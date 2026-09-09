@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10120f" />
+    <title>Alias Lens</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div class="ambient ambient-one"></div><div class="ambient ambient-two"></div>
+    <main class="shell">
+      <header class="topbar">
+        <a class="brand" href="/" aria-label="Alias Lens home"><span class="brand-mark">&gt;_</span><span>alias<span>lens</span></span></a>
+        <div class="source"><i></i><span>live from</span><code>~/.bash_aliases</code></div>
+      </header>
+      <section class="hero">
+        <p class="eyebrow">YOUR COMMANDS, IN FOCUS</p>
+        <h1>Find the shortcut<br /><em>before you forget it.</em></h1>
+        <p class="intro">Type one letter to browse a prefix, or keep typing for ranked command, description, and typo matches.</p>
+      </section>
+      <section class="console" aria-label="Alias search">
+        <div class="search-line">
+          <span class="prompt">$</span>
+          <input id="search" type="search" autocomplete="off" spellcheck="false" placeholder="search aliases..." aria-label="Search aliases" autofocus />
+          <kbd>esc</kbd>
+        </div>
+        <div class="result-meta"><span id="result-count">Loading aliases</span><button id="reload" type="button">↻ Reload file</button></div>
+        <div id="suggestion" class="suggestion" hidden></div>
+        <div id="results" class="results" aria-live="polite"></div>
+      </section>
+      <footer><span>Tip: <b>↑ ↓</b> to browse, <b>enter</b> to copy</span><span id="file-count"></span></footer>
+    </main>
+    <template id="alias-card">
+      <article class="alias-card" tabindex="0">
+        <div class="alias-main"><div class="alias-title"><code class="alias-name"></code><span class="category"></span></div><p class="description"></p></div>
+        <div class="command-wrap"><code class="command"></code><button class="copy" type="button" aria-label="Copy command">copy</button></div>
+      </article>
+    </template>
+    <script src="/app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+# Compiled Go binaries and test artifacts
+/al
+/alias-lens
+*.test
+*.out
+coverage.*
+
+# Local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials.json
+secrets.json
+
+# Alias Lens user data (never commit real aliases or local settings)
+.bash_aliases
+.bash_aliases.*
+config.json
+theme.json
+repos/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*~
+*.swp
