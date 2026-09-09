@@ -322,6 +322,17 @@ func TestAliasComparisonReportsBothSides(t *testing.T) {
 	}
 }
 
+func TestAliasDefinitionMapDoesNotConvertFunctions(t *testing.T) {
+	contents := []byte("alias gs='git status'\nfunction gopen() { gh browse; }\n")
+	aliases := aliasDefinitionMap(contents)
+	if len(aliases) != 1 || aliases["gs"] != "git status" {
+		t.Fatalf("plain alias map was incorrect: %#v", aliases)
+	}
+	if _, exists := aliases["gopen"]; exists {
+		t.Fatal("function was treated as a plain alias")
+	}
+}
+
 func TestTimestampedRevisionCanBeListed(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, ".bash_aliases")

@@ -67,14 +67,19 @@ func repositoryPaths() (AppConfig, string, string, error) {
 }
 
 func aliasCommandMap(contents []byte) map[string]string {
+	commands := aliasDefinitionMap(contents)
+	for _, function := range parseFunctions(string(contents)) {
+		commands[function.Name] = function.Command
+	}
+	return commands
+}
+
+func aliasDefinitionMap(contents []byte) map[string]string {
 	commands := map[string]string{}
 	for _, line := range strings.Split(string(contents), "\n") {
 		if name, command, ok := parseAliasDefinition(line); ok {
 			commands[name] = command
 		}
-	}
-	for _, function := range parseFunctions(string(contents)) {
-		commands[function.Name] = function.Command
 	}
 	return commands
 }
@@ -159,16 +164,28 @@ func pullRepository() (string, error) {
 		}
 		return "", fmt.Errorf("alias conflicts: %s; run al diff to inspect both commands", strings.Join(names, ", "))
 	}
-	remoteAliases := aliasCommandMap(remote)
+	remoteAliases := aliasDefinitionMap(remote)
+	imported := 0
+	skippedFunctions := 0
 	for _, name := range remoteOnly {
-		if err := addAliasToFile(source, name, remoteAliases[name], "Imported from the configured repository"); err != nil {
+		command, isAlias := remoteAliases[name]
+		if !isAlias {
+			skippedFunctions++
+			continue
+		}
+		if err := addAliasToFile(source, name, command, "Imported from the configured repository"); err != nil {
 			return "", err
 		}
+		imported++
 	}
-	if len(remoteOnly) == 0 {
+	if imported == 0 && skippedFunctions == 0 {
 		return "Repository pulled; no new aliases were found", nil
 	}
-	return fmt.Sprintf("Repository pulled; imported %d aliases", len(remoteOnly)), nil
+	message := fmt.Sprintf("Repository pulled; imported %d aliases", imported)
+	if skippedFunctions > 0 {
+		message += fmt.Sprintf("; left %d remote functions unchanged for manual review", skippedFunctions)
+	}
+	return message, nil
 }
 
 func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string, error) {
