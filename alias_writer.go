@@ -195,6 +195,9 @@ func isDescriptionComment(line string) bool {
 func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) error {
 
 	if len(contents) > 0 {
+		if err := saveRevision(path, contents); err != nil {
+			return fmt.Errorf("save revision: %w", err)
+		}
 		if err := os.WriteFile(path+".alias-lens.bak", contents, mode); err != nil {
 			return fmt.Errorf("create backup: %w", err)
 		}

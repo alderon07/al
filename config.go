@@ -123,13 +123,18 @@ func loadConfig() (AppConfig, error) {
 	if err := json.Unmarshal(contents, &config); err != nil {
 		return config, fmt.Errorf("parse %s: %w", path, err)
 	}
+	config = ensureConfigDefaults(config)
+	return config, nil
+}
+
+func ensureConfigDefaults(config AppConfig) AppConfig {
 	if config.AliasFile == "" {
 		config.AliasFile = ".bash_aliases"
 	}
 	if config.Providers == nil {
 		config.Providers = defaultConfig().Providers
 	}
-	return config, nil
+	return config
 }
 
 func defaultConfig() AppConfig {

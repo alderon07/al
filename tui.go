@@ -46,6 +46,8 @@ type model struct {
 	editingName string
 	deleteName  string
 	healthOnly  bool
+	selectMode  bool
+	selected    *Alias
 }
 
 func runTUI() {
@@ -68,6 +70,35 @@ func runTUI() {
 	if _, err := program.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, "Alias Lens could not start:", err)
 	}
+}
+
+func runAliasPicker(query string, commandOnly bool) error {
+	aliases, err := loadAliases()
+	if err != nil {
+		return err
+	}
+	theme, _ := loadTheme()
+	applyTheme(theme)
+	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: true}
+	options := []tea.ProgramOption{tea.WithAltScreen()}
+	if terminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
+		defer terminal.Close()
+		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
+	}
+	finished, err := tea.NewProgram(initial, options...).Run()
+	if err != nil {
+		return err
+	}
+	selected, ok := finished.(model)
+	if !ok || selected.selected == nil {
+		return nil
+	}
+	if commandOnly {
+		fmt.Println(selected.selected.Command)
+	} else {
+		fmt.Println(selected.selected.Name)
+	}
+	return nil
 }
 
 func (model) Init() tea.Cmd { return nil }
@@ -164,6 +195,11 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyEnter:
 			if len(matches) > 0 {
+				if m.selectMode {
+					selected := matches[m.cursor]
+					m.selected = &selected
+					return m, tea.Quit
+				}
 				m.status = "Command: " + matches[m.cursor].Command
 			}
 		case tea.KeyRunes:
@@ -184,6 +220,9 @@ func (m model) View() string {
 
 	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("~/.bash_aliases") + dimStyle.Render(fmt.Sprintf("  •  %d loaded  •  %d issues  •  %s", len(m.aliases), healthIssueCount(m.aliases), m.theme.Name))
 	title := titleStyle.Render("Find the shortcut before you forget it.") + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
+	if m.selectMode {
+		title = titleStyle.Render("Choose an alias to use in your shell.") + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
+	}
 	if m.adding {
 		return m.addFormView(width, height, contentWidth, header)
 	}
@@ -228,6 +267,9 @@ func (m model) View() string {
 	}
 
 	footer := dimStyle.Render("↑↓ move") + dimStyle.Render("  ^a ") + cyanStyle("add") + dimStyle.Render("  ^e ") + cyanStyle("edit") + dimStyle.Render("  ^d ") + cyanStyle("delete") + dimStyle.Render("  ^h ") + cyanStyle("health") + dimStyle.Render("  ^g ") + cyanStyle("sync")
+	if m.selectMode {
+		footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  esc cancel")
+	}
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
@@ -393,6 +435,15 @@ func renderAlias(alias Alias, active bool, width int) string {
 	categoryColor := colorForCategory(alias.Category)
 	category := lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(categoryColor).Padding(0, 1).Render(strings.ToUpper(alias.Category))
 	lineOne := aliasStyle.Render(marker+alias.Name) + "  " + category
+	if alias.Type == "function" {
+		lineOne += "  " + lipgloss.NewStyle().Foreground(violetColor).Render("FUNCTION")
+	}
+	if alias.Favorite {
+		lineOne += "  " + lipgloss.NewStyle().Foreground(amberColor).Render("★")
+	}
+	if len(alias.Tags) > 0 {
+		lineOne += "  " + dimStyle.Render("#"+strings.Join(alias.Tags, " #"))
+	}
 	description := lipgloss.NewStyle().Foreground(inkColor).Render(wrapText(alias.Description, cardWidth-6))
 	lineTwo := lipgloss.NewStyle().Foreground(cyanColor).Render("↳ " + truncate(alias.Command, cardWidth-6))
 	if len(alias.Issues) > 0 {
@@ -433,6 +484,10 @@ func suggestedAliases(aliases []Alias) []Alias {
 			continue
 		}
 		score := preferred[alias.Command]
+		score += min(alias.Usage, 25) * 3
+		if alias.Favorite {
+			score += 150
+		}
 		if len(alias.Name) == 2 {
 			score += 12
 		} else if len(alias.Name) == 3 {
@@ -493,6 +548,12 @@ func filterAliases(aliases []Alias, query string) []Alias {
 			score = 30
 		case wordsMatch(alias.Description, needle):
 			score = 40
+		case wordsMatch(strings.Join(alias.Tags, " "), needle):
+			score = 45
+		case wordsMatch(strings.Join(alias.Platforms, " "), needle):
+			score = 50
+		case alias.Type == needle:
+			score = 55
 		default:
 			distance := levenshtein(name, needle)
 			if distance <= max(1, len(needle)/3) {

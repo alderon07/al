@@ -23,6 +23,11 @@ type Alias struct {
 	Description string   `json:"description"`
 	Category    string   `json:"category"`
 	Issues      []string `json:"issues,omitempty"`
+	Usage       int      `json:"usage,omitempty"`
+	Type        string   `json:"type,omitempty"`
+	Tags        []string `json:"tags,omitempty"`
+	Platforms   []string `json:"platforms,omitempty"`
+	Favorite    bool     `json:"favorite,omitempty"`
 }
 
 func main() {
@@ -59,9 +64,94 @@ func main() {
 		if err := runConfigCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
+	case "pick":
+		commandOnly := false
+		arguments := os.Args[2:]
+		if len(arguments) > 0 && arguments[0] == "--command" {
+			commandOnly = true
+			arguments = arguments[1:]
+		}
+		if len(arguments) > 1 {
+			fmt.Fprintln(os.Stderr, "Usage: al pick [--command] [QUERY]")
+			return
+		}
+		query := ""
+		if len(arguments) == 1 {
+			query = arguments[0]
+		}
+		if err := runAliasPicker(query, commandOnly); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "shell-init":
+		if len(os.Args) != 3 || os.Args[2] != "bash" {
+			fmt.Fprintln(os.Stderr, "Usage: al shell-init bash")
+			return
+		}
+		printBashIntegration()
+	case "suggest":
+		if err := runHistorySuggestions(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "scan":
+		if len(os.Args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: al scan")
+			return
+		}
+		if err := runSecretScan(); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "meta":
+		if err := runMetadataCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "history":
+		if len(os.Args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: al history")
+			return
+		}
+		if err := runRevisionHistory(); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "undo":
+		if len(os.Args) > 3 {
+			fmt.Fprintln(os.Stderr, "Usage: al undo [REVISION]")
+			return
+		}
+		revision := "latest"
+		if len(os.Args) == 3 {
+			revision = os.Args[2]
+		}
+		if err := restoreRevision(revision); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "doctor":
+		if len(os.Args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: al doctor")
+			return
+		}
+		if err := runDoctor(); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "setup":
+		if len(os.Args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: al setup")
+			return
+		}
+		if err := runSetup(); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
 	case "sync":
-		if len(os.Args) > 3 || (len(os.Args) == 3 && os.Args[2] != "--push") {
+		if len(os.Args) > 3 || (len(os.Args) == 3 && os.Args[2] != "--push" && os.Args[2] != "--pull") {
 			printUsage()
+			return
+		}
+		if len(os.Args) == 3 && os.Args[2] == "--pull" {
+			message, err := pullRepository()
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				return
+			}
+			fmt.Println(message)
 			return
 		}
 		push := len(os.Args) == 3 && os.Args[2] == "--push"
@@ -71,21 +161,65 @@ func main() {
 			return
 		}
 		fmt.Println(message)
+	case "diff":
+		if len(os.Args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: al diff")
+			return
+		}
+		if err := showRepositoryDiff(); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
 	default:
 		printUsage()
 	}
 }
 
 func printUsage() {
-	fmt.Println("Usage: al [--web | repo [PROVIDER|PATH] | config | sync [--push]]")
+	fmt.Println("Usage: al [--web | pick | repo | config | sync]")
 	fmt.Println("  al               Open Alias Lens in the terminal")
 	fmt.Println("  al --web         Start the optional browser interface")
 	fmt.Println("  al repo          Pick from writable GitHub, Bitbucket, and GitLab repositories")
 	fmt.Println("  al repo PROVIDER Limit the picker to one configured provider")
 	fmt.Println("  al repo PATH     Choose an existing local Git repository")
 	fmt.Println("  al config        Show safe provider configuration and setup commands")
+	fmt.Println("  al pick          Print an alias selected in the terminal picker")
+	fmt.Println("  al use           Run a selected alias after loading shell integration")
+	fmt.Println("  al shell-init bash  Print Bash integration")
+	fmt.Println("  al suggest       Suggest aliases from local Bash history")
+	fmt.Println("  al scan          Check aliases for likely secrets")
+	fmt.Println("  al meta          Add tags, platforms, and favorite metadata")
+	fmt.Println("  al history       List recoverable alias revisions")
+	fmt.Println("  al undo          Restore the latest or a selected revision")
+	fmt.Println("  al doctor        Check shell, Git, providers, SSH, and sync setup")
+	fmt.Println("  al setup         Install Bash integration and the Ctrl+G binding")
 	fmt.Println("  al sync          Commit only .bash_aliases to that repository")
 	fmt.Println("  al sync --push   Commit and explicitly push it")
+	fmt.Println("  al sync --pull   Pull and import non-conflicting remote aliases")
+	fmt.Println("  al diff          Compare local and tracked aliases by name")
+}
+
+func printBashIntegration() {
+	fmt.Print(`# Alias Lens shell integration
+unalias al 2>/dev/null || true
+al() {
+  if [ "${1-}" = "use" ]; then
+    shift
+    local _alias_lens_command
+    _alias_lens_command="$(command alias-lens pick --command "$@")" || return
+    [ -n "$_alias_lens_command" ] && builtin eval "$_alias_lens_command"
+    return
+  fi
+  command alias-lens "$@"
+}
+_alias_lens_insert() {
+  local _alias_lens_name
+  _alias_lens_name="$(command alias-lens pick)" || return
+  [ -z "$_alias_lens_name" ] && return
+  READLINE_LINE="${READLINE_LINE:0:READLINE_POINT}${_alias_lens_name}${READLINE_LINE:READLINE_POINT}"
+  READLINE_POINT=$((READLINE_POINT + ${#_alias_lens_name}))
+}
+bind -x '"\C-g":_alias_lens_insert'
+`)
 }
 
 func runWeb() {
@@ -137,12 +271,17 @@ func loadAliases() ([]Alias, error) {
 
 	var aliases []Alias
 	var notes []string
+	metadata := EntryMetadata{}
 	for _, line := range strings.Split(string(contents), "\n") {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
 		if strings.HasPrefix(trimmed, "#") {
+			if parsed, ok := parseMetadataComment(line); ok {
+				metadata = parsed
+				continue
+			}
 			note := strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
 			if strings.Contains(note, "===") || strings.Contains(note, "---") || isSectionHeading(note) {
 				notes = nil
@@ -157,22 +296,29 @@ func loadAliases() ([]Alias, error) {
 		name, command, ok := parseAliasDefinition(line)
 		if !ok {
 			notes = nil
+			metadata = EntryMetadata{}
 			continue
 		}
 		description := describe(name, command)
 		if len(notes) > 0 {
 			description = notes[len(notes)-1]
 		}
-		aliases = append(aliases, Alias{
+		alias := Alias{
 			Name:        name,
 			Command:     command,
 			Description: description,
 			Category:    category(command),
-		})
+			Type:        "alias",
+		}
+		applyMetadata(&alias, metadata)
+		aliases = append(aliases, alias)
 		notes = nil
+		metadata = EntryMetadata{}
 	}
+	aliases = append(aliases, parseFunctions(string(contents))...)
 
 	sort.Slice(aliases, func(i, j int) bool { return strings.ToLower(aliases[i].Name) < strings.ToLower(aliases[j].Name) })
+	annotateUsage(aliases, loadHistoryCounts())
 	annotateHealth(aliases)
 	return aliases, nil
 }
@@ -189,6 +335,9 @@ func annotateHealth(aliases []Alias) {
 		}
 		if isDangerousCommand(alias.Command) {
 			alias.Issues = append(alias.Issues, "review before running")
+		}
+		if !platformSupported(alias.Platforms) {
+			alias.Issues = append(alias.Issues, "not for "+currentPlatform())
 		}
 		fields := strings.Fields(alias.Command)
 		if len(fields) > 0 && shouldCheckExecutable(fields[0]) {
@@ -213,7 +362,8 @@ func isDangerousCommand(command string) bool {
 func shouldCheckExecutable(command string) bool {
 	builtins := map[string]bool{
 		".": true, "alias": true, "cd": true, "command": true, "echo": true, "export": true,
-		"printf": true, "pwd": true, "read": true, "source": true, "test": true, "type": true,
+		"for": true, "if": true, "local": true, "printf": true, "pwd": true, "read": true,
+		"return": true, "source": true, "test": true, "type": true,
 	}
 	return !builtins[command] && !strings.ContainsAny(command, "$()`")
 }

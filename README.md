@@ -37,6 +37,57 @@ Alias Lens operates locally. It does not upload or execute the commands in your 
 - `Ctrl+R`: reload aliases and theme configuration
 - `Esc`: exit
 
+## Use an alias from the picker
+
+Install the Bash integration once, then start a new Bash shell:
+
+```bash
+al setup
+exec bash
+```
+
+Run `al use` to choose and run an alias in the current shell. This works for commands such as `cd` because Bash evaluates the selected command in the parent shell. Press `Ctrl+G` at a Bash prompt to choose an alias and insert its name at the cursor without running it.
+
+Scripts can use `al pick` to return an alias name. Add `--command` to return its command instead:
+
+```bash
+al pick
+al pick --command git
+```
+
+## Turn repeated commands into aliases
+
+`al suggest` reads only `~/.bash_history`. It lists long commands that appear at least three times and do not already have aliases.
+
+```bash
+al suggest
+al suggest add 1
+al suggest add 1 myname
+```
+
+Alias Lens does not suggest commands that commonly contain credentials, such as `ssh`, `curl`, or `export` commands.
+
+## Add metadata and Bash functions
+
+Alias Lens discovers Bash functions as well as aliases. It labels functions in search results. Add structured metadata immediately above an alias or function:
+
+```bash
+# al: tags=git,work platforms=linux,wsl favorite=true
+# Open the current branch in the browser
+gopen() {
+  gh browse
+}
+```
+
+Tags act as collections and become search terms. Favorites rank first on the suggestion screen. An unsupported `platforms` value appears in alias health. Update metadata without editing the file directly:
+
+```bash
+al meta gs tags=git,daily favorite=true
+al meta docker-clean platforms=linux
+```
+
+Supported metadata fields are `tags`, `collections`, `platforms`, and `favorite`.
+
 New aliases are inserted beside commands with the same tool and subcommand. Before every write, Alias Lens saves the previous file as `~/.bash_aliases.alias-lens.bak`.
 
 ## Themes
@@ -94,7 +145,34 @@ al sync
 al sync --push
 ```
 
-`al sync` copies and commits only the `alias_file` configured in `~/.config/alias-lens/config.json`. Pushing requires the explicit `--push` flag. Your repository may contain any other configuration files.
+`al sync` copies and commits only the `alias_file` configured in `~/.config/alias-lens/config.json`. Pushing requires the explicit `--push` flag. Before a push, Alias Lens scans for likely credentials and blocks the push when it finds one. Run `al scan` to see finding types and line numbers without printing secret values.
+
+Pull and compare aliases across machines:
+
+```bash
+al diff
+al sync --pull
+```
+
+Pull uses Git's fast-forward-only mode. Alias Lens imports remote-only aliases and preserves local-only aliases. If the same name has different commands, it stops and asks you to inspect both values with `al diff`.
+
+Your repository may contain other configuration files. Alias Lens does not stage or commit them.
+
+## Recover an earlier version
+
+Every edit stores the previous file in the private revision directory at `~/.local/share/alias-lens/revisions/`. The existing `~/.bash_aliases.alias-lens.bak` file still holds the most recent backup.
+
+```bash
+al history
+al undo
+al undo 20260909T120000.000000000Z
+```
+
+Restoring a revision saves the current file as another revision first.
+
+## Diagnose the installation
+
+Run `al doctor` to check the executable, `.bash_aliases` loading, shell integration, Git, the sync repository, provider credentials, and SSH fallback behavior.
 
 ## Optional browser view
 
@@ -126,5 +204,6 @@ alias al="$HOME/.local/bin/alias-lens"
 | `~/.bash_aliases.alias-lens.bak` | Most recent pre-edit backup |
 | `~/.config/alias-lens/config.json` | Repository and sync settings |
 | `~/.config/alias-lens/theme.json` | Selected theme and color overrides |
+| `~/.local/share/alias-lens/revisions/` | Timestamped private alias revisions |
 
 These files are intentionally excluded from this project's version control.

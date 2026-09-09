@@ -217,21 +217,140 @@ func TestTrustedNextURLRejectsCredentialRedirects(t *testing.T) {
 }
 
 func TestLegacyConfigGetsDefaultProviderLayer(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	directory := filepath.Join(home, ".config", "alias-lens")
-	if err := os.MkdirAll(directory, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(directory, "config.json"), []byte(`{"repository":"/tmp/dotfiles","alias_file":"shell/.bash_aliases"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	config, err := loadConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
+	config := ensureConfigDefaults(AppConfig{Repository: "/tmp/dotfiles", AliasFile: "shell/.bash_aliases"})
 	github, exists := config.Providers["github"]
 	if !exists || !github.Enabled || github.Protocol != "auto" {
 		t.Fatalf("legacy configuration was not migrated in memory: %#v", config)
+	}
+}
+
+func TestHistorySuggestionsUseRepeatedLongCommands(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, ".bash_history")
+	history := "#1700000000\ngo test ./...\ngo test ./...\ngo test ./...\ngit status\n"
+	if err := os.WriteFile(path, []byte(history), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	counts, err := historyCountsFrom(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	suggestions := historySuggestions(nil, counts)
+	if len(suggestions) != 1 || suggestions[0].Command != "go test ./..." || suggestions[0].Count != 3 {
+		t.Fatalf("unexpected history suggestions: %#v", suggestions)
+	}
+}
+
+func TestSecretScanReportsLocationWithoutValue(t *testing.T) {
+	secret := "github_" + "pat_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+	findings := findSecretFindings([]byte("alias safe='git status'\nalias leak='echo " + secret + "'\n"))
+	if len(findings) != 1 || findings[0].Line != 2 || findings[0].Kind != "GitHub token" {
+		t.Fatalf("unexpected findings: %#v", findings)
+	}
+	message := secretFindingsError(findings).Error()
+	if strings.Contains(message, secret) || !strings.Contains(message, "line 2") {
+		t.Fatalf("finding message leaked or omitted context: %s", message)
+	}
+}
+
+func TestPushWithSecretStopsBeforeRepositoryWrite(t *testing.T) {
+	directory := t.TempDir()
+	repository := filepath.Join(directory, "dotfiles")
+	if err := os.Mkdir(repository, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repository, "init")
+	source := filepath.Join(directory, ".bash_aliases")
+	secret := "ghp_" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
+	if err := os.WriteFile(source, []byte("alias leak='echo "+secret+"'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := syncRepositoryFiles(AppConfig{Repository: repository, AliasFile: ".bash_aliases"}, source, true)
+	if err == nil || !strings.Contains(err.Error(), "push blocked") {
+		t.Fatalf("secret push was not blocked: %v", err)
+	}
+	if _, statErr := os.Stat(filepath.Join(repository, ".bash_aliases")); !os.IsNotExist(statErr) {
+		t.Fatal("blocked push wrote the alias file into the repository")
+	}
+}
+
+func TestFunctionsAndMetadataAreDiscoverable(t *testing.T) {
+	contents := `# al: tags=git,work platforms=linux,wsl favorite=true
+# Open the current branch
+function gopen() {
+  gh browse
+}
+`
+	functions := parseFunctions(contents)
+	if len(functions) != 1 {
+		t.Fatalf("expected one function, got %#v", functions)
+	}
+	function := functions[0]
+	if function.Name != "gopen" || function.Command != "gh browse" || function.Type != "function" || !function.Favorite {
+		t.Fatalf("function fields were not parsed: %#v", function)
+	}
+	if strings.Join(function.Tags, ",") != "git,work" || strings.Join(function.Platforms, ",") != "linux,wsl" {
+		t.Fatalf("function metadata was not parsed: %#v", function)
+	}
+}
+
+func TestMetadataEditPreservesUnchangedFields(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, ".bash_aliases")
+	original := "# al: tags=git platforms=linux\nalias gs='git status'\n"
+	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := setEntryMetadata(path, "gs", EntryMetadata{Tags: []string{"git"}, Platforms: []string{"linux"}, Favorite: true}); err != nil {
+		t.Fatal(err)
+	}
+	updated, _ := os.ReadFile(path)
+	if !strings.Contains(string(updated), "tags=git") || !strings.Contains(string(updated), "platforms=linux") || !strings.Contains(string(updated), "favorite=true") {
+		t.Fatalf("metadata update lost fields:\n%s", updated)
+	}
+}
+
+func TestAliasComparisonReportsBothSides(t *testing.T) {
+	local := []byte("alias gs='git status -sb'\nalias ll='ls -la'\n")
+	remote := []byte("alias gs='git status'\nalias gp='git push'\n")
+	localOnly, remoteOnly, conflicts := compareAliasFiles(local, remote)
+	if strings.Join(localOnly, ",") != "ll" || strings.Join(remoteOnly, ",") != "gp" {
+		t.Fatalf("wrong unique entries: local=%v remote=%v", localOnly, remoteOnly)
+	}
+	if len(conflicts) != 1 || conflicts[0].Name != "gs" || conflicts[0].Local != "git status -sb" || conflicts[0].Remote != "git status" {
+		t.Fatalf("wrong conflict: %#v", conflicts)
+	}
+}
+
+func TestTimestampedRevisionCanBeListed(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, ".bash_aliases")
+	if err := os.WriteFile(path, []byte("alias gs='git status'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := addAliasToFile(path, "gp", "git push", "Push commits"); err != nil {
+		t.Fatal(err)
+	}
+	revisions, err := listRevisions(path)
+	if err != nil || len(revisions) != 1 {
+		t.Fatalf("expected one revision: %#v, %v", revisions, err)
+	}
+	revision, err := os.ReadFile(revisions[0].Path)
+	if err != nil || !strings.Contains(string(revision), "alias gs=") || strings.Contains(string(revision), "alias gp=") {
+		t.Fatalf("revision did not preserve the prior version: %s, %v", revision, err)
+	}
+}
+
+func TestBashLoaderSetupIsIdempotent(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".bashrc")
+	if err := ensureBashLoadsAliases(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureBashLoadsAliases(path); err != nil {
+		t.Fatal(err)
+	}
+	contents, _ := os.ReadFile(path)
+	if strings.Count(string(contents), ".bash_aliases") != 2 {
+		t.Fatalf("loader was duplicated or incomplete:\n%s", contents)
 	}
 }
