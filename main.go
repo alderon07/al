@@ -140,6 +140,33 @@ func main() {
 		if err := runSetup(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
+	case "autosync":
+		if err := runAutoSyncCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "watch":
+		if len(os.Args) == 3 && os.Args[2] == "--ensure" {
+			config, err := loadConfig()
+			if err == nil && config.AutoSync.Enabled {
+				err = ensureWatchProcess()
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			}
+			return
+		}
+		daemon := len(os.Args) == 3 && os.Args[2] == "--daemon"
+		if len(os.Args) > 3 || (len(os.Args) == 3 && !daemon) {
+			fmt.Fprintln(os.Stderr, "Usage: al watch")
+			return
+		}
+		if err := runWatch(daemon); err != nil && !daemon {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "track", "untrack":
+		if err := runTrackCommand(os.Args[2:], os.Args[1] == "untrack"); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
 	case "sync":
 		if len(os.Args) > 3 || (len(os.Args) == 3 && os.Args[2] != "--push" && os.Args[2] != "--pull") {
 			printUsage()
@@ -192,6 +219,10 @@ func printUsage() {
 	fmt.Println("  al undo          Restore the latest or a selected revision")
 	fmt.Println("  al doctor        Check shell, Git, providers, SSH, and sync setup")
 	fmt.Println("  al setup         Install Bash integration and the Ctrl+G binding")
+	fmt.Println("  al autosync      Enable, disable, or inspect automatic sync")
+	fmt.Println("  al watch         Run one pull/reconcile/push cycle")
+	fmt.Println("  al track         Add an explicit config file to automatic sync")
+	fmt.Println("  al untrack       Remove a config file from automatic sync")
 	fmt.Println("  al sync          Commit only .bash_aliases to that repository")
 	fmt.Println("  al sync --push   Commit and explicitly push it")
 	fmt.Println("  al sync --pull   Pull and import non-conflicting remote aliases")
@@ -219,6 +250,7 @@ _alias_lens_insert() {
   READLINE_POINT=$((READLINE_POINT + ${#_alias_lens_name}))
 }
 bind -x '"\C-g":_alias_lens_insert'
+command alias-lens watch --ensure >/dev/null 2>&1
 `)
 }
 
@@ -262,10 +294,13 @@ func loadAliases() ([]Alias, error) {
 	}
 	path := filepath.Join(home, ".bash_aliases")
 	contents, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return []Alias{}, nil
+	if os.IsNotExist(err) {
+		if createErr := ensureAliasFileExists(path); createErr != nil {
+			return nil, createErr
 		}
+		contents, err = os.ReadFile(path)
+	}
+	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)
 	}
 

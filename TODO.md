@@ -25,6 +25,17 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Show the difference between the local alias file and the tracked copy.
 - [x] Pull fast-forward repository updates without overwriting local aliases.
 - [x] Report alias-level conflicts with both command values.
+- [x] Reconcile local and remote changes in a locked background worker.
+- [x] Retry offline operations without overwriting either file.
+- [x] Save private conflict copies outside the live alias file.
+- [x] Auto-sync explicitly enrolled configuration files without staging unrelated files.
+- [x] Reject credential-shaped files before enrollment.
+
+## Start without an alias file
+
+- [x] Restore `.bash_aliases` from the configured repository when available.
+- [x] Create a private empty `.bash_aliases` when no copy exists.
+- [x] Install portable shell integration without a machine-specific path.
 
 ## Recover old aliases
 

@@ -11,9 +11,84 @@ import (
 )
 
 type AppConfig struct {
-	Repository string                    `json:"repository"`
-	AliasFile  string                    `json:"alias_file"`
-	Providers  map[string]ProviderConfig `json:"providers"`
+	Repository   string                    `json:"repository"`
+	AliasFile    string                    `json:"alias_file"`
+	Providers    map[string]ProviderConfig `json:"providers"`
+	AutoSync     AutoSyncConfig            `json:"auto_sync"`
+	TrackedFiles []TrackedFileConfig       `json:"tracked_files,omitempty"`
+}
+
+type AutoSyncConfig struct {
+	Enabled         bool `json:"enabled"`
+	IntervalSeconds int  `json:"interval_seconds"`
+}
+
+type TrackedFileConfig struct {
+	Source         string `json:"source"`
+	RepositoryPath string `json:"repository_path"`
+}
+
+func runTrackCommand(arguments []string, remove bool) error {
+	if len(arguments) < 1 || len(arguments) > 2 {
+		return fmt.Errorf("usage: al %s SOURCE [REPOSITORY_PATH]", map[bool]string{true: "untrack", false: "track"}[remove])
+	}
+	config, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	source, err := expandUserPath(arguments[0])
+	if err != nil {
+		return err
+	}
+	if sensitiveConfigPath(source) {
+		return fmt.Errorf("refusing to track a credential-shaped file: %s", source)
+	}
+	if remove {
+		var kept []TrackedFileConfig
+		for _, tracked := range config.TrackedFiles {
+			if tracked.Source != source {
+				kept = append(kept, tracked)
+			}
+		}
+		config.TrackedFiles = kept
+		return saveConfig(config)
+	}
+	repositoryPath := filepath.Base(source)
+	if len(arguments) == 2 {
+		repositoryPath = filepath.Clean(arguments[1])
+	}
+	if filepath.IsAbs(repositoryPath) || repositoryPath == ".." || strings.HasPrefix(repositoryPath, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("repository path must stay inside the configured repository")
+	}
+	for _, tracked := range config.TrackedFiles {
+		if tracked.Source == source || tracked.RepositoryPath == repositoryPath {
+			return fmt.Errorf("that source or repository path is already tracked")
+		}
+	}
+	config.TrackedFiles = append(config.TrackedFiles, TrackedFileConfig{Source: source, RepositoryPath: repositoryPath})
+	if err := saveConfig(config); err != nil {
+		return err
+	}
+	if config.AutoSync.Enabled {
+		return ensureWatchProcess()
+	}
+	return nil
+}
+
+func expandUserPath(path string) (string, error) {
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		path = filepath.Join(home, strings.TrimPrefix(path, "~/"))
+	}
+	return filepath.Abs(path)
+}
+
+func sensitiveConfigPath(path string) bool {
+	name := strings.ToLower(filepath.Base(path))
+	return name == ".env" || strings.HasPrefix(name, ".env.") || strings.Contains(name, "credential") || strings.Contains(name, "secret") || strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".key") || strings.HasSuffix(name, ".p12") || strings.HasSuffix(name, ".pfx")
 }
 
 func runConfigCommand(arguments []string) error {
@@ -134,6 +209,9 @@ func ensureConfigDefaults(config AppConfig) AppConfig {
 	if config.Providers == nil {
 		config.Providers = defaultConfig().Providers
 	}
+	if config.AutoSync.IntervalSeconds < 5 {
+		config.AutoSync.IntervalSeconds = 15
+	}
 	return config
 }
 
@@ -143,6 +221,7 @@ func defaultConfig() AppConfig {
 		Providers: map[string]ProviderConfig{
 			"github": {Enabled: true, Host: "github.com", Protocol: "auto"},
 		},
+		AutoSync: AutoSyncConfig{IntervalSeconds: 15},
 	}
 }
 

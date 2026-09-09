@@ -23,7 +23,11 @@ func configureRepository(path string) error {
 		return err
 	}
 	config.Repository = absolute
-	return saveConfig(config)
+	config.AutoSync.Enabled = true
+	if err := saveConfig(config); err != nil {
+		return err
+	}
+	return ensureWatchProcess()
 }
 
 func syncRepository(push bool) (string, error) {

@@ -24,6 +24,8 @@ It opens an interactive Bubble Tea interface directly in the terminal. A browser
 
 Alias Lens operates locally. It does not upload or execute the commands in your alias file.
 
+If `~/.bash_aliases` does not exist, Alias Lens restores it from the configured repository. If the repository does not contain a copy, Alias Lens creates an empty file with mode `0600`.
+
 ## Terminal controls
 
 - `↑` / `↓`: select an alias
@@ -145,7 +147,32 @@ al sync
 al sync --push
 ```
 
-`al sync` copies and commits only the `alias_file` configured in `~/.config/alias-lens/config.json`. Pushing requires the explicit `--push` flag. Before a push, Alias Lens scans for likely credentials and blocks the push when it finds one. Run `al scan` to see finding types and line numbers without printing secret values.
+`al sync` copies and commits only the `alias_file` configured in `~/.config/alias-lens/config.json`. Manual sync requires the explicit `--push` flag. Automatic sync pushes after a safe reconciliation when you enable it. Before any push, Alias Lens scans for likely credentials and blocks the push when it finds one. Run `al scan` to see finding types and line numbers without printing secret values.
+
+## Keep aliases synchronized automatically
+
+Choosing a repository enables automatic sync. `al setup` starts one background worker from Bash. The worker checks every 15 seconds by default. A lock prevents multiple shells from starting competing workers.
+
+```bash
+al autosync status
+al autosync disable
+al autosync enable
+al watch
+```
+
+`al watch` runs one reconciliation cycle in the foreground. Each cycle pulls with Git's fast-forward-only mode before it considers a push. Local-only changes are scanned, committed, and pushed. Remote-only changes create a revision and then update `.bash_aliases` atomically.
+
+Track other configuration files explicitly. Alias Lens rejects environment files, keys, and credential-shaped filenames:
+
+```bash
+al track ~/.gitconfig
+al track ~/.config/starship.toml shell/starship.toml
+al untrack ~/.gitconfig
+```
+
+Each tracked file has independent hashes, backups, and private conflict copies. Alias Lens stages and commits only the file that changed.
+
+If both files changed since the last successful cycle, Alias Lens does not overwrite either version. It stores private conflict copies in `~/.local/state/alias-lens/conflicts/`, reports `conflict` in `al autosync status`, and waits until you make the local and tracked files match. Network failures report `offline` and retry on the next cycle.
 
 Pull and compare aliases across machines:
 
@@ -205,5 +232,7 @@ alias al="$HOME/.local/bin/alias-lens"
 | `~/.config/alias-lens/config.json` | Repository and sync settings |
 | `~/.config/alias-lens/theme.json` | Selected theme and color overrides |
 | `~/.local/share/alias-lens/revisions/` | Timestamped private alias revisions |
+| `~/.local/state/alias-lens/sync-state.json` | Automatic sync hashes and status |
+| `~/.local/state/alias-lens/conflicts/` | Private local and remote conflict copies |
 
 These files are intentionally excluded from this project's version control.

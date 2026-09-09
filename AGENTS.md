@@ -9,6 +9,8 @@ The command name is `al`. The installed binary is `alias-lens`, which lets the B
 ## Safety rules
 
 - Treat `~/.bash_aliases`, shell history, provider tokens, backups, and local config as private user data.
+- Auto-sync only `.bash_aliases` and files the user enrolled with `al track`.
+- Reject environment files, keys, and credential-shaped filenames from the tracked-file registry.
 - Never add private user data to this repository, test fixtures, logs, screenshots, or error messages.
 - Never execute an alias while parsing, searching, explaining, checking, or syncing it.
 - Keep provider tokens out of `config.json`, command arguments, clone URLs, and Git remotes.
@@ -17,6 +19,9 @@ The command name is `al`. The installed binary is `alias-lens`, which lets the B
 - Preserve unrelated files and staged changes in a configured dotfiles repository. Alias Lens may commit only `alias_file`.
 - Create a backup and a timestamped revision before changing the user's alias file.
 - Pull with `--ff-only`. Do not overwrite a local alias when the remote repository defines a different command under the same name.
+- Serialize automatic sync with one lock. Keep the last successful local and remote hashes.
+- If both files changed, save private conflict copies and leave the live alias file unchanged.
+- Create a missing `.bash_aliases` with mode `0600`. Prefer the configured repository copy when one exists.
 
 ## Code map
 
@@ -28,6 +33,7 @@ The command name is `al`. The installed binary is `alias-lens`, which lets the B
 - `security.go` detects likely secrets without returning their values.
 - `revisions.go` stores and restores private alias revisions.
 - `repository.go` handles alias-only Git synchronization and comparison.
+- `autosync.go` owns background reconciliation, locking, status, offline retries, and conflict copies.
 - `providers.go` implements GitHub, Bitbucket Cloud, and GitLab repository discovery.
 - `github_picker.go` contains the provider-neutral remote repository picker. The filename remains for Git history.
 - `config.go` owns app and provider configuration.

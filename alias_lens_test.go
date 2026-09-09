@@ -365,3 +365,68 @@ func TestBashLoaderSetupIsIdempotent(t *testing.T) {
 		t.Fatalf("loader was duplicated or incomplete:\n%s", contents)
 	}
 }
+
+func TestShellIntegrationDoesNotAccumulateBlankLines(t *testing.T) {
+	initial := []string{"alias gs='git status'", "", "", "# Alias Lens shell integration", `eval "$(command alias-lens shell-init bash)"`}
+	once := withShellIntegration(initial)
+	twice := withShellIntegration(once)
+	if strings.Join(once, "\n") != strings.Join(twice, "\n") {
+		t.Fatalf("shell integration was not idempotent:\n%q\n%q", once, twice)
+	}
+	if strings.Count(strings.Join(once, "\n"), "\n\n") != 1 {
+		t.Fatalf("integration spacing was not normalized: %q", once)
+	}
+}
+
+func TestAutoSyncDecisionNeverOverwritesConcurrentChanges(t *testing.T) {
+	base := contentHash([]byte("base"))
+	local := contentHash([]byte("local"))
+	remote := contentHash([]byte("remote"))
+	state := SyncState{LocalHash: base, RemoteHash: base, Status: "synced"}
+	if action := decideSyncAction(state, local, base); action != actionPush {
+		t.Fatalf("local-only change chose %s", action)
+	}
+	if action := decideSyncAction(state, base, remote); action != actionPull {
+		t.Fatalf("remote-only change chose %s", action)
+	}
+	if action := decideSyncAction(state, local, remote); action != actionConflict {
+		t.Fatalf("concurrent change chose %s", action)
+	}
+	if action := decideSyncAction(SyncState{}, local, remote); action != actionConflict {
+		t.Fatalf("different first-sync files chose %s", action)
+	}
+	if action := decideSyncAction(SyncState{Status: "conflict", LocalHash: local, RemoteHash: remote}, local, remote); action != actionConflict {
+		t.Fatalf("unresolved conflict chose %s", action)
+	}
+	if action := decideSyncAction(state, local, local); action != actionNoop {
+		t.Fatalf("matching files chose %s", action)
+	}
+}
+
+func TestNewAliasFileUsesPrivatePermissions(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	if err := writeNewAliasFile(path, []byte("alias gs='git status'\n")); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("new alias file mode is %o", info.Mode().Perm())
+	}
+}
+
+func TestCredentialShapedFilesCannotBeTracked(t *testing.T) {
+	rejected := []string{".env", ".env.production", "credentials.json", "private.key", "client.p12", "my-secrets.toml"}
+	for _, path := range rejected {
+		if !sensitiveConfigPath(path) {
+			t.Errorf("expected %s to be rejected", path)
+		}
+	}
+	for _, path := range []string{".gitconfig", "starship.toml", "settings.json"} {
+		if sensitiveConfigPath(path) {
+			t.Errorf("expected %s to be allowed", path)
+		}
+	}
+}

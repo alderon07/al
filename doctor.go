@@ -64,6 +64,17 @@ func doctorChecks() []DoctorCheck {
 		}
 	}
 	checks = append(checks, DoctorCheck{Name: "sync repository", OK: repoOK, Message: repoMessage})
+	if config.AutoSync.Enabled {
+		state, _ := loadSyncState()
+		syncOK := state.Status != "conflict" && state.Status != "offline" && state.Status != ""
+		message := defaultString(state.Status, "run al watch")
+		if state.Message != "" {
+			message += ": " + state.Message
+		}
+		checks = append(checks, DoctorCheck{Name: "automatic sync", OK: syncOK, Message: message})
+	} else {
+		checks = append(checks, DoctorCheck{Name: "automatic sync", OK: false, Message: "run al autosync enable"})
+	}
 
 	for _, provider := range configuredProviders(config) {
 		ok, message := providerCredentialStatus(provider)
@@ -108,40 +119,75 @@ func runSetup() error {
 	if err != nil {
 		return err
 	}
-	contents, err := os.ReadFile(aliasPath)
-	if err != nil && !os.IsNotExist(err) {
+	if err := ensureAliasFileExists(aliasPath); err != nil {
 		return err
 	}
-	if strings.Contains(string(contents), "shell-init bash") {
-		fmt.Println("Alias Lens shell integration is already installed.")
-		return nil
-	}
-	executable, err := os.Executable()
+	contents, err := os.ReadFile(aliasPath)
 	if err != nil {
 		return err
 	}
 	lines := strings.Split(strings.TrimSuffix(string(contents), "\n"), "\n")
-	var kept []string
-	for _, line := range lines {
-		name, _, ok := parseAliasDefinition(line)
-		if ok && name == "al" {
-			continue
+	kept := withShellIntegration(lines)
+	updated := []byte(strings.Join(kept, "\n") + "\n")
+	if string(updated) == string(contents) {
+		if err := os.Chmod(aliasPath, 0o600); err != nil {
+			return err
 		}
-		kept = append(kept, line)
+		fmt.Println("Alias Lens shell integration is already installed.")
+		return nil
 	}
-	kept = append(kept, "", "# Alias Lens shell integration", fmt.Sprintf("eval \"$(%s shell-init bash)\"", shellQuote(executable)))
-	updated := []byte(strings.TrimLeft(strings.Join(kept, "\n"), "\n") + "\n")
-	mode := os.FileMode(0o644)
-	if info, statErr := os.Stat(aliasPath); statErr == nil {
-		mode = info.Mode().Perm()
-	}
-	if err := writeAliasFile(aliasPath, contents, updated, mode); err != nil {
+	if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
 		return err
 	}
 	if err := ensureBashLoadsAliases(filepath.Join(filepath.Dir(aliasPath), ".bashrc")); err != nil {
 		return err
 	}
 	fmt.Println("Installed Alias Lens shell integration. Start a new Bash shell to use al use and Ctrl+G.")
+	return nil
+}
+
+func withShellIntegration(lines []string) []string {
+	var kept []string
+	for _, line := range lines {
+		name, _, ok := parseAliasDefinition(line)
+		if (ok && name == "al") || strings.Contains(line, "shell-init bash") || strings.TrimSpace(line) == "# Alias Lens shell integration" {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	for len(kept) > 0 && strings.TrimSpace(kept[len(kept)-1]) == "" {
+		kept = kept[:len(kept)-1]
+	}
+	kept = append(kept, "", "# Alias Lens shell integration", `eval "$(command alias-lens shell-init bash)"`)
+	return kept
+}
+
+func ensureAliasFileExists(aliasPath string) error {
+	if _, err := os.Stat(aliasPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	config, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	if config.Repository != "" {
+		remotePath := filepath.Join(config.Repository, filepath.Clean(config.AliasFile))
+		if remote, readErr := os.ReadFile(remotePath); readErr == nil {
+			if err := writeNewAliasFile(aliasPath, remote); err != nil {
+				return err
+			}
+			fmt.Println("Restored .bash_aliases from the configured repository.")
+			return nil
+		} else if !os.IsNotExist(readErr) {
+			return readErr
+		}
+	}
+	if err := writeNewAliasFile(aliasPath, nil); err != nil {
+		return err
+	}
+	fmt.Println("Created ~/.bash_aliases with mode 0600.")
 	return nil
 }
 

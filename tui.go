@@ -218,7 +218,7 @@ func (m model) View() string {
 	matches := m.currentAliases()
 	cursor := min(m.cursor, max(0, len(matches)-1))
 
-	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("~/.bash_aliases") + dimStyle.Render(fmt.Sprintf("  •  %d loaded  •  %d issues  •  %s", len(m.aliases), healthIssueCount(m.aliases), m.theme.Name))
+	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("~/.bash_aliases") + dimStyle.Render(fmt.Sprintf("  •  %d loaded  •  %d issues  •  %s  •  %s", len(m.aliases), healthIssueCount(m.aliases), m.theme.Name, syncStatusLabel()))
 	title := titleStyle.Render("Find the shortcut before you forget it.") + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
 	if m.selectMode {
 		title = titleStyle.Render("Choose an alias to use in your shell.") + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
