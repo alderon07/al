@@ -187,19 +187,51 @@ func runGit(t *testing.T, directory string, args ...string) string {
 	return string(output)
 }
 
-func TestFilterGitHubRepos(t *testing.T) {
-	repositories := []GitHubRepo{
-		{FullName: "naqi/al", Description: "Alias manager"},
-		{FullName: "naqi/dotfiles", Description: "Shell configuration"},
+func TestFilterRemoteRepos(t *testing.T) {
+	repositories := []RemoteRepo{
+		{Provider: "github", FullName: "naqi/al", Description: "Alias manager"},
+		{Provider: "gitlab", FullName: "naqi/dotfiles", Description: "Shell configuration"},
 	}
 
-	if got := filterGitHubRepos(repositories, "dot"); len(got) != 1 || got[0].FullName != "naqi/dotfiles" {
+	if got := filterRemoteRepos(repositories, "dot"); len(got) != 1 || got[0].FullName != "naqi/dotfiles" {
 		t.Fatalf("name filter returned %#v", got)
 	}
-	if got := filterGitHubRepos(repositories, "manager"); len(got) != 1 || got[0].FullName != "naqi/al" {
+	if got := filterRemoteRepos(repositories, "manager"); len(got) != 1 || got[0].FullName != "naqi/al" {
 		t.Fatalf("description filter returned %#v", got)
 	}
-	if got := filterGitHubRepos(repositories, ""); len(got) != len(repositories) {
+	if got := filterRemoteRepos(repositories, "gitlab"); len(got) != 1 || got[0].FullName != "naqi/dotfiles" {
+		t.Fatalf("provider filter returned %#v", got)
+	}
+	if got := filterRemoteRepos(repositories, ""); len(got) != len(repositories) {
 		t.Fatalf("empty filter returned %d repositories", len(got))
+	}
+}
+
+func TestTrustedNextURLRejectsCredentialRedirects(t *testing.T) {
+	if got := trustedNextURL("https://api.bitbucket.org/2.0/example?page=2", "api.bitbucket.org"); got == "" {
+		t.Fatal("trusted Bitbucket pagination URL was rejected")
+	}
+	if got := trustedNextURL("https://evil.example/steal", "api.bitbucket.org"); got != "" {
+		t.Fatalf("untrusted pagination URL was accepted: %s", got)
+	}
+}
+
+func TestLegacyConfigGetsDefaultProviderLayer(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	directory := filepath.Join(home, ".config", "alias-lens")
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(directory, "config.json"), []byte(`{"repository":"/tmp/dotfiles","alias_file":"shell/.bash_aliases"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	config, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	github, exists := config.Providers["github"]
+	if !exists || !github.Enabled || github.Protocol != "auto" {
+		t.Fatalf("legacy configuration was not migrated in memory: %#v", config)
 	}
 }

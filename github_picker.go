@@ -1,12 +1,10 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -14,25 +12,16 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-type GitHubRepo struct {
-	FullName    string `json:"full_name"`
-	Name        string `json:"name"`
-	Private     bool   `json:"private"`
-	Archived    bool   `json:"archived"`
-	Description string `json:"description"`
-	Permissions struct {
-		Push bool `json:"push"`
-	} `json:"permissions"`
-}
-
 type repoPickerModel struct {
-	repos  []GitHubRepo
-	query  string
-	cursor int
-	width  int
-	height int
-	result string
-	busy   bool
+	repos    []RemoteRepo
+	config   AppConfig
+	warnings []string
+	query    string
+	cursor   int
+	width    int
+	height   int
+	result   string
+	busy     bool
 }
 
 type repoConfiguredMsg struct {
@@ -40,14 +29,21 @@ type repoConfiguredMsg struct {
 	err     error
 }
 
-func runRepoPicker() error {
-	repos, err := listWritableGitHubRepositories()
+func runRepoPicker(only string) error {
+	config, err := loadConfig()
 	if err != nil {
 		return err
 	}
+	repos, warnings := listRemoteRepositories(context.Background(), config, only)
+	if len(repos) == 0 {
+		if len(warnings) > 0 {
+			return fmt.Errorf("no repositories available\n%s", strings.Join(warnings, "\n"))
+		}
+		return fmt.Errorf("no writable repositories found")
+	}
 	theme, _ := loadTheme()
 	applyTheme(theme)
-	program := tea.NewProgram(repoPickerModel{repos: repos, width: 80, height: 24}, tea.WithAltScreen())
+	program := tea.NewProgram(repoPickerModel{repos: repos, config: config, warnings: warnings, width: 80, height: 24}, tea.WithAltScreen())
 	finished, err := program.Run()
 	if err != nil {
 		return err
@@ -56,34 +52,6 @@ func runRepoPicker() error {
 		fmt.Println(selected.result)
 	}
 	return nil
-}
-
-func listWritableGitHubRepositories() ([]GitHubRepo, error) {
-	if _, err := exec.LookPath("gh"); err != nil {
-		return nil, fmt.Errorf("GitHub CLI is required; install gh and run gh auth login")
-	}
-	if output, err := exec.Command("gh", "auth", "status").CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("GitHub login required: run gh auth login\n%s", strings.TrimSpace(string(output)))
-	}
-	endpoint := "user/repos?affiliation=owner,collaborator,organization_member&per_page=100&sort=pushed"
-	output, err := exec.Command("gh", "api", endpoint, "--paginate", "--slurp").CombinedOutput()
-	if err != nil {
-		return nil, fmt.Errorf("list GitHub repositories: %s", strings.TrimSpace(string(output)))
-	}
-	var pages [][]GitHubRepo
-	if err := json.Unmarshal(output, &pages); err != nil {
-		return nil, fmt.Errorf("read GitHub response: %w", err)
-	}
-	var repos []GitHubRepo
-	for _, page := range pages {
-		for _, repo := range page {
-			if repo.Permissions.Push && !repo.Archived {
-				repos = append(repos, repo)
-			}
-		}
-	}
-	sort.SliceStable(repos, func(i, j int) bool { return repos[i].FullName < repos[j].FullName })
-	return repos, nil
 }
 
 func (m repoPickerModel) Init() tea.Cmd { return nil }
@@ -104,7 +72,7 @@ func (m repoPickerModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.busy {
 			return m, nil
 		}
-		filtered := filterGitHubRepos(m.repos, m.query)
+		filtered := filterRemoteRepos(m.repos, m.query)
 		switch message.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
@@ -121,7 +89,7 @@ func (m repoPickerModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			if len(filtered) > 0 {
 				m.busy = true
-				return m, cloneAndConfigureCmd(filtered[m.cursor])
+				return m, cloneAndConfigureCmd(m.config, filtered[m.cursor])
 			}
 		case tea.KeyRunes:
 			m.query += string(message.Runes)
@@ -134,12 +102,12 @@ func (m repoPickerModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 func (m repoPickerModel) View() string {
 	width := max(48, m.width)
 	contentWidth := max(40, min(width-8, 100))
-	filtered := filterGitHubRepos(m.repos, m.query)
+	filtered := filterRemoteRepos(m.repos, m.query)
 	if m.cursor >= len(filtered) {
 		m.cursor = max(0, len(filtered)-1)
 	}
-	header := brandStyle.Render("ALIAS LENS") + "  " + titleStyle.Render("Choose a GitHub repository")
-	subtitle := dimStyle.Render(fmt.Sprintf("%d repositories where you have push access", len(m.repos)))
+	header := brandStyle.Render("ALIAS LENS") + "  " + titleStyle.Render("Choose a remote repository")
+	subtitle := dimStyle.Render(fmt.Sprintf("%d writable repositories across configured providers", len(m.repos)))
 	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle("⌕") + " " + searchText(m.query))
 
 	var list strings.Builder
@@ -161,7 +129,8 @@ func (m repoPickerModel) View() string {
 		if repo.Private {
 			visibility = "private"
 		}
-		line := style.Render(marker+repo.FullName) + "  " + dimStyle.Render(visibility)
+		providerBadge := lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(colorForCategory(repo.Provider)).Padding(0, 1).Render(strings.ToUpper(repo.ProviderTag))
+		line := style.Render(marker+repo.FullName) + "  " + providerBadge + "  " + dimStyle.Render(visibility)
 		list.WriteString(line)
 		if index < end-1 {
 			list.WriteByte('\n')
@@ -171,6 +140,9 @@ func (m repoPickerModel) View() string {
 		list.WriteString(dimStyle.Render("No writable repositories match this search."))
 	}
 	footer := dimStyle.Render("type to filter  ·  ↑↓ move  ·  enter clone/select  ·  esc cancel")
+	if len(m.warnings) > 0 {
+		footer += "\n" + dimStyle.Render("Unavailable: "+strings.Join(m.warnings, " · "))
+	}
 	if m.busy {
 		footer = statusStyle.Render("Cloning and configuring repository…")
 	}
@@ -178,21 +150,21 @@ func (m repoPickerModel) View() string {
 	return lipgloss.NewStyle().Width(width).Height(max(18, m.height)).Padding(1, 3).Render(page)
 }
 
-func filterGitHubRepos(repos []GitHubRepo, query string) []GitHubRepo {
+func filterRemoteRepos(repos []RemoteRepo, query string) []RemoteRepo {
 	needle := strings.ToLower(strings.TrimSpace(query))
 	if needle == "" {
 		return repos
 	}
-	var filtered []GitHubRepo
+	var filtered []RemoteRepo
 	for _, repo := range repos {
-		if strings.Contains(strings.ToLower(repo.FullName), needle) || strings.Contains(strings.ToLower(repo.Description), needle) {
+		if strings.Contains(strings.ToLower(repo.FullName), needle) || strings.Contains(strings.ToLower(repo.Description), needle) || strings.Contains(repo.Provider, needle) {
 			filtered = append(filtered, repo)
 		}
 	}
 	return filtered
 }
 
-func cloneAndConfigureCmd(repo GitHubRepo) tea.Cmd {
+func cloneAndConfigureCmd(config AppConfig, repo RemoteRepo) tea.Cmd {
 	return func() tea.Msg {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -202,11 +174,17 @@ func cloneAndConfigureCmd(repo GitHubRepo) tea.Cmd {
 		if err := os.MkdirAll(root, 0o755); err != nil {
 			return repoConfiguredMsg{err: err}
 		}
-		destination := filepath.Join(root, strings.ReplaceAll(repo.FullName, "/", "--"))
+		destination := filepath.Join(root, repo.Provider, strings.ReplaceAll(repo.FullName, "/", "--"))
+		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+			return repoConfiguredMsg{err: err}
+		}
 		if _, err := os.Stat(filepath.Join(destination, ".git")); os.IsNotExist(err) {
-			output, cloneErr := exec.Command("gh", "repo", "clone", repo.FullName, destination, "--", "--depth=1").CombinedOutput()
-			if cloneErr != nil {
-				return repoConfiguredMsg{err: fmt.Errorf("clone %s: %s", repo.FullName, strings.TrimSpace(string(output)))}
+			provider := providerByID(config, repo.Provider)
+			if provider == nil {
+				return repoConfiguredMsg{err: fmt.Errorf("provider %s is no longer configured", repo.Provider)}
+			}
+			if cloneErr := provider.Clone(context.Background(), repo, destination); cloneErr != nil {
+				return repoConfiguredMsg{err: cloneErr}
 			}
 		}
 		if err := configureRepository(destination); err != nil {

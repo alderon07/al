@@ -19,7 +19,7 @@ It opens an interactive Bubble Tea interface directly in the terminal. A browser
 - **Edits aliases safely.** Add, update, and delete entries without leaving the terminal. Related commands are kept close together in `.bash_aliases`.
 - **Checks alias health.** Find missing executables, risky destructive commands, duplicate definitions, and stale paths.
 - **Fits your terminal.** Switch among Phosphor, JetBrains Darcula, Dracula, and Catppuccin Mocha themes.
-- **Tracks aliases with Git.** Choose a writable GitHub repository from the terminal or connect an existing local dotfiles repository. Syncing commits only the configured alias file.
+- **Tracks aliases with Git.** Choose a writable GitHub, Bitbucket, or GitLab repository from the terminal, or connect an existing local dotfiles repository. Syncing commits only the configured alias file.
 - **Offers an optional web view.** Run a local browser interface when useful; the terminal experience remains the default.
 
 Alias Lens operates locally. It does not upload or execute the commands in your alias file.
@@ -45,14 +45,43 @@ Built-in themes are Phosphor, JetBrains Darcula, Dracula, and Catppuccin Mocha. 
 
 ## Git repository tracking
 
-Authenticate GitHub CLI once, then open the interactive picker:
+GitHub is enabled by default. Authenticate GitHub CLI once, then open the interactive picker:
 
 ```bash
 gh auth login
 al repo
 ```
 
-The picker requests repositories visible to your account, keeps only non-archived repositories where you have push access, and clones your selection into `~/.local/share/alias-lens/repos/`. You can instead connect an existing local Git repository:
+Add Bitbucket Cloud or GitLab to the same picker through the provider configuration layer:
+
+```bash
+# Bitbucket Cloud: repeat this for each workspace you want to search
+al config provider bitbucket YOUR_WORKSPACE
+export BITBUCKET_API_TOKEN="..."
+
+# GitLab.com, or pass a self-managed GitLab hostname as the final argument
+al config provider gitlab
+export GITLAB_TOKEN="..."
+
+# See the effective configuration. Tokens are never included.
+al config
+```
+
+Bitbucket tokens need repository read access to discover repositories. GitLab tokens need API read access. Git push permissions remain controlled by the credentials used by Git itself.
+
+The picker requests repositories visible to your enabled providers and keeps only non-archived repositories where you can push. It clones selections beneath `~/.local/share/alias-lens/repos/<provider>/`.
+
+Clone transport defaults to `auto`: Alias Lens checks for an authenticated, non-interactive SSH connection and prefers the SSH URL when available. Otherwise it uses the provider's HTTPS or CLI flow. Override this per provider when needed:
+
+```bash
+al config protocol github ssh
+al config protocol bitbucket https
+al config protocol gitlab auto
+```
+
+You can limit the picker to one provider with `al repo github`, `al repo bitbucket`, or `al repo gitlab`. Disable a connection with `al config disable PROVIDER`.
+
+You can instead connect an existing local Git repository:
 
 ```bash
 al repo /path/to/dotfiles

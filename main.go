@@ -35,7 +35,7 @@ func main() {
 		runWeb()
 	case "repo":
 		if len(os.Args) == 2 {
-			if err := runRepoPicker(); err != nil {
+			if err := runRepoPicker(""); err != nil {
 				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			}
 			return
@@ -44,11 +44,21 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Usage: al repo [/path/to/dotfiles]")
 			return
 		}
+		if os.Args[2] == "github" || os.Args[2] == "bitbucket" || os.Args[2] == "gitlab" {
+			if err := runRepoPicker(os.Args[2]); err != nil {
+				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			}
+			return
+		}
 		if err := configureRepository(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			return
 		}
 		fmt.Println("Alias Lens will sync only .bash_aliases in", os.Args[2])
+	case "config":
+		if err := runConfigCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
 	case "sync":
 		if len(os.Args) > 3 || (len(os.Args) == 3 && os.Args[2] != "--push") {
 			printUsage()
@@ -67,11 +77,13 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("Usage: al [--web | repo [PATH] | sync [--push]]")
+	fmt.Println("Usage: al [--web | repo [PROVIDER|PATH] | config | sync [--push]]")
 	fmt.Println("  al               Open Alias Lens in the terminal")
 	fmt.Println("  al --web         Start the optional browser interface")
-	fmt.Println("  al repo          Pick and clone a writable GitHub repository")
+	fmt.Println("  al repo          Pick from writable GitHub, Bitbucket, and GitLab repositories")
+	fmt.Println("  al repo PROVIDER Limit the picker to one configured provider")
 	fmt.Println("  al repo PATH     Choose an existing local Git repository")
+	fmt.Println("  al config        Show safe provider configuration and setup commands")
 	fmt.Println("  al sync          Commit only .bash_aliases to that repository")
 	fmt.Println("  al sync --push   Commit and explicitly push it")
 }
