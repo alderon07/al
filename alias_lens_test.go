@@ -430,3 +430,33 @@ func TestCredentialShapedFilesCannotBeTracked(t *testing.T) {
 		}
 	}
 }
+
+func TestTrackedFilesViewShowsSourceDestinationAndState(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	applyTheme(builtInTheme("phosphor"))
+	m := model{
+		width:       100,
+		height:      30,
+		trackedOnly: true,
+		trackedRepo: "/tmp/dotfiles",
+		tracked: []trackedFileItem{{
+			Config: TrackedFileConfig{Source: "/tmp/starship.toml", RepositoryPath: "shell/starship.toml"},
+			State:  SyncState{Status: "synced", Message: "files match"},
+		}},
+	}
+	view := m.View()
+	for _, expected := range []string{"TRACKED CONFIG FILES", "/tmp/starship.toml", "repo/shell/starship.toml", "SYNCED", "files match"} {
+		if !strings.Contains(view, expected) {
+			t.Fatalf("tracked-files view does not contain %q:\n%s", expected, view)
+		}
+	}
+}
+
+func TestTrackedFilesViewExplainsEmptyRegistry(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	applyTheme(builtInTheme("phosphor"))
+	view := (model{width: 90, height: 24, trackedOnly: true}).View()
+	if !strings.Contains(view, "No extra config files are tracked.") || !strings.Contains(view, "al track PATH") {
+		t.Fatalf("empty tracked-files view is not actionable:\n%s", view)
+	}
+}

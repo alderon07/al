@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -46,8 +47,18 @@ type model struct {
 	editingName string
 	deleteName  string
 	healthOnly  bool
+	trackedOnly bool
+	tracked     []trackedFileItem
+	trackedRepo string
+	trackedErr  string
 	selectMode  bool
 	selected    *Alias
+}
+
+type trackedFileItem struct {
+	Config TrackedFileConfig
+	State  SyncState
+	Error  string
 }
 
 func runTUI() {
@@ -117,6 +128,17 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateDeleteConfirmation(message)
 		}
 		m.status = ""
+		if message.Type == tea.KeyCtrlF && !m.selectMode {
+			m.trackedOnly = !m.trackedOnly
+			m.cursor = 0
+			if m.trackedOnly {
+				m = m.refreshTrackedFiles()
+			}
+			return m, nil
+		}
+		if m.trackedOnly {
+			return m.updateTrackedFiles(message)
+		}
 		matches := m.currentAliases()
 		switch message.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
@@ -218,13 +240,20 @@ func (m model) View() string {
 	matches := m.currentAliases()
 	cursor := min(m.cursor, max(0, len(matches)-1))
 
-	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("~/.bash_aliases") + dimStyle.Render(fmt.Sprintf("  •  %d loaded  •  %d issues  •  %s  •  %s", len(m.aliases), healthIssueCount(m.aliases), m.theme.Name, syncStatusLabel()))
+	headerDetails := fmt.Sprintf("  •  %d aliases  •  %s", len(m.aliases), syncStatusLabel())
+	if contentWidth >= 84 {
+		headerDetails = fmt.Sprintf("  •  %d loaded  •  %d issues  •  %s  •  %s", len(m.aliases), healthIssueCount(m.aliases), m.theme.Name, syncStatusLabel())
+	}
+	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("~/.bash_aliases") + dimStyle.Render(headerDetails)
 	title := titleStyle.Render("Find the shortcut before you forget it.") + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
 	if m.selectMode {
 		title = titleStyle.Render("Choose an alias to use in your shell.") + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
 	}
 	if m.adding {
 		return m.addFormView(width, height, contentWidth, header)
+	}
+	if m.trackedOnly {
+		return m.trackedFilesView(width, height, contentWidth, header)
 	}
 	search := lipgloss.NewStyle().
 		Width(contentWidth-3).
@@ -266,7 +295,7 @@ func (m model) View() string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move") + dimStyle.Render("  ^a ") + cyanStyle("add") + dimStyle.Render("  ^e ") + cyanStyle("edit") + dimStyle.Render("  ^d ") + cyanStyle("delete") + dimStyle.Render("  ^h ") + cyanStyle("health") + dimStyle.Render("  ^g ") + cyanStyle("sync")
+	footer := dimStyle.Render("↑↓ move") + dimStyle.Render("  ^a ") + cyanStyle("add") + dimStyle.Render("  ^e ") + cyanStyle("edit") + dimStyle.Render("  ^d ") + cyanStyle("delete") + dimStyle.Render("  ^h ") + cyanStyle("health") + dimStyle.Render("  ^f ") + cyanStyle("files") + dimStyle.Render("  ^g ") + cyanStyle("sync")
 	if m.selectMode {
 		footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  esc cancel")
 	}
@@ -283,6 +312,159 @@ func (m model) View() string {
 		Height(height).
 		Padding(1, 3).
 		Render(page)
+}
+
+func (m model) refreshTrackedFiles() model {
+	config, err := loadConfig()
+	if err != nil {
+		m.tracked = nil
+		m.trackedRepo = ""
+		m.trackedErr = err.Error()
+		return m
+	}
+	m.trackedRepo = config.Repository
+	m.trackedErr = ""
+	m.tracked = make([]trackedFileItem, 0, len(config.TrackedFiles))
+	for _, tracked := range config.TrackedFiles {
+		item := trackedFileItem{Config: tracked}
+		statePath, pathErr := trackedStatePath(tracked)
+		if pathErr != nil {
+			item.Error = pathErr.Error()
+		} else if state, stateErr := loadSyncStateAt(statePath); stateErr != nil {
+			item.Error = stateErr.Error()
+		} else {
+			item.State = state
+		}
+		m.tracked = append(m.tracked, item)
+	}
+	return m
+}
+
+func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch message.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		m.trackedOnly = false
+		m.cursor = 0
+	case tea.KeyCtrlR:
+		m = m.refreshTrackedFiles()
+		m.status = fmt.Sprintf("Reloaded %d tracked files", len(m.tracked))
+	case tea.KeyUp:
+		if m.cursor > 0 {
+			m.cursor--
+		}
+	case tea.KeyDown:
+		if m.cursor < len(m.tracked)-1 {
+			m.cursor++
+		}
+	case tea.KeyPgUp:
+		m.cursor = max(0, m.cursor-m.trackedVisibleCount())
+	case tea.KeyPgDown:
+		m.cursor = min(max(0, len(m.tracked)-1), m.cursor+m.trackedVisibleCount())
+	case tea.KeyHome:
+		m.cursor = 0
+	case tea.KeyEnd:
+		m.cursor = max(0, len(m.tracked)-1)
+	}
+	return m, nil
+}
+
+func (m model) trackedFilesView(width, height, contentWidth int, header string) string {
+	var body strings.Builder
+	body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("TRACKED CONFIG FILES"))
+	body.WriteString(dimStyle.Render(fmt.Sprintf("  %d enrolled", len(m.tracked))))
+	body.WriteByte('\n')
+	if m.trackedRepo == "" {
+		body.WriteString(dimStyle.Render("Repository: not configured"))
+	} else {
+		body.WriteString(dimStyle.Render("Repository: ") + cyanStyle(compactHomePath(m.trackedRepo)))
+	}
+	body.WriteString("\n\n")
+
+	if m.trackedErr != "" {
+		body.WriteString(lipgloss.NewStyle().Foreground(coralColor).Render(wrapText("Could not load tracked files: "+m.trackedErr, contentWidth)))
+	} else if len(m.tracked) == 0 {
+		body.WriteString(titleStyle.Render("No extra config files are tracked."))
+		body.WriteString("\n" + dimStyle.Render("Add one with ") + cyanStyle("al track PATH") + dimStyle.Render(". ~/.bash_aliases remains the primary file."))
+	} else {
+		cursor := min(m.cursor, len(m.tracked)-1)
+		visible := m.trackedVisibleCount()
+		start := 0
+		if cursor >= visible {
+			start = cursor - visible + 1
+		}
+		end := min(len(m.tracked), start+visible)
+		for index := start; index < end; index++ {
+			body.WriteString(renderTrackedFile(m.tracked[index], index == cursor, contentWidth))
+			if index < end-1 {
+				body.WriteByte('\n')
+			}
+		}
+		if len(m.tracked) > visible {
+			body.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(m.tracked))))
+		}
+	}
+
+	footer := dimStyle.Render("↑↓ move  ·  ctrl+r refresh  ·  ctrl+f or esc aliases  ·  ctrl+c quit")
+	if m.status != "" {
+		footer = statusStyle.Render(truncate(m.status, contentWidth))
+	}
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", titleStyle.Render("See what Alias Lens keeps in sync."), "", body.String(), "", footer)
+	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+}
+
+func (m model) trackedVisibleCount() int { return max(1, (m.height-12)/5) }
+
+func renderTrackedFile(item trackedFileItem, active bool, width int) string {
+	cardWidth := max(34, width-3)
+	marker := "  "
+	if active {
+		marker = "▶ "
+	}
+	status := defaultString(item.State.Status, "waiting")
+	if item.Error != "" {
+		status = "error"
+	}
+	statusColor := mutedColor
+	switch status {
+	case "synced", "pushed", "pulled":
+		statusColor = acidColor
+	case "conflict", "error":
+		statusColor = coralColor
+	case "offline":
+		statusColor = amberColor
+	}
+	statusBadge := lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(statusColor).Padding(0, 1).Render(strings.ToUpper(status))
+	lineOne := aliasStyle.Render(marker+compactHomePath(item.Config.Source)) + "  " + statusBadge
+	lineTwo := cyanStyle("↳ repo/") + lipgloss.NewStyle().Foreground(inkColor).Render(truncate(filepath.ToSlash(item.Config.RepositoryPath), cardWidth-10))
+	detail := item.State.Message
+	if item.Error != "" {
+		detail = item.Error
+	}
+	if detail == "" {
+		detail = "Waiting for the first sync cycle"
+	}
+	lineThree := dimStyle.Render(wrapText(detail, cardWidth-6))
+	if !item.State.UpdatedAt.IsZero() {
+		lineThree += "\n" + dimStyle.Render("Updated "+item.State.UpdatedAt.Local().Format("Jan 2, 15:04"))
+	}
+	borderColor := lineColor
+	if active {
+		borderColor = acidColor
+	}
+	return lipgloss.NewStyle().Width(cardWidth).Padding(0, 1).Border(lipgloss.ThickBorder(), false, false, false, true).BorderForeground(borderColor).Render(lineOne + "\n" + lineTwo + "\n" + lineThree)
+}
+
+func compactHomePath(path string) string {
+	home, err := os.UserHomeDir()
+	if err == nil && path == home {
+		return "~"
+	}
+	if err == nil && strings.HasPrefix(path, home+string(filepath.Separator)) {
+		return "~/" + filepath.ToSlash(strings.TrimPrefix(path, home+string(filepath.Separator)))
+	}
+	return filepath.ToSlash(path)
 }
 
 func (m model) updateAddForm(message tea.KeyMsg) (tea.Model, tea.Cmd) {

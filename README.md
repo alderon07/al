@@ -34,6 +34,7 @@ If `~/.bash_aliases` does not exist, Alias Lens restores it from the configured 
 - `Ctrl+E`: edit the selected alias
 - `Ctrl+D`: delete the selected alias after confirmation
 - `Ctrl+H`: show aliases with health warnings
+- `Ctrl+F`: show tracked config files and their sync status
 - `Ctrl+G`: commit aliases to the configured repository
 - `Ctrl+T`: switch themes
 - `Ctrl+R`: reload aliases and theme configuration
