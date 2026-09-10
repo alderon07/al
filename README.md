@@ -40,6 +40,28 @@ git pull --ff-only
 make test install
 ```
 
+## Build and development commands
+
+Run `make` or `make help` to print the command guide. The main targets are:
+
+| Command | What it does |
+| --- | --- |
+| `make fmt` | Rewrites every top-level Go source file with `gofmt`. |
+| `make fmt-check` | Reports files that need formatting without changing them. |
+| `make test` | Runs the Go test suite. |
+| `make vet` | Runs Go's static analyzer to find suspicious code. |
+| `make build` | Builds `alias-lens` at `/tmp/alias-lens-release`. |
+| `make diff-check` | Checks the current Git diff for whitespace errors. |
+| `make check` | Runs the non-modifying format check, tests, static analysis, build, and diff check used by CI. |
+| `make install` | Builds the binary and copies it to `~/.local/bin/alias-lens`. It does not run `alias-lens setup` or edit shell files. |
+
+Override the output or install location on the command line:
+
+```bash
+make build OUTPUT=./alias-lens
+make install PREFIX=/usr/local
+```
+
 Homebrew packaging is in progress. Release maintainers can follow [the release and Homebrew checklist](docs/RELEASING.md).
 
 ## What it does
@@ -57,6 +79,18 @@ Homebrew packaging is in progress. Release maintainers can follow [the release a
 Alias Lens operates locally. It does not upload or execute the commands in your alias file.
 
 If `~/.bash_aliases` does not exist, Alias Lens restores it from the configured repository. If the repository does not contain a copy, Alias Lens creates an empty file with mode `0600`.
+
+## Command help
+
+Run `al help` to see every command grouped by purpose. Use `al help COMMAND` or `al COMMAND --help` to see a command's syntax, file changes, sync behavior, and examples.
+
+```bash
+al help
+al help sync
+al repo --help
+```
+
+The help text marks commands that execute aliases, edit shell files, create Git commits, push to a remote, or enable automatic sync.
 
 ## Terminal controls
 

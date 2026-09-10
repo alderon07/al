@@ -37,6 +37,20 @@ func main() {
 		runTUI()
 		return
 	}
+	if os.Args[1] == "help" || isHelpFlag(os.Args[1]) {
+		if len(os.Args) == 2 {
+			printUsage()
+		} else if len(os.Args) == 3 {
+			printCommandUsage(os.Args[2])
+		} else {
+			fmt.Fprintln(os.Stderr, "Usage: al help [COMMAND]")
+		}
+		return
+	}
+	if len(os.Args) == 3 && isHelpFlag(os.Args[2]) {
+		printCommandUsage(os.Args[1])
+		return
+	}
 	switch os.Args[1] {
 	case "version", "--version", "-v":
 		fmt.Printf("alias-lens %s\n", version)
@@ -205,35 +219,6 @@ func main() {
 	}
 }
 
-func printUsage() {
-	fmt.Println("Usage: al [--web | --version | pick | repo | config | sync]")
-	fmt.Println("  al               Open Alias Lens in the terminal")
-	fmt.Println("  al --web         Start the optional browser interface")
-	fmt.Println("  al --version     Print the installed Alias Lens version")
-	fmt.Println("  al repo          Pick from writable GitHub, Bitbucket, and GitLab repositories")
-	fmt.Println("  al repo PROVIDER Limit the picker to one configured provider")
-	fmt.Println("  al repo PATH     Choose an existing local Git repository")
-	fmt.Println("  al config        Show safe provider configuration and setup commands")
-	fmt.Println("  al pick          Print an alias selected in the terminal picker")
-	fmt.Println("  al use           Run a selected alias after loading shell integration")
-	fmt.Println("  al shell-init bash  Print Bash integration")
-	fmt.Println("  al suggest       Suggest aliases from local Bash history")
-	fmt.Println("  al scan          Check aliases for likely secrets")
-	fmt.Println("  al meta          Add tags, platforms, and favorite metadata")
-	fmt.Println("  al history       List recoverable alias revisions")
-	fmt.Println("  al undo          Restore the latest or a selected revision")
-	fmt.Println("  al doctor        Check shell, Git, providers, SSH, and sync setup")
-	fmt.Println("  al setup         Install Bash integration and the Ctrl+G binding")
-	fmt.Println("  al autosync      Enable, disable, or inspect automatic sync")
-	fmt.Println("  al watch         Run one pull/reconcile/push cycle")
-	fmt.Println("  al track         Add an explicit config file to automatic sync")
-	fmt.Println("  al untrack       Remove a config file from automatic sync")
-	fmt.Println("  al sync          Commit only .bash_aliases to that repository")
-	fmt.Println("  al sync --push   Commit and explicitly push it")
-	fmt.Println("  al sync --pull   Pull and import non-conflicting remote aliases")
-	fmt.Println("  al diff          Compare local and tracked aliases by name")
-}
-
 func printBashIntegration() {
 	_, _ = os.Stdout.WriteString(`# Alias Lens shell integration
 unalias al 2>/dev/null || true
@@ -253,6 +238,10 @@ al() {
   fi
   if [ "${1-}" = "use" ]; then
     shift
+    if [ "${1-}" = "--help" ] || [ "${1-}" = "-h" ]; then
+      command alias-lens help use
+      return
+    fi
     local _alias_lens_command
     _alias_lens_command="$(command alias-lens pick --command "$@")" || return
     [ -n "$_alias_lens_command" ] && builtin eval "$_alias_lens_command"
