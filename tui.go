@@ -68,7 +68,6 @@ func runTUI() {
 		return
 	}
 	theme, themeErr := loadTheme()
-	applyTheme(theme)
 	status := ""
 	if themeErr != nil {
 		status = themeErr.Error()
@@ -77,8 +76,10 @@ func runTUI() {
 	options := []tea.ProgramOption{tea.WithAltScreen()}
 	if terminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
 		defer terminal.Close()
+		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
+	applyTheme(theme)
 	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status}, options...).Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Alias Lens could not start:", err)
@@ -96,13 +97,14 @@ func runAliasPicker(query string, commandOnly bool) error {
 		return err
 	}
 	theme, _ := loadTheme()
-	applyTheme(theme)
-	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: true}
 	options := []tea.ProgramOption{tea.WithAltScreen()}
 	if terminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
 		defer terminal.Close()
+		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
+	applyTheme(theme)
+	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: true}
 	finished, err := tea.NewProgram(initial, options...).Run()
 	if err != nil {
 		return err
