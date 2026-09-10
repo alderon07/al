@@ -134,16 +134,20 @@ func runSetup() error {
 			return err
 		}
 		fmt.Println("Alias Lens shell integration is already installed.")
+	} else {
+		if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
+			return err
+		}
+		if err := ensureBashLoadsAliases(filepath.Join(filepath.Dir(aliasPath), ".bashrc")); err != nil {
+			return err
+		}
+		fmt.Println("Installed Alias Lens shell integration. Start a new Bash shell to use al use and Ctrl+G.")
+	}
+	if !interactiveInput(os.Stdin) {
+		fmt.Println("Optional developer aliases were not reviewed because input is not interactive. Run al setup in a terminal to review them.")
 		return nil
 	}
-	if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
-		return err
-	}
-	if err := ensureBashLoadsAliases(filepath.Join(filepath.Dir(aliasPath), ".bashrc")); err != nil {
-		return err
-	}
-	fmt.Println("Installed Alias Lens shell integration. Start a new Bash shell to use al use and Ctrl+G.")
-	return nil
+	return offerDefaultAliases(aliasPath, os.Stdin, os.Stdout)
 }
 
 func withShellIntegration(lines []string) []string {

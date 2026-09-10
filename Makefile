@@ -20,7 +20,7 @@ help:
 		'  make build       Build alias-lens at OUTPUT.' \
 		'  make diff-check  Check the Git diff for whitespace errors.' \
 		'  make check       Run fmt-check, test, vet, build, and diff-check.' \
-		'  make install     Build and copy alias-lens to BINDIR.' \
+		'  make install     Test, build, and copy alias-lens to BINDIR.' \
 		'' \
 		'Default paths' \
 		'  OUTPUT=/tmp/alias-lens-release' \
@@ -56,6 +56,6 @@ diff-check:
 
 check: fmt-check test vet build diff-check
 
-install: build
+install: test build
 	mkdir -p "$(BINDIR)"
 	install -m 0755 "$(OUTPUT)" "$(BINDIR)/alias-lens"

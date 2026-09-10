@@ -19,7 +19,7 @@ Alias Lens requires Bash, Make, and Go 1.24 or newer. Clone the repository and i
 ```bash
 git clone https://github.com/alderon07/al.git
 cd al
-make test install
+make install
 ```
 
 Make sure `~/.local/bin` is on `PATH`. Install the `al` Bash function and start a new shell:
@@ -32,12 +32,14 @@ al --version
 
 `alias-lens setup` preserves your aliases. Before it edits `~/.bash_aliases`, it creates `~/.bash_aliases.alias-lens.bak` and a timestamped private revision. It replaces an existing alias named `al` because Alias Lens uses that command. If setup must add the `.bash_aliases` loader to `~/.bashrc`, it first creates `~/.bashrc.alias-lens.bak`.
 
+During interactive setup, Alias Lens offers a small set of optional Git and file-listing aliases. It prints every alias and explains what it does before asking. The default answer is no. If you accept, setup skips existing alias names and commands rather than replacing them.
+
 To update a local installation, pull the repository and rebuild the binary:
 
 ```bash
 cd /path/to/al
 git pull --ff-only
-make test install
+make install
 ```
 
 ## Build and development commands
@@ -53,7 +55,7 @@ Run `make` or `make help` to print the command guide. The main targets are:
 | `make build` | Builds `alias-lens` at `/tmp/alias-lens-release`. |
 | `make diff-check` | Checks the current Git diff for whitespace errors. |
 | `make check` | Runs the non-modifying format check, tests, static analysis, build, and diff check used by CI. |
-| `make install` | Builds the binary and copies it to `~/.local/bin/alias-lens`. It does not run `alias-lens setup` or edit shell files. |
+| `make install` | Runs the tests, builds the binary, and copies it to `~/.local/bin/alias-lens`. It does not run `alias-lens setup` or edit shell files. |
 
 Override the output or install location on the command line:
 

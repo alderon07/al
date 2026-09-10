@@ -105,7 +105,9 @@ Failed checks print the command or action that should fix them.
 
 Install the Bash function used by "al" and "al use", plus the Ctrl+G binding.
 The command may edit ~/.bash_aliases and ~/.bashrc. It creates backups and a
-private revision first, and creates a missing alias file with mode 0600.
+private revision first, and creates a missing alias file with mode 0600. In an
+interactive terminal, it also shows a set of optional developer aliases and
+asks before adding them. The default answer is no.
 `,
 	"repo": `Usage:
   al repo

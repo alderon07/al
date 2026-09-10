@@ -288,7 +288,7 @@ func (m model) View() string {
 		for index := start; index < end; index++ {
 			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth))
 			if index < end-1 {
-				body.WriteByte('\n')
+				body.WriteString("\n\n")
 			}
 		}
 		if strings.TrimSpace(m.query) != "" {
@@ -648,7 +648,7 @@ func renderAlias(alias Alias, active bool, width int) string {
 		Render(lineOne + "\n" + description + "\n" + lineTwo)
 }
 
-func (m model) visibleCount() int { return max(1, (m.height-14)/3) }
+func (m model) visibleCount() int { return max(1, (m.height-14)/4) }
 
 func aliasWindow(aliases []Alias, cursor, width, height int) (int, int) {
 	if len(aliases) == 0 {
@@ -661,10 +661,14 @@ func aliasWindow(aliases []Alias, cursor, width, height int) (int, int) {
 		end := start
 		for end < len(aliases) {
 			cardHeight := lipgloss.Height(renderAlias(aliases[end], end == cursor, width))
-			if used+cardHeight > budget && end > start {
+			separatorHeight := 0
+			if end > start {
+				separatorHeight = 1
+			}
+			if used+separatorHeight+cardHeight > budget && end > start {
 				break
 			}
-			used += cardHeight
+			used += separatorHeight + cardHeight
 			end++
 		}
 		if cursor < end {

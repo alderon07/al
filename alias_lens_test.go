@@ -478,8 +478,8 @@ func TestEnterSelectsAliasAndQuitsTheTUI(t *testing.T) {
 
 func TestTallTerminalShowsMoreSuggestedAliases(t *testing.T) {
 	applyTheme(builtInTheme("phosphor"))
-	if count := (model{height: 40}).visibleCount(); count != 8 {
-		t.Fatalf("tall terminal pages by %d aliases, want 8", count)
+	if count := (model{height: 40}).visibleCount(); count != 6 {
+		t.Fatalf("tall terminal pages by %d aliases, want 6", count)
 	}
 	aliases := make([]Alias, 10)
 	for index := range aliases {
@@ -489,7 +489,7 @@ func TestTallTerminalShowsMoreSuggestedAliases(t *testing.T) {
 		t.Fatalf("suggestion cap returned %d aliases, want 10", len(suggestions))
 	}
 	start, end := aliasWindow(aliases, 0, 82, 40)
-	if start != 0 || end < 8 {
-		t.Fatalf("tall terminal rendered aliases %d through %d, want at least 8", start, end)
+	if start != 0 || end < 6 {
+		t.Fatalf("tall terminal rendered aliases %d through %d, want at least 6", start, end)
 	}
 }
