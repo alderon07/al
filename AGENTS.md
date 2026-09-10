@@ -42,7 +42,7 @@ Keep shell behavior behind `ShellAdapter`. Bash owns `.bash_aliases`, `.bash_his
 - `providers.go` implements GitHub, Bitbucket Cloud, and GitLab repository discovery.
 - `github_picker.go` contains the provider-neutral remote repository picker. The filename remains for Git history.
 - `config.go` owns app and provider configuration.
-- `theme.go` contains verified theme palettes and overrides.
+- `theme.go` contains verified dark Codex palettes, Alias Lens originals, selection order, and overrides.
 - `web/` contains the optional local browser view.
 - `TODO.md` tracks user-facing work and acceptance criteria.
 

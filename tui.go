@@ -41,6 +41,10 @@ type model struct {
 	height      int
 	status      string
 	theme       Theme
+	themePicker bool
+	themeCursor int
+	themeBefore Theme
+	helpVisible bool
 	adding      bool
 	field       int
 	form        [3]string
@@ -131,6 +135,12 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = message.Height
 		return m, nil
 	case tea.KeyMsg:
+		if m.helpVisible {
+			return m.updateHelp(message)
+		}
+		if m.themePicker {
+			return m.updateThemePicker(message)
+		}
 		if m.adding {
 			return m.updateAddForm(message)
 		}
@@ -148,6 +158,11 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.trackedOnly {
 			return m.updateTrackedFiles(message)
+		}
+		if message.Type == tea.KeyRunes && len(message.Runes) == 1 && message.Runes[0] == '?' {
+			m.helpVisible = true
+			m.status = ""
+			return m, nil
 		}
 		matches := m.currentAliases()
 		switch message.Type {
@@ -168,18 +183,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				applyTheme(theme)
 			}
 		case tea.KeyCtrlT:
-			m.theme = nextTheme(m.theme.Preset)
-			applyTheme(m.theme)
-			if err := saveTheme(m.theme); err != nil {
-				m.status = "Theme changed but could not be saved: " + err.Error()
-			} else {
-				m.status = "Theme: " + m.theme.Name
-			}
+			m.openThemePicker()
 		case tea.KeyCtrlA:
-			m.adding = true
-			m.field = 0
-			m.form = [3]string{}
-			m.editingName = ""
+			m.startAddForm()
 		case tea.KeyCtrlE:
 			if len(matches) > 0 {
 				selected := matches[m.cursor]
@@ -230,6 +236,8 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				selected := matches[m.cursor]
 				m.selected = &selected
 				return m, tea.Quit
+			} else if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.selectMode {
+				m.startAddForm()
 			}
 		case tea.KeyRunes:
 			m.healthOnly = false
@@ -258,8 +266,20 @@ func (m model) View() string {
 	} else if m.executeMode {
 		title = titleStyle.Render("Choose an alias to run.") + "\n" + dimStyle.Render("Enter executes it. Esc exits without running anything.")
 	}
+	if len(m.aliases) == 0 {
+		title = titleStyle.Render("Set up your first shortcut.") + "\n" + dimStyle.Render("Create an alias here or add one to the active alias file.")
+		if m.selectMode {
+			title = titleStyle.Render("No aliases are available to select.") + "\n" + dimStyle.Render("Open Alias Lens normally to create one.")
+		}
+	}
 	if m.adding {
 		return m.addFormView(width, height, contentWidth, header)
+	}
+	if m.themePicker {
+		return m.themePickerView(width, height, contentWidth, header)
+	}
+	if m.helpVisible {
+		return m.helpView(width, height, contentWidth, header)
 	}
 	if m.trackedOnly {
 		return m.trackedFilesView(width, height, contentWidth, header)
@@ -272,14 +292,18 @@ func (m model) View() string {
 		Render(acidStyle("$") + " " + searchText(m.query))
 
 	var body strings.Builder
-	if m.healthOnly {
+	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
+		body.WriteString(m.emptyStateView(contentWidth))
+	} else if m.healthOnly {
 		body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("⚠ ALIAS HEALTH"))
 		body.WriteByte('\n')
 	} else if strings.TrimSpace(m.query) == "" {
 		body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("✦ SUGGESTED FOR YOU"))
 		body.WriteByte('\n')
 	}
-	if m.healthOnly && len(matches) == 0 {
+	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
+		// The empty state above replaces the normal search result list.
+	} else if m.healthOnly && len(matches) == 0 {
 		body.WriteString(statusStyle.Render("No health issues found."))
 	} else if len(matches) == 0 {
 		body.WriteString(titleStyle.Render(fmt.Sprintf("No alias matched %q", m.query)))
@@ -299,14 +323,20 @@ func (m model) View() string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ^f ") + cyanStyle("files") + dimStyle.Render("  ·  ^h ") + cyanStyle("health") + dimStyle.Render("  ·  esc quit")
-	if contentWidth < 60 {
-		footer = dimStyle.Render("↑↓  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ^f ") + cyanStyle("files") + dimStyle.Render("  ·  esc quit")
+	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
+	if contentWidth < 96 {
+		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  ? help  ·  ^t themes  ·  esc quit")
 	}
 	if m.selectMode {
-		footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  esc cancel")
+		footer = dimStyle.Render("type · ↑↓ move · enter select · ? help · esc cancel")
+		if contentWidth >= 96 {
+			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
+		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ^f files  ·  ^h health  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  ^t themes  ·  esc quit")
+		if contentWidth >= 96 {
+			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
+		}
 	}
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
@@ -321,6 +351,180 @@ func (m model) View() string {
 		Height(height).
 		Padding(1, 3).
 		Render(page)
+}
+
+func (m *model) startAddForm() {
+	m.adding = true
+	m.field = 0
+	m.form = [3]string{}
+	m.editingName = ""
+}
+
+func (m model) emptyStateView(contentWidth int) string {
+	var body strings.Builder
+	body.WriteString(titleStyle.Render("No aliases yet."))
+	body.WriteString("\n" + dimStyle.Render(wrapText("Alias Lens is reading "+aliasDisplayPath()+" for "+activeShellAdapter().DisplayName()+".", contentWidth)))
+	if m.selectMode {
+		body.WriteString("\n\n" + dimStyle.Render("Open ") + cyanStyle("al") + dimStyle.Render(" and press ") + aliasStyle.Render("Ctrl+A") + dimStyle.Render(" to create one."))
+		return body.String()
+	}
+	body.WriteString("\n\n" + aliasStyle.Render("Enter") + dimStyle.Render(" or ") + aliasStyle.Render("Ctrl+A") + dimStyle.Render("  Create your first alias"))
+	body.WriteString("\n" + dimStyle.Render("Ctrl+R") + dimStyle.Render("             Reload aliases added outside Alias Lens"))
+	return body.String()
+}
+
+func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if message.Type == tea.KeyCtrlC {
+		return m, tea.Quit
+	}
+	if message.Type == tea.KeyEsc || (message.Type == tea.KeyRunes && len(message.Runes) == 1 && message.Runes[0] == '?') {
+		m.helpVisible = false
+	}
+	return m, nil
+}
+
+func (m model) helpView(width, height, contentWidth int, header string) string {
+	enterAction := "Run the selected alias"
+	if m.selectMode {
+		enterAction = "Select without running"
+	}
+	shortcuts := [][2]string{
+		{"Type", "Search names, commands, and descriptions"},
+		{"↑↓ / PgUp PgDn", "Move through results"},
+		{"Enter", enterAction},
+		{"Ctrl+A / E / D", "Add, edit, or delete an alias"},
+		{"Ctrl+H", "Show aliases with health issues"},
+		{"Ctrl+F", "Show files enrolled in sync"},
+		{"Ctrl+G", "Commit alias changes locally"},
+		{"Ctrl+T", "Choose a theme with live preview"},
+		{"Ctrl+R", "Reload aliases and theme settings"},
+		{"? / Esc", "Close this guide"},
+	}
+
+	keyWidth := 16
+	if contentWidth < 60 {
+		keyWidth = 14
+	}
+	var rows strings.Builder
+	for index, shortcut := range shortcuts {
+		key := aliasStyle.Render(fmt.Sprintf("%-*s", keyWidth, shortcut[0]))
+		descriptionWidth := max(12, contentWidth-keyWidth-2)
+		rows.WriteString(key + dimStyle.Render(truncate(shortcut[1], descriptionWidth)))
+		if index < len(shortcuts)-1 {
+			rows.WriteByte('\n')
+		}
+	}
+
+	title := titleStyle.Render("Keyboard guide") + "\n" + dimStyle.Render("Keep your hands on the keyboard. Press ? again to return.")
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", rows.String(), "", dimStyle.Render("? or esc close  ·  ctrl+c quit"))
+	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+}
+
+func (m *model) openThemePicker() {
+	m.themePicker = true
+	m.themeBefore = m.theme
+	m.themeCursor = 0
+	for index, theme := range availableThemes() {
+		if theme.Preset == m.theme.Preset {
+			m.themeCursor = index
+			break
+		}
+	}
+	m.status = ""
+}
+
+func (m model) updateThemePicker(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	themes := availableThemes()
+	if len(themes) == 0 {
+		m.themePicker = false
+		return m, nil
+	}
+	switch message.Type {
+	case tea.KeyCtrlC:
+		m.theme = m.themeBefore
+		applyTheme(m.theme)
+		return m, tea.Quit
+	case tea.KeyEsc:
+		m.theme = m.themeBefore
+		m.themePicker = false
+		m.themeBefore = Theme{}
+		m.status = "Theme unchanged"
+		applyTheme(m.theme)
+		return m, nil
+	case tea.KeyEnter:
+		if err := saveTheme(m.theme); err != nil {
+			m.status = "Could not save theme: " + err.Error()
+			return m, nil
+		}
+		m.themePicker = false
+		m.themeBefore = Theme{}
+		m.status = "Theme: " + m.theme.Name
+		return m, nil
+	case tea.KeyUp:
+		m.themeCursor = max(0, m.themeCursor-1)
+	case tea.KeyDown:
+		m.themeCursor = min(len(themes)-1, m.themeCursor+1)
+	case tea.KeyPgUp:
+		m.themeCursor = max(0, m.themeCursor-m.themePickerVisibleCount())
+	case tea.KeyPgDown:
+		m.themeCursor = min(len(themes)-1, m.themeCursor+m.themePickerVisibleCount())
+	case tea.KeyHome:
+		m.themeCursor = 0
+	case tea.KeyEnd:
+		m.themeCursor = len(themes) - 1
+	default:
+		return m, nil
+	}
+	m.theme = themes[m.themeCursor]
+	m.status = ""
+	applyTheme(m.theme)
+	return m, nil
+}
+
+func (m model) themePickerVisibleCount() int {
+	return max(5, m.height-12)
+}
+
+func (m model) themePickerView(width, height, contentWidth int, header string) string {
+	themes := availableThemes()
+	cursor := min(max(0, m.themeCursor), max(0, len(themes)-1))
+	visible := min(len(themes), m.themePickerVisibleCount())
+	start := max(0, cursor-visible/2)
+	start = min(start, max(0, len(themes)-visible))
+	end := min(len(themes), start+visible)
+
+	var rows strings.Builder
+	for index := start; index < end; index++ {
+		theme := themes[index]
+		marker := "  "
+		rowStyle := lipgloss.NewStyle().Width(contentWidth-2).Padding(0, 1).Foreground(mutedColor)
+		if index == cursor {
+			marker = "▶ "
+			rowStyle = rowStyle.Bold(true).Foreground(inkColor).Background(activeColor)
+		}
+		swatches := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Accent)).Render("●") +
+			lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Secondary)).Render("●") +
+			lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Git)).Render("●") +
+			lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Files)).Render("●") +
+			lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Dev)).Render("●")
+		labelWidth := max(12, contentWidth-25)
+		label := fmt.Sprintf("%s%-*s", marker, labelWidth, truncate(theme.Name, labelWidth))
+		rows.WriteString(rowStyle.Render(label + "  " + swatches))
+		if index < end-1 {
+			rows.WriteByte('\n')
+		}
+	}
+	if len(themes) > visible {
+		rows.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(themes))))
+	}
+
+	title := titleStyle.Render("Choose a theme") + "\n" + dimStyle.Render("The preview changes as you move. Save only when it looks right.")
+	footer := dimStyle.Render("↑↓ preview  ·  pgup/pgdn jump  ·  enter ") + cyanStyle("save") + dimStyle.Render("  ·  esc restore")
+	if m.status != "" {
+		footer = lipgloss.NewStyle().Foreground(coralColor).Render(truncate(m.status, contentWidth))
+	}
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", rows.String(), "", footer)
+	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 
 func (m model) refreshTrackedFiles() model {

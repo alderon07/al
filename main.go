@@ -83,6 +83,10 @@ func main() {
 		if err := runConfigCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
+	case "theme":
+		if err := runThemeCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
 	case "pick":
 		commandOnly := false
 		arguments := os.Args[2:]

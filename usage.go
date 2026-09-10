@@ -37,6 +37,7 @@ Configure Git sync:
   watch      Run one automatic-sync reconciliation cycle in the foreground
 
 Other commands:
+  theme      List dark themes or select one by preset name
   shell-init Print Bash or Zsh integration; normally called by al setup
   --web      Start the optional local web interface on 127.0.0.1:8787
   --version  Print the installed version
@@ -193,6 +194,15 @@ Run one automatic-sync reconciliation cycle in the foreground. The cycle pulls
 with fast-forward-only Git behavior, compares saved hashes, and then safely
 pulls or pushes when only one side changed. If both sides changed, it saves
 private conflict copies and leaves the live alias file unchanged.
+`,
+	"theme": `Usage: al theme [PRESET]
+
+List every built-in dark theme and mark the active one. Pass a preset name to
+save it immediately. Ctrl+T opens a live-preview theme picker inside the TUI.
+
+Examples:
+  al theme
+  al theme tokyo-night
 `,
 	"shell-init": `Usage: al shell-init bash|zsh
 

@@ -66,7 +66,7 @@ Homebrew packaging is in progress. Release maintainers can follow [the release a
 - **Explains every shortcut.** Alias Lens shows the command and a plain-language description derived from nearby comments and known command patterns.
 - **Edits aliases safely.** Add, update, and delete entries without leaving the terminal. Related commands are kept close together in the active alias file.
 - **Checks alias health.** Find missing executables, risky destructive commands, duplicate definitions, and stale paths.
-- **Fits your terminal.** Switch among Phosphor, JetBrains Darcula, Dracula, and Catppuccin Mocha themes.
+- **Fits your terminal.** Use every dark theme shipped with Codex, plus the original Phosphor and JetBrains Darcula presets.
 - **Tracks aliases with Git.** Choose a writable GitHub, Bitbucket, or GitLab repository from the terminal, or connect an existing local dotfiles repository. Syncing commits only the configured alias file.
 - **Offers an optional web view.** Run a local browser interface when useful; the terminal experience remains the default.
 
@@ -88,6 +88,7 @@ The help text marks commands that execute aliases, edit shell files, create Git 
 
 ## Terminal controls
 
+- `?`: open or close the keyboard guide
 - `↑` / `↓`: select an alias
 - `Enter`: close the TUI and execute the selected alias
 - `Ctrl+A`: add an alias
@@ -96,9 +97,11 @@ The help text marks commands that execute aliases, edit shell files, create Git 
 - `Ctrl+H`: show aliases with health warnings
 - `Ctrl+F`: show tracked config files and their sync status
 - `Ctrl+G`: commit aliases to the configured repository
-- `Ctrl+T`: switch themes
+- `Ctrl+T`: open the theme picker; moving through it previews each theme
 - `Ctrl+R`: reload aliases and theme configuration
 - `Esc`: exit
+
+When the active alias file is empty, Alias Lens shows the file and detected shell instead of an empty search result. Press `Enter` or `Ctrl+A` to create the first alias.
 
 ## Use an alias from the picker
 
@@ -162,7 +165,16 @@ New aliases are inserted beside commands with the same tool and subcommand. Befo
 
 ## Themes
 
-Built-in themes are Phosphor, JetBrains Darcula, Dracula, and Catppuccin Mocha. `Ctrl+T` cycles through them and saves the selection to `~/.config/alias-lens/theme.json`. You can also set `preset` to `phosphor`, `darcula`, `dracula`, or `catppuccin`. Add any color field from `theme.go` to override that part of the preset.
+Alias Lens includes the 27 dark theme families shipped with Codex: Absolutely, Ayu, Catppuccin, Codex, Dracula, Everforest, GitHub, Gruvbox, Linear, Lobster, Material, Matrix, Monokai, Night Owl, Nord, Notion, One, Oscurange, Raycast, Rose Pine, Sentry, Solarized, Temple, Tokyo Night, Vercel, VS Code Plus, and Xcode. Phosphor and JetBrains Darcula remain available as Alias Lens originals.
+
+List preset names or select one directly:
+
+```bash
+al theme
+al theme tokyo-night
+```
+
+`Ctrl+T` opens the theme picker. Move through the list to preview themes immediately, press `Enter` to save, or press `Esc` to restore the previous theme. You can still override individual color fields in `~/.config/alias-lens/theme.json`.
 
 ## Git repository tracking
 

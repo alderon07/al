@@ -24,7 +24,7 @@ func TestEveryDocumentedCommandHasDetailedUsage(t *testing.T) {
 	commands := []string{
 		"pick", "use", "suggest", "meta", "describe", "scan", "history", "undo", "doctor",
 		"setup", "repo", "config", "track", "untrack", "sync", "diff",
-		"autosync", "watch", "shell-init", "--web", "--version",
+		"autosync", "watch", "theme", "shell-init", "--web", "--version",
 	}
 	for _, command := range commands {
 		text, ok := commandUsage[command]
