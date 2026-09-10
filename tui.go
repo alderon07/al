@@ -74,12 +74,19 @@ func runTUI() {
 		status = themeErr.Error()
 	}
 
-	program := tea.NewProgram(
-		model{aliases: aliases, width: 80, height: 24, theme: theme, status: status},
-		tea.WithAltScreen(),
-	)
-	if _, err := program.Run(); err != nil {
+	options := []tea.ProgramOption{tea.WithAltScreen()}
+	if terminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
+		defer terminal.Close()
+		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
+	}
+	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status}, options...).Run()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "Alias Lens could not start:", err)
+		return
+	}
+	selected, ok := finished.(model)
+	if ok && selected.selected != nil {
+		fmt.Println(selected.selected.Name)
 	}
 }
 
@@ -217,12 +224,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyEnter:
 			if len(matches) > 0 {
-				if m.selectMode {
-					selected := matches[m.cursor]
-					m.selected = &selected
-					return m, tea.Quit
-				}
-				m.status = "Command: " + matches[m.cursor].Command
+				selected := matches[m.cursor]
+				m.selected = &selected
+				return m, tea.Quit
 			}
 		case tea.KeyRunes:
 			m.healthOnly = false
@@ -278,12 +282,7 @@ func (m model) View() string {
 			body.WriteString("\n" + dimStyle.Render("Did you mean ") + aliasStyle.Render(strings.Join(close, "  ")) + dimStyle.Render(" ?"))
 		}
 	} else {
-		visible := m.visibleCount()
-		start := 0
-		if cursor >= visible {
-			start = cursor - visible + 1
-		}
-		end := min(len(matches), start+visible)
+		start, end := aliasWindow(matches, cursor, contentWidth, height)
 		for index := start; index < end; index++ {
 			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth))
 			if index < end-1 {
@@ -295,7 +294,10 @@ func (m model) View() string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move") + dimStyle.Render("  ^a ") + cyanStyle("add") + dimStyle.Render("  ^e ") + cyanStyle("edit") + dimStyle.Render("  ^d ") + cyanStyle("delete") + dimStyle.Render("  ^h ") + cyanStyle("health") + dimStyle.Render("  ^f ") + cyanStyle("files") + dimStyle.Render("  ^g ") + cyanStyle("sync")
+	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ^f ") + cyanStyle("files") + dimStyle.Render("  ·  ^h ") + cyanStyle("health") + dimStyle.Render("  ·  esc quit")
+	if contentWidth < 60 {
+		footer = dimStyle.Render("↑↓  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ^f ") + cyanStyle("files") + dimStyle.Render("  ·  esc quit")
+	}
 	if m.selectMode {
 		footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  esc cancel")
 	}
@@ -644,7 +646,31 @@ func renderAlias(alias Alias, active bool, width int) string {
 		Render(lineOne + "\n" + description + "\n" + lineTwo)
 }
 
-func (m model) visibleCount() int { return max(1, (m.height-13)/5) }
+func (m model) visibleCount() int { return max(1, (m.height-14)/3) }
+
+func aliasWindow(aliases []Alias, cursor, width, height int) (int, int) {
+	if len(aliases) == 0 {
+		return 0, 0
+	}
+	cursor = min(max(0, cursor), len(aliases)-1)
+	budget := max(3, height-14)
+	for start := 0; start <= cursor; start++ {
+		used := 0
+		end := start
+		for end < len(aliases) {
+			cardHeight := lipgloss.Height(renderAlias(aliases[end], end == cursor, width))
+			if used+cardHeight > budget && end > start {
+				break
+			}
+			used += cardHeight
+			end++
+		}
+		if cursor < end {
+			return start, end
+		}
+	}
+	return cursor, cursor + 1
+}
 
 func suggestedAliases(aliases []Alias) []Alias {
 	type ranked struct {
@@ -683,7 +709,7 @@ func suggestedAliases(aliases []Alias) []Alias {
 		}
 		return rankedAliases[i].score > rankedAliases[j].score
 	})
-	limit := min(6, len(rankedAliases))
+	limit := min(12, len(rankedAliases))
 	result := make([]Alias, limit)
 	for index := range limit {
 		result[index] = rankedAliases[index].alias

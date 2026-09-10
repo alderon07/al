@@ -1,11 +1,14 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestParseAliasDefinitionRoundTripsShellQuotes(t *testing.T) {
@@ -458,5 +461,35 @@ func TestTrackedFilesViewExplainsEmptyRegistry(t *testing.T) {
 	view := (model{width: 90, height: 24, trackedOnly: true}).View()
 	if !strings.Contains(view, "No extra config files are tracked.") || !strings.Contains(view, "al track PATH") {
 		t.Fatalf("empty tracked-files view is not actionable:\n%s", view)
+	}
+}
+
+func TestEnterSelectsAliasAndQuitsTheTUI(t *testing.T) {
+	m := model{aliases: []Alias{{Name: "gc", Command: "git commit"}}, query: "g"}
+	updated, command := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	result := updated.(model)
+	if command == nil {
+		t.Fatal("Enter did not request that the TUI exit")
+	}
+	if result.selected == nil || result.selected.Name != "gc" {
+		t.Fatalf("Enter selected %#v, want gc", result.selected)
+	}
+}
+
+func TestTallTerminalShowsMoreSuggestedAliases(t *testing.T) {
+	applyTheme(builtInTheme("phosphor"))
+	if count := (model{height: 40}).visibleCount(); count != 8 {
+		t.Fatalf("tall terminal pages by %d aliases, want 8", count)
+	}
+	aliases := make([]Alias, 10)
+	for index := range aliases {
+		aliases[index] = Alias{Name: fmt.Sprintf("a%d", index), Command: fmt.Sprintf("echo %d", index)}
+	}
+	if suggestions := suggestedAliases(aliases); len(suggestions) != 10 {
+		t.Fatalf("suggestion cap returned %d aliases, want 10", len(suggestions))
+	}
+	start, end := aliasWindow(aliases, 0, 82, 40)
+	if start != 0 || end < 8 {
+		t.Fatalf("tall terminal rendered aliases %d through %d, want at least 8", start, end)
 	}
 }

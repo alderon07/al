@@ -230,9 +230,22 @@ func printUsage() {
 }
 
 func printBashIntegration() {
-	fmt.Print(`# Alias Lens shell integration
+	_, _ = os.Stdout.WriteString(`# Alias Lens shell integration
 unalias al 2>/dev/null || true
 al() {
+  if [ "$#" -eq 0 ]; then
+    local _alias_lens_name _alias_lens_line _alias_lens_prompt
+    _alias_lens_name="$(command alias-lens)" || return
+    [ -z "$_alias_lens_name" ] && return
+    if [[ $- != *i* ]]; then
+      printf '%s\n' "$_alias_lens_name"
+      return
+    fi
+    _alias_lens_prompt="${PS1-}"
+    IFS= read -e -r -i "$_alias_lens_name" -p "${_alias_lens_prompt@P}" _alias_lens_line || return
+    [ -n "$_alias_lens_line" ] && builtin eval -- "$_alias_lens_line"
+    return
+  fi
   if [ "${1-}" = "use" ]; then
     shift
     local _alias_lens_command

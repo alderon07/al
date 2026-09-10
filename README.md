@@ -29,7 +29,7 @@ If `~/.bash_aliases` does not exist, Alias Lens restores it from the configured 
 ## Terminal controls
 
 - `↑` / `↓`: select an alias
-- `Enter`: reveal its full command
+- `Enter`: close the TUI and copy the selected alias to an editable shell line
 - `Ctrl+A`: add an alias
 - `Ctrl+E`: edit the selected alias
 - `Ctrl+D`: delete the selected alias after confirmation
@@ -49,7 +49,7 @@ al setup
 exec bash
 ```
 
-Run `al use` to choose and run an alias in the current shell. This works for commands such as `cd` because Bash evaluates the selected command in the parent shell. Press `Ctrl+G` at a Bash prompt to choose an alias and insert its name at the cursor without running it.
+Run `al`, select an alias, and press `Enter`. Alias Lens closes and places the alias on an editable shell line. Press `Enter` again to run it, or edit it first. Run `al use` to choose and run an alias immediately. Press `Ctrl+G` at a Bash prompt to insert an alias at the current cursor without running it.
 
 Scripts can use `al pick` to return an alias name. Add `--command` to return its command instead:
 
