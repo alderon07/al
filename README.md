@@ -14,15 +14,12 @@ It opens an interactive Bubble Tea interface directly in the terminal. A browser
 
 ## Install locally
 
-Alias Lens requires Bash and Go 1.24 or newer. Clone the repository and install the binary in `~/.local/bin`:
+Alias Lens requires Bash, Make, and Go 1.24 or newer. Clone the repository and install the binary in `~/.local/bin`:
 
 ```bash
 git clone https://github.com/alderon07/al.git
 cd al
-go test ./...
-go build -buildvcs=false -o /tmp/alias-lens .
-mkdir -p ~/.local/bin
-install -m 0755 /tmp/alias-lens ~/.local/bin/alias-lens
+make test install
 ```
 
 Make sure `~/.local/bin` is on `PATH`. Install the `al` Bash function and start a new shell:
@@ -40,9 +37,7 @@ To update a local installation, pull the repository and rebuild the binary:
 ```bash
 cd /path/to/al
 git pull --ff-only
-go test ./...
-go build -buildvcs=false -o /tmp/alias-lens .
-install -m 0755 /tmp/alias-lens ~/.local/bin/alias-lens
+make test install
 ```
 
 Homebrew packaging is in progress. Release maintainers can follow [the release and Homebrew checklist](docs/RELEASING.md).

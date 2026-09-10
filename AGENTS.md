@@ -56,11 +56,7 @@ The command name is `al`. The installed binary is `alias-lens`, which lets the B
 Run these commands from the repository root:
 
 ```bash
-gofmt -w *.go
-go test ./...
-go vet ./...
-go build -buildvcs=false -o /tmp/alias-lens-release .
-git diff --check
+make fmt check
 ```
 
 For terminal layout changes, run the compiled binary in a real terminal at narrow and wide widths. For provider changes, test missing credentials, invalid credentials, pagination, write-access filtering, and SSH fallback. Do not use a production token in a fixture.

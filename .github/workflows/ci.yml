@@ -25,11 +25,5 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Check formatting
-        run: gofmt -w *.go && git diff --exit-code -- '*.go'
-      - name: Test
-        run: go test ./...
-      - name: Vet
-        run: go vet ./...
-      - name: Build
-        run: go build -buildvcs=false -o /tmp/alias-lens .
+      - name: Check
+        run: make check

@@ -8,11 +8,7 @@ Alias Lens needs a stable GitHub release before it can be installed from a Homeb
 2. Run the repository checks:
 
    ```bash
-   gofmt -w *.go
-   go test ./...
-   go vet ./...
-   go build -buildvcs=false -o /tmp/alias-lens-release .
-   git diff --check
+   make fmt check
    ```
 
 3. Commit and push the release setup.
