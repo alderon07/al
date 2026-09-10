@@ -111,7 +111,9 @@ Install the detected shell integration once, then start a new shell:
 al setup
 ```
 
-Run `al`, select an alias, and press `Enter`. Alias Lens closes and executes the selected alias by name. It does not place the underlying command on the terminal line. The TUI labels this action as `execute` so the alias does not run by surprise. `al use QUERY` does the same thing with an initial search. Press `Ctrl+G` at a Bash or Zsh prompt to insert an alias at the current cursor without running it.
+Run `al`, select an alias, and press `Enter`. Alias Lens closes, prints `$ NAME` on the next line, and executes that alias by name. It does not display or execute the underlying command directly. The printed name makes subsequent command output easy to identify. `al use QUERY` runs an alias with an initial search. Press `Ctrl+G` at a Bash or Zsh prompt to insert an alias at the current cursor without running it.
+
+Aliases containing force options, destructive Git operations, recursive deletion, or recursive permission changes open a review screen first. The screen shows the alias command and why Alias Lens flagged it. Press `y` to run the alias or `n`/`Esc` to cancel. Normal aliases still run with one press of `Enter`.
 
 Scripts can use `al pick` to return an alias name. Add `--command` to return its command instead:
 

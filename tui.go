@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -50,6 +51,7 @@ type model struct {
 	form        [3]string
 	editingName string
 	deleteName  string
+	runConfirm  *Alias
 	healthOnly  bool
 	trackedOnly bool
 	tracked     []trackedFileItem
@@ -79,7 +81,9 @@ func runTUI() {
 	}
 
 	options := []tea.ProgramOption{tea.WithAltScreen()}
-	if terminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
+	var terminal *os.File
+	if openedTerminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
+		terminal = openedTerminal
 		defer terminal.Close()
 		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
@@ -92,8 +96,20 @@ func runTUI() {
 	}
 	selected, ok := finished.(model)
 	if ok && selected.selected != nil {
-		fmt.Println(selected.selected.Name)
+		writeAliasSelection(os.Stdout, terminal, selected.selected.Name, fileIsTerminal(os.Stdout))
 	}
+}
+
+func fileIsTerminal(file *os.File) bool {
+	info, err := file.Stat()
+	return err == nil && info.Mode()&os.ModeCharDevice != 0
+}
+
+func writeAliasSelection(stdout, terminal io.Writer, name string, stdoutIsTerminal bool) {
+	if terminal != nil && !stdoutIsTerminal {
+		fmt.Fprintf(terminal, "$ %s\n", name)
+	}
+	fmt.Fprintln(stdout, name)
 }
 
 func runAliasPicker(query string, commandOnly bool) error {
@@ -146,6 +162,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.deleteName != "" {
 			return m.updateDeleteConfirmation(message)
+		}
+		if m.runConfirm != nil {
+			return m.updateRunConfirmation(message)
 		}
 		m.status = ""
 		if message.Type == tea.KeyCtrlF && !m.selectMode {
@@ -234,6 +253,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			if len(matches) > 0 {
 				selected := matches[m.cursor]
+				if m.executeMode && isDangerousCommand(selected.Command) {
+					m.runConfirm = &selected
+					return m, nil
+				}
 				m.selected = &selected
 				return m, tea.Quit
 			} else if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.selectMode {
@@ -280,6 +303,9 @@ func (m model) View() string {
 	}
 	if m.helpVisible {
 		return m.helpView(width, height, contentWidth, header)
+	}
+	if m.runConfirm != nil {
+		return m.runConfirmationView(width, height, contentWidth, header)
 	}
 	if m.trackedOnly {
 		return m.trackedFilesView(width, height, contentWidth, header)
@@ -381,6 +407,54 @@ func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.helpVisible = false
 	}
 	return m, nil
+}
+
+func (m model) updateRunConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if message.Type == tea.KeyCtrlC {
+		m.runConfirm = nil
+		return m, tea.Quit
+	}
+	if message.Type == tea.KeyEsc || message.String() == "n" {
+		m.runConfirm = nil
+		m.status = "Run canceled"
+		return m, nil
+	}
+	if message.String() != "y" {
+		return m, nil
+	}
+	selected := *m.runConfirm
+	m.runConfirm = nil
+	m.selected = &selected
+	return m, tea.Quit
+}
+
+func (m model) runConfirmationView(width, height, contentWidth int, header string) string {
+	if m.runConfirm == nil {
+		return ""
+	}
+	alias := *m.runConfirm
+	reasons := dangerousCommandReasons(alias.Command)
+	reason := "Alias Lens marked this command for review."
+	if len(reasons) > 0 {
+		reason = "Why: " + strings.Join(reasons, "; ") + "."
+	}
+
+	name := lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(alias.Name)
+	command := lipgloss.NewStyle().
+		Width(max(32, contentWidth-4)).
+		Padding(1, 2).
+		Foreground(inkColor).
+		Background(panelColor).
+		Border(lipgloss.ThickBorder(), false, false, false, true).
+		BorderForeground(coralColor).
+		Render("$ " + wrapText(alias.Command, max(24, contentWidth-10)))
+	body := titleStyle.Render("Review before running") +
+		"\n" + dimStyle.Render("Alias ") + name + dimStyle.Render(" may make changes that are hard to undo.") +
+		"\n\n" + command +
+		"\n\n" + lipgloss.NewStyle().Foreground(coralColor).Render(wrapText(reason, contentWidth))
+	footer := aliasStyle.Render("y") + dimStyle.Render(" run alias  ·  ") + aliasStyle.Render("n") + dimStyle.Render(" or esc cancel")
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
+	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 
 func (m model) helpView(width, height, contentWidth int, header string) string {
@@ -704,6 +778,12 @@ func (m model) updateAddForm(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.form[m.field] != "" {
 			_, size := utf8.DecodeLastRuneInString(m.form[m.field])
 			m.form[m.field] = m.form[m.field][:len(m.form[m.field])-size]
+		}
+	case tea.KeySpace:
+		if m.field == 0 {
+			m.status = "Alias names cannot contain spaces"
+		} else {
+			m.form[m.field] += " "
 		}
 	case tea.KeyRunes:
 		m.form[m.field] += string(message.Runes)

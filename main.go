@@ -376,14 +376,32 @@ func annotateHealth(aliases []Alias) {
 }
 
 func isDangerousCommand(command string) bool {
+	return len(dangerousCommandReasons(command)) > 0
+}
+
+func dangerousCommandReasons(command string) []string {
 	lower := strings.ToLower(command)
-	patterns := []string{"--force", "reset --hard", "clean -fd", "rm -rf", "chmod -r", "chown -r"}
+	patterns := []struct {
+		needle string
+		reason string
+	}{
+		{"--force", "uses a force option"},
+		{"reset --hard", "discards uncommitted Git changes"},
+		{"clean -fd", "deletes untracked Git files"},
+		{"rm -rf", "recursively deletes files"},
+		{"chmod -r", "recursively changes file permissions"},
+		{"chown -r", "recursively changes file ownership"},
+	}
+	var reasons []string
 	for _, pattern := range patterns {
-		if strings.Contains(lower, pattern) {
-			return true
+		if strings.Contains(lower, pattern.needle) {
+			reasons = append(reasons, pattern.reason)
 		}
 	}
-	return strings.Contains(command, "branch -D")
+	if strings.Contains(command, "branch -D") {
+		reasons = append(reasons, "force-deletes a Git branch")
+	}
+	return reasons
 }
 
 func shouldCheckExecutable(command string) bool {
