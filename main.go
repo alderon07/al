@@ -14,6 +14,8 @@ import (
 	"strings"
 )
 
+var version = "dev"
+
 //go:embed web/*
 var web embed.FS
 
@@ -36,6 +38,8 @@ func main() {
 		return
 	}
 	switch os.Args[1] {
+	case "version", "--version", "-v":
+		fmt.Printf("alias-lens %s\n", version)
 	case "--web":
 		runWeb()
 	case "repo":
@@ -202,9 +206,10 @@ func main() {
 }
 
 func printUsage() {
-	fmt.Println("Usage: al [--web | pick | repo | config | sync]")
+	fmt.Println("Usage: al [--web | --version | pick | repo | config | sync]")
 	fmt.Println("  al               Open Alias Lens in the terminal")
 	fmt.Println("  al --web         Start the optional browser interface")
+	fmt.Println("  al --version     Print the installed Alias Lens version")
 	fmt.Println("  al repo          Pick from writable GitHub, Bitbucket, and GitLab repositories")
 	fmt.Println("  al repo PROVIDER Limit the picker to one configured provider")
 	fmt.Println("  al repo PATH     Choose an existing local Git repository")

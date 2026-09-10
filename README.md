@@ -1,14 +1,51 @@
-# al — Alias Lens
+# Alias Lens
 
 **Remember less. Move faster.**
 
-Alias Lens is a terminal-first productivity tool for discovering, understanding, and maintaining the shell aliases in `~/.bash_aliases`. Launch it with two letters from any directory:
+Alias Lens is a terminal-first Bash alias manager for searching, explaining, editing, and syncing commands in `~/.bash_aliases`. It combines fuzzy search, command history suggestions, alias health checks, private revisions, and conflict-aware Git sync in a Bubble Tea TUI.
+
+Launch it with two letters from any directory:
 
 ```bash
 al
 ```
 
 It opens an interactive Bubble Tea interface directly in the terminal. A browser is never required.
+
+## Install locally
+
+Alias Lens requires Bash and Go 1.24 or newer. Clone the repository and install the binary in `~/.local/bin`:
+
+```bash
+git clone https://github.com/alderon07/al.git
+cd al
+go test ./...
+go build -buildvcs=false -o /tmp/alias-lens .
+mkdir -p ~/.local/bin
+install -m 0755 /tmp/alias-lens ~/.local/bin/alias-lens
+```
+
+Make sure `~/.local/bin` is on `PATH`. Install the `al` Bash function and start a new shell:
+
+```bash
+alias-lens setup
+exec bash
+al --version
+```
+
+`alias-lens setup` preserves your aliases. Before it edits `~/.bash_aliases`, it creates `~/.bash_aliases.alias-lens.bak` and a timestamped private revision. It replaces an existing alias named `al` because Alias Lens uses that command. If setup must add the `.bash_aliases` loader to `~/.bashrc`, it first creates `~/.bashrc.alias-lens.bak`.
+
+To update a local installation, pull the repository and rebuild the binary:
+
+```bash
+cd /path/to/al
+git pull --ff-only
+go test ./...
+go build -buildvcs=false -o /tmp/alias-lens .
+install -m 0755 /tmp/alias-lens ~/.local/bin/alias-lens
+```
+
+Homebrew packaging is in progress. Release maintainers can follow [the release and Homebrew checklist](docs/RELEASING.md).
 
 ## What it does
 
@@ -202,27 +239,11 @@ Restoring a revision saves the current file as another revision first.
 
 Run `al doctor` to check the executable, `.bash_aliases` loading, shell integration, Git, the sync repository, provider credentials, and SSH fallback behavior.
 
+Check the installed build with `al --version`.
+
 ## Optional browser view
 
 Run `al --web` and open `http://127.0.0.1:8787`.
-
-## Build from source
-
-Alias Lens requires Go 1.24 or newer.
-
-```bash
-git clone https://github.com/alderon07/al.git
-cd al
-go test ./...
-go build -o al .
-install -Dm755 al ~/.local/bin/alias-lens
-```
-
-Add this line to `~/.bash_aliases`, then start a new shell or run `source ~/.bash_aliases`:
-
-```bash
-alias al="$HOME/.local/bin/alias-lens"
-```
 
 ## Local files
 

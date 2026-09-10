@@ -1,6 +1,7 @@
 # Compiled Go binaries and test artifacts
 /al
 /alias-lens
+/dist/
 *.test
 *.out
 coverage.*

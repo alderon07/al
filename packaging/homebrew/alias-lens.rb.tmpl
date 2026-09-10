@@ -1,0 +1,29 @@
+class AliasLens < Formula
+  desc "Terminal-first Bash alias manager"
+  homepage "https://github.com/alderon07/al"
+  url "https://github.com/alderon07/al/archive/refs/tags/vVERSION.tar.gz"
+  sha256 "SHA256"
+  license "LICENSE"
+
+  depends_on "go" => :build
+
+  def install
+    system "go", "build", *std_go_args(
+      output: bin/"alias-lens",
+      ldflags: "-s -w -X main.version=#{version}",
+    )
+  end
+
+  def caveats
+    <<~EOS
+      Install the Bash integration, then start a new shell:
+        alias-lens setup
+        exec bash
+    EOS
+  end
+
+  test do
+    assert_match version.to_s, shell_output("#{bin}/alias-lens --version")
+    assert_match "Alias Lens shell integration", shell_output("#{bin}/alias-lens shell-init bash")
+  end
+end
