@@ -120,17 +120,21 @@ func restoreRevision(id string) error {
 			return fmt.Errorf("revision %q was not found", id)
 		}
 	}
-	restored, err := os.ReadFile(selected.Path)
-	if err != nil {
-		return err
-	}
-	current, mode, _, err := readAliasFile(path)
-	if err != nil {
-		return err
-	}
-	if err := writeAliasFile(path, current, restored, mode); err != nil {
+	if err := restoreRevisionFile(path, selected); err != nil {
 		return err
 	}
 	fmt.Println("Restored revision", selected.ID)
 	return nil
+}
+
+func restoreRevisionFile(aliasPath string, revision Revision) error {
+	restored, err := os.ReadFile(revision.Path)
+	if err != nil {
+		return err
+	}
+	current, mode, _, err := readAliasFile(aliasPath)
+	if err != nil {
+		return err
+	}
+	return writeAliasFile(aliasPath, current, restored, mode)
 }

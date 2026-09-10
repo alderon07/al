@@ -63,3 +63,12 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 - [x] Document every new command and metadata field.
 - [x] Run tests, static checks, a secret scan, and a live terminal check.
+
+## Make the terminal interface easier to learn
+
+- [x] Add a searchable keyboard guide opened with `?`.
+- [x] Confirm risky aliases before execution and explain why they were flagged.
+- [x] Make alias descriptions editable from the TUI.
+- [x] Browse and restore private revisions with `Ctrl+Z`.
+- [x] Distinguish missing, broken, and risky aliases in the wide header.
+- [x] Show a one-time keyboard tour after setup.

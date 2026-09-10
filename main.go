@@ -385,12 +385,14 @@ func dangerousCommandReasons(command string) []string {
 		needle string
 		reason string
 	}{
+		{"sudo ", "runs with elevated privileges"},
 		{"--force", "uses a force option"},
 		{"reset --hard", "discards uncommitted Git changes"},
 		{"clean -fd", "deletes untracked Git files"},
 		{"rm -rf", "recursively deletes files"},
 		{"chmod -r", "recursively changes file permissions"},
 		{"chown -r", "recursively changes file ownership"},
+		{"docker system prune", "deletes unused Docker data"},
 	}
 	var reasons []string
 	for _, pattern := range patterns {
@@ -400,6 +402,9 @@ func dangerousCommandReasons(command string) []string {
 	}
 	if strings.Contains(command, "branch -D") {
 		reasons = append(reasons, "force-deletes a Git branch")
+	}
+	if strings.TrimSpace(lower) == "sudo" {
+		reasons = append(reasons, "runs with elevated privileges")
 	}
 	return reasons
 }

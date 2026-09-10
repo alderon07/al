@@ -171,6 +171,9 @@ func runSetup(shellName string) error {
 	if err := adapter.ConfigureStartup(filepath.Dir(aliasPath), runtime.GOOS); err != nil {
 		return err
 	}
+	if err := scheduleTour(); err != nil {
+		return fmt.Errorf("save first-run tour state: %w", err)
+	}
 	if !interactiveInput(os.Stdin) {
 		fmt.Println("Optional developer aliases were not reviewed because input is not interactive. Run al setup in a terminal to review them.")
 		return nil

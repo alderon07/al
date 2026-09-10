@@ -92,8 +92,9 @@ The help text marks commands that execute aliases, edit shell files, create Git 
 - `↑` / `↓`: select an alias
 - `Enter`: close the TUI and execute the selected alias
 - `Ctrl+A`: add an alias
-- `Ctrl+E`: edit the selected alias
+- `Ctrl+E`: edit the selected alias, starting with its description
 - `Ctrl+D`: delete the selected alias after confirmation
+- `Ctrl+Z`: browse private revisions and restore one after confirmation
 - `Ctrl+H`: show aliases with health warnings
 - `Ctrl+F`: show tracked config files and their sync status
 - `Ctrl+G`: commit aliases to the configured repository
@@ -103,6 +104,8 @@ The help text marks commands that execute aliases, edit shell files, create Git 
 
 When the active alias file is empty, Alias Lens shows the file and detected shell instead of an empty search result. Press `Enter` or `Ctrl+A` to create the first alias.
 
+Press `?` and type a word such as `theme`, `edit`, or `restore` to filter the keyboard guide. `Ctrl+E` opens the selected alias with its description focused; use `Shift+Tab` to move back to the command or name.
+
 ## Use an alias from the picker
 
 Install the detected shell integration once, then start a new shell:
@@ -111,9 +114,11 @@ Install the detected shell integration once, then start a new shell:
 al setup
 ```
 
+The first launch after setup shows a short keyboard tour. Press `Enter` to dismiss it or `?` to open the complete searchable guide. Alias Lens records the dismissal locally and does not show the tour again.
+
 Run `al`, select an alias, and press `Enter`. Alias Lens closes, prints `$ NAME` on the next line, and executes that alias by name. It does not display or execute the underlying command directly. The printed name makes subsequent command output easy to identify. `al use QUERY` runs an alias with an initial search. Press `Ctrl+G` at a Bash or Zsh prompt to insert an alias at the current cursor without running it.
 
-Aliases containing force options, destructive Git operations, recursive deletion, or recursive permission changes open a review screen first. The screen shows the alias command and why Alias Lens flagged it. Press `y` to run the alias or `n`/`Esc` to cancel. Normal aliases still run with one press of `Enter`.
+Aliases containing `sudo`, Docker system pruning, force options, destructive Git operations, recursive deletion, or recursive permission changes open a review screen first. The screen shows the alias command and why Alias Lens flagged it. Press `y` to run the alias or `n`/`Esc` to cancel. Normal aliases still run with one press of `Enter`.
 
 Scripts can use `al pick` to return an alias name. Add `--command` to return its command instead:
 
