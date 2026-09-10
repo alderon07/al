@@ -105,7 +105,7 @@ func parseFunctions(contents string) []Alias {
 			body = strings.Join(bodyLines, " ")
 		}
 		body = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(body), ";"))
-		description := "Bash function"
+		description := "Shell function"
 		if len(notes) > 0 {
 			description = notes[len(notes)-1]
 		}

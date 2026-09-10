@@ -11,11 +11,11 @@ import (
 var aliasName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 func addAlias(name, command, description string) error {
-	home, err := os.UserHomeDir()
+	path, err := aliasesPath()
 	if err != nil {
 		return err
 	}
-	return addAliasToFile(filepath.Join(home, ".bash_aliases"), name, command, description)
+	return addAliasToFile(path, name, command, description)
 }
 
 func addAliasToFile(path, name, command, description string) error {
@@ -117,12 +117,85 @@ func deleteAliasFromFile(path, name string) error {
 	return fmt.Errorf("alias %q no longer exists", name)
 }
 
-func aliasesPath() (string, error) {
-	home, err := os.UserHomeDir()
+func addAliasDescriptions() error {
+	path, err := aliasesPath()
 	if err != nil {
-		return "", err
+		return err
 	}
-	return filepath.Join(home, ".bash_aliases"), nil
+	added, err := addAliasDescriptionsToFile(path)
+	if err != nil {
+		return err
+	}
+	if added == 0 {
+		fmt.Println("Every alias already has a useful description.")
+		return nil
+	}
+	fmt.Printf("Added or improved descriptions for %d aliases. Backup and private revision saved.\n", added)
+	return nil
+}
+
+func addAliasDescriptionsToFile(path string) (int, error) {
+	contents, mode, lines, err := readAliasFile(path)
+	if err != nil {
+		return 0, err
+	}
+	added := 0
+	for index := 0; index < len(lines); index++ {
+		name, command, ok := parseAliasDefinition(lines[index])
+		if !ok {
+			continue
+		}
+		description := describe(name, command)
+		if descriptionIndex := aliasDescriptionIndex(lines, index); descriptionIndex >= 0 {
+			existing := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(lines[descriptionIndex]), "#"))
+			if existing == legacyDescription(name, command) && existing != description {
+				lines[descriptionIndex] = "# " + description
+				added++
+			}
+			continue
+		}
+		insertAt := index
+		for insertAt > 0 {
+			if _, metadata := parseMetadataComment(lines[insertAt-1]); !metadata {
+				break
+			}
+			insertAt--
+		}
+		lines = append(lines, "")
+		copy(lines[insertAt+1:], lines[insertAt:])
+		lines[insertAt] = "# " + description
+		index++
+		added++
+	}
+	if added == 0 {
+		return 0, nil
+	}
+	updated := []byte(strings.Join(lines, "\n") + "\n")
+	if err := writeAliasFile(path, contents, updated, mode); err != nil {
+		return 0, err
+	}
+	return added, nil
+}
+
+func aliasDescriptionIndex(lines []string, aliasIndex int) int {
+	for index := aliasIndex - 1; index >= 0; index-- {
+		trimmed := strings.TrimSpace(lines[index])
+		if trimmed == "" {
+			continue
+		}
+		if _, metadata := parseMetadataComment(lines[index]); metadata {
+			continue
+		}
+		if isDescriptionComment(lines[index]) {
+			return index
+		}
+		return -1
+	}
+	return -1
+}
+
+func aliasesPath() (string, error) {
+	return aliasPathFor(activeShellAdapter())
 }
 
 func readAliasFile(path string) ([]byte, os.FileMode, []string, error) {
@@ -193,7 +266,6 @@ func isDescriptionComment(line string) bool {
 }
 
 func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) error {
-
 	if len(contents) > 0 {
 		if err := saveRevision(path, contents); err != nil {
 			return fmt.Errorf("save revision: %w", err)
@@ -202,7 +274,17 @@ func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) err
 			return fmt.Errorf("create backup: %w", err)
 		}
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".bash_aliases.alias-lens-*")
+	writePath := path
+	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		resolved, resolveErr := filepath.EvalSymlinks(path)
+		if resolveErr != nil {
+			return fmt.Errorf("resolve alias file symlink: %w", resolveErr)
+		}
+		writePath = resolved
+	} else if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(writePath), ".alias-lens-write-*")
 	if err != nil {
 		return err
 	}
@@ -219,7 +301,7 @@ func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) err
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	if err := os.Rename(temporaryPath, path); err != nil {
+	if err := os.Rename(temporaryPath, writePath); err != nil {
 		return err
 	}
 	return nil

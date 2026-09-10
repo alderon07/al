@@ -52,6 +52,7 @@ type model struct {
 	trackedRepo string
 	trackedErr  string
 	selectMode  bool
+	executeMode bool
 	selected    *Alias
 }
 
@@ -64,7 +65,7 @@ type trackedFileItem struct {
 func runTUI() {
 	aliases, err := loadAliases()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Could not read ~/.bash_aliases:", err)
+		fmt.Fprintf(os.Stderr, "Could not read %s: %v\n", aliasDisplayPath(), err)
 		return
 	}
 	theme, themeErr := loadTheme()
@@ -80,7 +81,7 @@ func runTUI() {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status}, options...).Run()
+	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status, executeMode: true}, options...).Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Alias Lens could not start:", err)
 		return
@@ -250,10 +251,12 @@ func (m model) View() string {
 	if contentWidth >= 84 {
 		headerDetails = fmt.Sprintf("  •  %d loaded  •  %d issues  •  %s  •  %s", len(m.aliases), healthIssueCount(m.aliases), m.theme.Name, syncStatusLabel())
 	}
-	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("~/.bash_aliases") + dimStyle.Render(headerDetails)
+	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render(aliasDisplayPath()) + dimStyle.Render(headerDetails)
 	title := titleStyle.Render("Find the shortcut before you forget it.") + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
 	if m.selectMode {
 		title = titleStyle.Render("Choose an alias to use in your shell.") + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
+	} else if m.executeMode {
+		title = titleStyle.Render("Choose an alias to run.") + "\n" + dimStyle.Render("Enter executes it. Esc exits without running anything.")
 	}
 	if m.adding {
 		return m.addFormView(width, height, contentWidth, header)
@@ -302,6 +305,8 @@ func (m model) View() string {
 	}
 	if m.selectMode {
 		footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  esc cancel")
+	} else if m.executeMode {
+		footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ^f files  ·  ^h health  ·  esc quit")
 	}
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
@@ -390,7 +395,7 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 		body.WriteString(lipgloss.NewStyle().Foreground(coralColor).Render(wrapText("Could not load tracked files: "+m.trackedErr, contentWidth)))
 	} else if len(m.tracked) == 0 {
 		body.WriteString(titleStyle.Render("No extra config files are tracked."))
-		body.WriteString("\n" + dimStyle.Render("Add one with ") + cyanStyle("al track PATH") + dimStyle.Render(". ~/.bash_aliases remains the primary file."))
+		body.WriteString("\n" + dimStyle.Render("Add one with ") + cyanStyle("al track PATH") + dimStyle.Render(". "+aliasDisplayPath()+" remains the primary file."))
 	} else {
 		cursor := min(m.cursor, len(m.tracked)-1)
 		visible := m.trackedVisibleCount()
@@ -566,7 +571,7 @@ func (m model) addFormView(width, height, contentWidth int, header string) strin
 	hints := []string{"ex: gpf", "ex: git push --force-with-lease", "ex: Safely force-push the current branch"}
 	var form strings.Builder
 	heading := "＋ ADD AN ALIAS"
-	message := "It will be placed beside related commands in ~/.bash_aliases."
+	message := "It will be placed beside related commands in " + aliasDisplayPath() + "."
 	if m.editingName != "" {
 		heading = "✎ EDIT " + m.editingName
 		message = "Saving will move it beside related commands if needed."

@@ -236,5 +236,5 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 	if changed {
 		return "Aliases committed locally", nil
 	}
-	return "Repository already matches ~/.bash_aliases", nil
+	return "Repository already matches " + aliasDisplayPath(), nil
 }

@@ -5,12 +5,12 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 ## Use an alias without retyping it
 
 - [x] Add an alias picker that returns the selected command.
-- [x] Add Bash integration that runs the selected command in the current shell.
+- [x] Add Bash and Zsh integrations that run the selected command in the current shell.
 - [x] Add a Readline binding that inserts the selected alias at the cursor.
 
 ## Suggest aliases from real usage
 
-- [x] Count commands in local Bash history without sending history anywhere.
+- [x] Count commands in local Bash or Zsh history without sending history anywhere.
 - [x] Suggest repeated long commands that do not already have aliases.
 - [x] Use local command frequency to improve the default alias ranking.
 
@@ -33,8 +33,8 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ## Start without an alias file
 
-- [x] Restore `.bash_aliases` from the configured repository when available.
-- [x] Create a private empty `.bash_aliases` when no copy exists.
+- [x] Restore the active shell alias file from the configured repository when available.
+- [x] Create a private empty shell alias file when no copy exists.
 - [x] Install portable shell integration without a machine-specific path.
 
 ## Recover old aliases
@@ -45,7 +45,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ## Support commands that aliases cannot express
 
-- [x] Discover Bash functions alongside aliases.
+- [x] Discover common Bash and Zsh functions alongside aliases.
 - [x] Label functions in search results and explain their commands.
 
 ## Handle different machines and contexts

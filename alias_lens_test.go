@@ -19,6 +19,12 @@ func TestParseAliasDefinitionRoundTripsShellQuotes(t *testing.T) {
 	}
 }
 
+func TestParseAliasDefinitionRejectsUnsafeExecutableName(t *testing.T) {
+	if _, _, ok := parseAliasDefinition(`alias 'safe; echo exposed'='git status'`); ok {
+		t.Fatal("accepted an alias name that is unsafe to execute through the shell integration")
+	}
+}
+
 func TestAddAliasPlacesRelatedCommandsTogetherAndCreatesBackup(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, ".bash_aliases")
@@ -44,6 +50,30 @@ func TestAddAliasPlacesRelatedCommandsTogetherAndCreatesBackup(t *testing.T) {
 	}
 	if string(backup) != original {
 		t.Fatal("backup did not preserve the original file")
+	}
+}
+
+func TestAliasWritePreservesSymlink(t *testing.T) {
+	directory := t.TempDir()
+	target := filepath.Join(directory, "aliases")
+	path := filepath.Join(directory, ".bash_aliases")
+	original := []byte("alias gs='git status'\n")
+	if err := os.WriteFile(target, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("aliases", path); err != nil {
+		t.Fatal(err)
+	}
+	if err := addAliasToFile(path, "gp", "git push", "Push the current branch"); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("alias-file symlink was replaced: %v", err)
+	}
+	contents, err := os.ReadFile(target)
+	if err != nil || !strings.Contains(string(contents), "alias gp=") {
+		t.Fatalf("symlink target was not updated: %s, %v", contents, err)
 	}
 }
 
@@ -225,6 +255,9 @@ func TestLegacyConfigGetsDefaultProviderLayer(t *testing.T) {
 	if !exists || !github.Enabled || github.Protocol != "auto" {
 		t.Fatalf("legacy configuration was not migrated in memory: %#v", config)
 	}
+	if config.Shell != "bash" {
+		t.Fatalf("legacy configuration selected %q, want bash", config.Shell)
+	}
 }
 
 func TestHistorySuggestionsUseRepeatedLongCommands(t *testing.T) {
@@ -357,10 +390,10 @@ func TestTimestampedRevisionCanBeListed(t *testing.T) {
 
 func TestBashLoaderSetupIsIdempotent(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".bashrc")
-	if err := ensureBashLoadsAliases(path); err != nil {
+	if err := ensureStartupFileLoads(path, ".bash_aliases", bashAliasLoader); err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureBashLoadsAliases(path); err != nil {
+	if err := ensureStartupFileLoads(path, ".bash_aliases", bashAliasLoader); err != nil {
 		t.Fatal(err)
 	}
 	contents, _ := os.ReadFile(path)
@@ -369,10 +402,95 @@ func TestBashLoaderSetupIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestLinuxAndWSLSetupUseBashrc(t *testing.T) {
+	home := t.TempDir()
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "linux"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".bashrc")); err != nil {
+		t.Fatal("Linux setup did not create .bashrc")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".bash_profile")); !os.IsNotExist(err) {
+		t.Fatal("Linux setup should not create .bash_profile")
+	}
+}
+
+func TestMacBashSetupCoversLoginShells(t *testing.T) {
+	home := t.TempDir()
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin"); err != nil {
+		t.Fatal(err)
+	}
+	bashrc, err := os.ReadFile(filepath.Join(home, ".bashrc"))
+	if err != nil || !strings.Contains(string(bashrc), ".bash_aliases") {
+		t.Fatal("macOS .bashrc does not load .bash_aliases")
+	}
+	profile, err := os.ReadFile(filepath.Join(home, ".bash_profile"))
+	if err != nil || !strings.Contains(string(profile), ".bashrc") || !strings.Contains(string(profile), "BASH_VERSION") {
+		t.Fatal("macOS login profile does not safely load .bashrc")
+	}
+}
+
+func TestMacBashSetupPreservesProfileThatLoadsBashrc(t *testing.T) {
+	home := t.TempDir()
+	profilePath := filepath.Join(home, ".bash_profile")
+	original := []byte("source ~/.bashrc\n")
+	if err := os.WriteFile(profilePath, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin"); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(contents) != string(original) {
+		t.Fatal("setup changed a profile that already loads .bashrc")
+	}
+}
+
+func TestMacBashSetupUsesExistingLoginFilePrecedence(t *testing.T) {
+	home := t.TempDir()
+	profilePath := filepath.Join(home, ".profile")
+	if err := os.WriteFile(profilePath, []byte("export EDITOR=vi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".bash_profile")); !os.IsNotExist(err) {
+		t.Fatal("setup created .bash_profile and shadowed an existing .profile")
+	}
+	contents, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(contents), "BASH_VERSION") || !strings.Contains(string(contents), ".bashrc") {
+		t.Fatal("existing .profile did not receive a Bash-only .bashrc loader")
+	}
+}
+
+func TestCommentedStartupReferenceDoesNotBlockSetup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".bashrc")
+	if err := os.WriteFile(path, []byte("# old ~/.bash_aliases loader removed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensureStartupFileLoads(path, ".bash_aliases", bashAliasLoader); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(contents), ".bash_aliases") != 3 {
+		t.Fatalf("active loader was not added after commented reference:\n%s", contents)
+	}
+}
+
 func TestShellIntegrationDoesNotAccumulateBlankLines(t *testing.T) {
 	initial := []string{"alias gs='git status'", "", "", "# Alias Lens shell integration", `eval "$(command alias-lens shell-init bash)"`}
-	once := withShellIntegration(initial)
-	twice := withShellIntegration(once)
+	once := withShellIntegration(initial, bashShellAdapter{})
+	twice := withShellIntegration(once, bashShellAdapter{})
 	if strings.Join(once, "\n") != strings.Join(twice, "\n") {
 		t.Fatalf("shell integration was not idempotent:\n%q\n%q", once, twice)
 	}
@@ -473,6 +591,34 @@ func TestEnterSelectsAliasAndQuitsTheTUI(t *testing.T) {
 	}
 	if result.selected == nil || result.selected.Name != "gc" {
 		t.Fatalf("Enter selected %#v, want gc", result.selected)
+	}
+}
+
+func TestExecuteModeExplainsThatEnterRunsTheAlias(t *testing.T) {
+	applyTheme(builtInTheme("phosphor"))
+	m := model{
+		aliases:     []Alias{{Name: "gs", Command: "git status", Description: "Show status", Category: "git"}},
+		width:       90,
+		height:      24,
+		executeMode: true,
+	}
+	view := m.View()
+	for _, expected := range []string{"Choose an alias to run.", "Enter executes it.", "execute"} {
+		if !strings.Contains(view, expected) {
+			t.Errorf("execute-mode view is missing %q:\n%s", expected, view)
+		}
+	}
+}
+
+func TestBashIntegrationExecutesAliasNameInsteadOfCommandText(t *testing.T) {
+	if !strings.Contains(bashIntegration, `_alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE=`) {
+		t.Fatal("shell integration does not capture the selected alias name")
+	}
+	if !strings.Contains(bashIntegration, `builtin eval "$_alias_lens_name"`) {
+		t.Fatal("shell integration does not execute the selected alias name")
+	}
+	if !strings.Contains(bashIntegration, `alias-lens pick --command "$@"`) {
+		t.Fatal("al use does not explicitly request the selected command")
 	}
 }
 

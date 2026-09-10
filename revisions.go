@@ -28,7 +28,7 @@ func saveRevision(aliasPath string, contents []byte) error {
 		return err
 	}
 	id := time.Now().UTC().Format("20060102T150405.000000000Z")
-	return os.WriteFile(filepath.Join(directory, id+".bash_aliases"), contents, 0o600)
+	return os.WriteFile(filepath.Join(directory, id+filepath.Base(aliasPath)), contents, 0o600)
 }
 
 func revisionDirectory(aliasPath string) (string, error) {
@@ -60,15 +60,16 @@ func listRevisions(aliasPath string) ([]Revision, error) {
 		return nil, err
 	}
 	var revisions []Revision
+	suffix := filepath.Base(aliasPath)
 	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".bash_aliases") {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), suffix) {
 			continue
 		}
 		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
-		revisions = append(revisions, Revision{ID: strings.TrimSuffix(entry.Name(), ".bash_aliases"), Path: filepath.Join(directory, entry.Name()), Time: info.ModTime(), Size: info.Size()})
+		revisions = append(revisions, Revision{ID: strings.TrimSuffix(entry.Name(), suffix), Path: filepath.Join(directory, entry.Name()), Time: info.ModTime(), Size: info.Size()})
 	}
 	sort.Slice(revisions, func(i, j int) bool { return revisions[i].ID > revisions[j].ID })
 	return revisions, nil

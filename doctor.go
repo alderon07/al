@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -35,20 +36,20 @@ func runDoctor() error {
 
 func doctorChecks() []DoctorCheck {
 	var checks []DoctorCheck
+	adapter := activeShellAdapter()
 	executable, executableErr := os.Executable()
 	checks = append(checks, DoctorCheck{Name: "binary", OK: executableErr == nil, Message: defaultString(executable, "not found")})
 	aliasPath, aliasErr := aliasesPath()
 	_, aliasStatErr := os.Stat(aliasPath)
-	checks = append(checks, DoctorCheck{Name: ".bash_aliases", OK: aliasErr == nil && aliasStatErr == nil, Message: aliasPath})
+	checks = append(checks, DoctorCheck{Name: adapter.AliasFilename(), OK: aliasErr == nil && aliasStatErr == nil, Message: aliasPath})
 
 	home, _ := os.UserHomeDir()
-	bashrcPath := filepath.Join(home, ".bashrc")
-	bashrc, _ := os.ReadFile(bashrcPath)
-	sourcesAliases := strings.Contains(string(bashrc), ".bash_aliases")
-	checks = append(checks, DoctorCheck{Name: "Bash loading", OK: sourcesAliases, Message: map[bool]string{true: ".bashrc loads .bash_aliases", false: "run al setup"}[sourcesAliases]})
+	startupOK, startupMessage := adapter.StartupStatus(home, runtime.GOOS)
+	checks = append(checks, DoctorCheck{Name: adapter.DisplayName() + " loading", OK: startupOK, Message: startupMessage})
 	aliases, _ := os.ReadFile(aliasPath)
-	hasIntegration := strings.Contains(string(aliases), "shell-init bash")
-	checks = append(checks, DoctorCheck{Name: "shell actions", OK: hasIntegration, Message: map[bool]string{true: "al use and Ctrl+G are enabled", false: "run al setup"}[hasIntegration]})
+	hasIntegration := strings.Contains(string(aliases), "shell-init "+adapter.Name())
+	setupCommand := "run al setup " + adapter.Name()
+	checks = append(checks, DoctorCheck{Name: "shell actions", OK: hasIntegration, Message: map[bool]string{true: "Enter, al use, and Ctrl+G are enabled", false: setupCommand}[hasIntegration]})
 
 	_, gitErr := exec.LookPath("git")
 	checks = append(checks, DoctorCheck{Name: "Git", OK: gitErr == nil, Message: map[bool]string{true: "installed", false: "install Git"}[gitErr == nil]})
@@ -114,8 +115,35 @@ func providerCredentialStatus(provider RepoProvider) (bool, string) {
 	}
 }
 
-func runSetup() error {
-	aliasPath, err := aliasesPath()
+func runSetup(shellName string) error {
+	adapter, err := requestedShellAdapter(shellName)
+	if err != nil {
+		return err
+	}
+	config, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	oldAdapter, _ := shellAdapter(config.Shell)
+	if oldAdapter != nil && config.AliasFile == oldAdapter.AliasFilename() {
+		config.AliasFile = adapter.AliasFilename()
+	}
+	config.Shell = adapter.Name()
+	if err := saveConfig(config); err != nil {
+		return err
+	}
+	if shellName == "" {
+		detected := filepath.Base(strings.TrimSpace(os.Getenv(activeShellEnvironment)))
+		if detected == "." || detected == "" {
+			detected = filepath.Base(strings.TrimSpace(os.Getenv("SHELL")))
+		}
+		if detected == adapter.Name() {
+			fmt.Printf("Detected %s from the current shell environment.\n", adapter.DisplayName())
+		} else {
+			fmt.Printf("Using configured shell %s. Pass bash or zsh to override it.\n", adapter.DisplayName())
+		}
+	}
+	aliasPath, err := aliasPathFor(adapter)
 	if err != nil {
 		return err
 	}
@@ -127,21 +155,21 @@ func runSetup() error {
 		return err
 	}
 	lines := strings.Split(strings.TrimSuffix(string(contents), "\n"), "\n")
-	kept := withShellIntegration(lines)
+	kept := withShellIntegration(lines, adapter)
 	updated := []byte(strings.Join(kept, "\n") + "\n")
 	if string(updated) == string(contents) {
 		if err := os.Chmod(aliasPath, 0o600); err != nil {
 			return err
 		}
-		fmt.Println("Alias Lens shell integration is already installed.")
+		fmt.Printf("Alias Lens %s integration is already installed.\n", adapter.DisplayName())
 	} else {
 		if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
 			return err
 		}
-		if err := ensureBashLoadsAliases(filepath.Join(filepath.Dir(aliasPath), ".bashrc")); err != nil {
-			return err
-		}
-		fmt.Println("Installed Alias Lens shell integration. Start a new Bash shell to use al use and Ctrl+G.")
+		fmt.Printf("Installed Alias Lens %s integration. Start a new %s shell to use Enter, al use, and Ctrl+G.\n", adapter.DisplayName(), adapter.Name())
+	}
+	if err := adapter.ConfigureStartup(filepath.Dir(aliasPath), runtime.GOOS); err != nil {
+		return err
 	}
 	if !interactiveInput(os.Stdin) {
 		fmt.Println("Optional developer aliases were not reviewed because input is not interactive. Run al setup in a terminal to review them.")
@@ -150,11 +178,12 @@ func runSetup() error {
 	return offerDefaultAliases(aliasPath, os.Stdin, os.Stdout)
 }
 
-func withShellIntegration(lines []string) []string {
+func withShellIntegration(lines []string, adapter ShellAdapter) []string {
 	var kept []string
 	for _, line := range lines {
 		name, _, ok := parseAliasDefinition(line)
-		if (ok && name == "al") || strings.Contains(line, "shell-init bash") || strings.TrimSpace(line) == "# Alias Lens shell integration" {
+		trimmed := strings.TrimSpace(line)
+		if (ok && name == "al") || strings.Contains(line, "shell-init ") || (strings.HasPrefix(trimmed, "# Alias Lens ") && strings.HasSuffix(trimmed, " integration")) {
 			continue
 		}
 		kept = append(kept, line)
@@ -162,7 +191,7 @@ func withShellIntegration(lines []string) []string {
 	for len(kept) > 0 && strings.TrimSpace(kept[len(kept)-1]) == "" {
 		kept = kept[:len(kept)-1]
 	}
-	kept = append(kept, "", "# Alias Lens shell integration", `eval "$(command alias-lens shell-init bash)"`)
+	kept = append(kept, "", "# Alias Lens "+adapter.DisplayName()+" integration", `eval "$(command alias-lens shell-init `+adapter.Name()+`)"`)
 	return kept
 }
 
@@ -182,7 +211,7 @@ func ensureAliasFileExists(aliasPath string) error {
 			if err := writeNewAliasFile(aliasPath, remote); err != nil {
 				return err
 			}
-			fmt.Println("Restored .bash_aliases from the configured repository.")
+			fmt.Println("Restored", aliasDisplayPath(), "from the configured repository.")
 			return nil
 		} else if !os.IsNotExist(readErr) {
 			return readErr
@@ -191,25 +220,8 @@ func ensureAliasFileExists(aliasPath string) error {
 	if err := writeNewAliasFile(aliasPath, nil); err != nil {
 		return err
 	}
-	fmt.Println("Created ~/.bash_aliases with mode 0600.")
+	fmt.Println("Created", aliasDisplayPath(), "with mode 0600.")
 	return nil
-}
-
-func ensureBashLoadsAliases(path string) error {
-	contents, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	if strings.Contains(string(contents), ".bash_aliases") {
-		return nil
-	}
-	if len(contents) > 0 {
-		if err := os.WriteFile(path+".alias-lens.bak", contents, 0o600); err != nil {
-			return err
-		}
-	}
-	block := "\n# Load personal aliases.\nif [ -f \"$HOME/.bash_aliases\" ]; then\n  . \"$HOME/.bash_aliases\"\nfi\n"
-	return os.WriteFile(path, append(contents, []byte(block)...), 0o644)
 }
 
 func checkProviderSSH(provider RepoProvider) bool {

@@ -13,6 +13,7 @@ import (
 type AppConfig struct {
 	Repository   string                    `json:"repository"`
 	AliasFile    string                    `json:"alias_file"`
+	Shell        string                    `json:"shell"`
 	Providers    map[string]ProviderConfig `json:"providers"`
 	AutoSync     AutoSyncConfig            `json:"auto_sync"`
 	TrackedFiles []TrackedFileConfig       `json:"tracked_files,omitempty"`
@@ -107,6 +108,19 @@ func runConfigCommand(arguments []string) error {
 	}
 
 	switch arguments[0] {
+	case "shell":
+		if len(arguments) != 2 {
+			return fmt.Errorf("usage: al config shell bash|zsh")
+		}
+		adapter, err := shellAdapter(arguments[1])
+		if err != nil {
+			return err
+		}
+		oldAdapter, _ := shellAdapter(config.Shell)
+		if oldAdapter != nil && config.AliasFile == oldAdapter.AliasFilename() {
+			config.AliasFile = adapter.AliasFilename()
+		}
+		config.Shell = adapter.Name()
 	case "provider":
 		if len(arguments) < 2 || len(arguments) > 3 {
 			return fmt.Errorf("usage: al config provider github [HOST] | bitbucket WORKSPACE | gitlab [HOST]")
@@ -166,12 +180,12 @@ func runConfigCommand(arguments []string) error {
 		settings.Enabled = false
 		config.Providers[name] = settings
 	default:
-		return fmt.Errorf("usage: al config [provider|protocol|disable]")
+		return fmt.Errorf("usage: al config [shell|provider|protocol|disable]")
 	}
 	if err := saveConfig(config); err != nil {
 		return err
 	}
-	fmt.Println("Alias Lens provider configuration updated")
+	fmt.Println("Alias Lens configuration updated")
 	return nil
 }
 
@@ -203,8 +217,15 @@ func loadConfig() (AppConfig, error) {
 }
 
 func ensureConfigDefaults(config AppConfig) AppConfig {
+	if config.Shell == "" {
+		config.Shell = "bash"
+	}
 	if config.AliasFile == "" {
-		config.AliasFile = ".bash_aliases"
+		adapter, err := shellAdapter(config.Shell)
+		if err != nil {
+			adapter = bashShellAdapter{}
+		}
+		config.AliasFile = adapter.AliasFilename()
 	}
 	if config.Providers == nil {
 		config.Providers = defaultConfig().Providers
@@ -218,6 +239,7 @@ func ensureConfigDefaults(config AppConfig) AppConfig {
 func defaultConfig() AppConfig {
 	return AppConfig{
 		AliasFile: ".bash_aliases",
+		Shell:     "bash",
 		Providers: map[string]ProviderConfig{
 			"github": {Enabled: true, Host: "github.com", Protocol: "auto"},
 		},

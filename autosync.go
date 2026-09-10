@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -382,10 +383,11 @@ func saveSyncConflict(local, remote []byte, message string) error {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(directory, "local.bash_aliases"), local, 0o600); err != nil {
+	suffix := strings.TrimPrefix(activeShellAdapter().AliasFilename(), ".")
+	if err := os.WriteFile(filepath.Join(directory, "local."+suffix), local, 0o600); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(directory, "remote.bash_aliases"), remote, 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "remote."+suffix), remote, 0o600); err != nil {
 		return err
 	}
 	writeSyncStatus("conflict", message+"; run al diff", contentHash(local), contentHash(remote))

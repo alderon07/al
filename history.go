@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"unicode"
@@ -21,11 +20,16 @@ func loadHistoryCounts() map[string]int {
 	if err != nil {
 		return nil
 	}
-	counts, _ := historyCountsFrom(filepath.Join(home, ".bash_history"))
+	adapter := activeShellAdapter()
+	counts, _ := historyCountsFromShell(historyPathFor(adapter, home), adapter.Name())
 	return counts
 }
 
 func historyCountsFrom(path string) (map[string]int, error) {
+	return historyCountsFromShell(path, "bash")
+}
+
+func historyCountsFromShell(path, shell string) (map[string]int, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -39,7 +43,13 @@ func historyCountsFrom(path string) (map[string]int, error) {
 	buffer := make([]byte, 64*1024)
 	scanner.Buffer(buffer, 1024*1024)
 	for scanner.Scan() {
-		command := normalizeHistoryCommand(scanner.Text())
+		line := scanner.Text()
+		if shell == "zsh" && strings.HasPrefix(line, ": ") {
+			if separator := strings.IndexByte(line, ';'); separator >= 0 {
+				line = line[separator+1:]
+			}
+		}
+		command := normalizeHistoryCommand(line)
 		if command != "" {
 			counts[command]++
 		}
@@ -139,7 +149,7 @@ func runHistorySuggestions(arguments []string) error {
 		if len(arguments) == 3 {
 			suggestion.Name = arguments[2]
 		}
-		return addAlias(suggestion.Name, suggestion.Command, fmt.Sprintf("Used %d times in local Bash history", suggestion.Count))
+		return addAlias(suggestion.Name, suggestion.Command, fmt.Sprintf("Used %d times in local %s history", suggestion.Count, activeShellAdapter().DisplayName()))
 	}
 	if len(arguments) != 0 {
 		return fmt.Errorf("usage: al suggest [add NUMBER [NAME]]")

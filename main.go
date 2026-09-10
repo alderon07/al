@@ -77,7 +77,8 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			return
 		}
-		fmt.Println("Alias Lens will sync only .bash_aliases in", os.Args[2])
+		config, _ := loadConfig()
+		fmt.Printf("Alias Lens will sync only %s in %s\n", config.AliasFile, os.Args[2])
 	case "config":
 		if err := runConfigCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
@@ -101,11 +102,13 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "shell-init":
-		if len(os.Args) != 3 || os.Args[2] != "bash" {
-			fmt.Fprintln(os.Stderr, "Usage: al shell-init bash")
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "Usage: al shell-init bash|zsh")
 			return
 		}
-		printBashIntegration()
+		if err := printShellIntegration(os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
 	case "suggest":
 		if err := runHistorySuggestions(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
@@ -120,6 +123,14 @@ func main() {
 		}
 	case "meta":
 		if err := runMetadataCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "describe":
+		if len(os.Args) != 2 {
+			fmt.Fprintln(os.Stderr, "Usage: al describe")
+			return
+		}
+		if err := addAliasDescriptions(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "history":
@@ -151,11 +162,15 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "setup":
-		if len(os.Args) != 2 {
-			fmt.Fprintln(os.Stderr, "Usage: al setup")
+		if len(os.Args) > 3 {
+			fmt.Fprintln(os.Stderr, "Usage: al setup [bash|zsh]")
 			return
 		}
-		if err := runSetup(); err != nil {
+		shellName := ""
+		if len(os.Args) == 3 {
+			shellName = os.Args[2]
+		}
+		if err := runSetup(shellName); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "autosync":
@@ -219,46 +234,13 @@ func main() {
 	}
 }
 
-func printBashIntegration() {
-	_, _ = os.Stdout.WriteString(`# Alias Lens shell integration
-unalias al 2>/dev/null || true
-al() {
-  if [ "$#" -eq 0 ]; then
-    local _alias_lens_name _alias_lens_line _alias_lens_prompt
-    _alias_lens_name="$(command alias-lens)" || return
-    [ -z "$_alias_lens_name" ] && return
-    if [[ $- != *i* ]]; then
-      printf '%s\n' "$_alias_lens_name"
-      return
-    fi
-    _alias_lens_prompt="${PS1-}"
-    IFS= read -e -r -i "$_alias_lens_name" -p "${_alias_lens_prompt@P}" _alias_lens_line || return
-    [ -n "$_alias_lens_line" ] && builtin eval -- "$_alias_lens_line"
-    return
-  fi
-  if [ "${1-}" = "use" ]; then
-    shift
-    if [ "${1-}" = "--help" ] || [ "${1-}" = "-h" ]; then
-      command alias-lens help use
-      return
-    fi
-    local _alias_lens_command
-    _alias_lens_command="$(command alias-lens pick --command "$@")" || return
-    [ -n "$_alias_lens_command" ] && builtin eval "$_alias_lens_command"
-    return
-  fi
-  command alias-lens "$@"
-}
-_alias_lens_insert() {
-  local _alias_lens_name
-  _alias_lens_name="$(command alias-lens pick)" || return
-  [ -z "$_alias_lens_name" ] && return
-  READLINE_LINE="${READLINE_LINE:0:READLINE_POINT}${_alias_lens_name}${READLINE_LINE:READLINE_POINT}"
-  READLINE_POINT=$((READLINE_POINT + ${#_alias_lens_name}))
-}
-bind -x '"\C-g":_alias_lens_insert'
-command alias-lens watch --ensure >/dev/null 2>&1
-`)
+func printShellIntegration(name string) error {
+	adapter, err := shellAdapter(name)
+	if err != nil {
+		return err
+	}
+	_, err = os.Stdout.WriteString(adapter.Integration())
+	return err
 }
 
 func runWeb() {
@@ -278,7 +260,7 @@ func runWeb() {
 
 	address := "127.0.0.1:8787"
 	fmt.Printf("Alias Lens web mode is running at http://%s\n", address)
-	fmt.Println("Reading aliases from ~/.bash_aliases")
+	fmt.Println("Reading aliases from", aliasDisplayPath())
 	if err := http.ListenAndServe(address, mux); err != nil {
 		panic(err)
 	}
@@ -295,11 +277,10 @@ func aliasesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func loadAliases() ([]Alias, error) {
-	home, err := os.UserHomeDir()
+	path, err := aliasesPath()
 	if err != nil {
-		return nil, fmt.Errorf("find home directory: %w", err)
+		return nil, fmt.Errorf("find alias file: %w", err)
 	}
-	path := filepath.Join(home, ".bash_aliases")
 	contents, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		if createErr := ensureAliasFileExists(path); createErr != nil {
@@ -419,7 +400,7 @@ func parseAliasDefinition(line string) (string, string, bool) {
 	name, value, found := strings.Cut(definition, "=")
 	name = strings.TrimSpace(name)
 	value = strings.TrimSpace(value)
-	if !found || name == "" || value == "" {
+	if !found || name == "" || value == "" || !aliasName.MatchString(name) {
 		return "", "", false
 	}
 	if strings.HasPrefix(value, "'") && strings.HasSuffix(value, "'") {
@@ -468,6 +449,120 @@ func category(command string) string {
 }
 
 func describe(name, command string) string {
+	fields := strings.Fields(command)
+	if len(fields) == 0 {
+		return "Custom command for " + name
+	}
+	tool := filepath.Base(fields[0])
+	subcommand := ""
+	if len(fields) > 1 {
+		subcommand = fields[1]
+	}
+	if tool == "git" {
+		if description, ok := map[string]string{
+			"status":   "Show changed files and the current branch",
+			"add":      "Stage files for the next commit",
+			"commit":   "Create a commit from staged changes",
+			"diff":     "Show changes that are not committed",
+			"log":      "Show commit history",
+			"push":     "Push commits to the remote repository",
+			"pull":     "Fetch and merge remote changes",
+			"fetch":    "Fetch remote branches and commits",
+			"branch":   "List or manage Git branches",
+			"checkout": "Switch branches or restore files",
+			"switch":   "Switch Git branches",
+			"restore":  "Restore working tree files",
+			"stash":    "Temporarily store uncommitted changes",
+			"merge":    "Merge another Git branch",
+			"rebase":   "Reapply commits on another base",
+			"clone":    "Clone a Git repository",
+			"remote":   "Manage Git remotes",
+			"worktree": "Manage linked Git worktrees",
+		}[subcommand]; ok {
+			return description
+		}
+		return "Run a Git command"
+	}
+	if tool == "docker" {
+		if description, ok := map[string]string{
+			"ps":      "List running Docker containers",
+			"images":  "List Docker images",
+			"build":   "Build a Docker image",
+			"run":     "Start a new Docker container",
+			"exec":    "Run a command in a Docker container",
+			"logs":    "Show logs from a Docker container",
+			"compose": "Manage a Docker Compose application",
+		}[subcommand]; ok {
+			return description
+		}
+		return "Run a Docker command"
+	}
+	if tool == "go" {
+		if description, ok := map[string]string{
+			"test":  "Run Go tests",
+			"build": "Build Go packages",
+			"run":   "Compile and run a Go program",
+			"fmt":   "Format Go source files",
+			"vet":   "Check Go code for suspicious constructs",
+			"mod":   "Manage Go module dependencies",
+		}[subcommand]; ok {
+			return description
+		}
+		return "Run a Go command"
+	}
+	if tool == "npm" || tool == "pnpm" || tool == "yarn" || tool == "bun" {
+		if description, ok := map[string]string{
+			"install": "Install project dependencies",
+			"add":     "Add a project dependency",
+			"remove":  "Remove a project dependency",
+			"test":    "Run the project test script",
+			"build":   "Build the project",
+			"dev":     "Start the development server",
+			"run":     "Run a project script",
+		}[subcommand]; ok {
+			return description
+		}
+		return "Run a " + tool + " command"
+	}
+	if description, ok := map[string]string{
+		"ls":         "List files and directories",
+		"eza":        "List files and directories",
+		"cd":         "Change the current directory",
+		"pwd":        "Print the current directory",
+		"mkdir":      "Create a directory",
+		"cp":         "Copy files or directories",
+		"mv":         "Move or rename files",
+		"rm":         "Remove files or directories",
+		"cat":        "Print file contents",
+		"less":       "Read a file one screen at a time",
+		"head":       "Show the beginning of a file",
+		"tail":       "Show the end of a file",
+		"rg":         "Search file contents",
+		"grep":       "Search file contents",
+		"find":       "Find files and directories",
+		"clear":      "Clear the terminal",
+		"ssh":        "Connect to a remote machine over SSH",
+		"scp":        "Copy files over SSH",
+		"curl":       "Transfer data using a URL",
+		"wget":       "Download files from a URL",
+		"code":       "Open a path in Visual Studio Code",
+		"source":     "Load commands into the current shell",
+		"kubectl":    "Manage Kubernetes resources",
+		"terraform":  "Manage infrastructure with Terraform",
+		"systemctl":  "Manage system services",
+		"journalctl": "Read system service logs",
+		"python":     "Run Python",
+		"python3":    "Run Python",
+	}[tool]; ok {
+		return description
+	}
+	if tool == "sudo" {
+		return "Run a command with administrator privileges"
+	}
+	return "Run " + tool
+}
+
+func legacyDescription(name, command string) string {
 	fields := strings.Fields(command)
 	if len(fields) >= 2 && fields[0] == "git" {
 		return "Runs git " + strings.Join(fields[1:], " ")

@@ -10,7 +10,7 @@ func TestUsageDescribesImportantCommandEffects(t *testing.T) {
 		"pick       Select an alias and print its name or command; never executes it",
 		"repo       Choose or clone a Git repository and enable automatic sync",
 		"sync       Copy and commit aliases locally, or explicitly push or pull",
-		"setup      Back up shell files and install the Bash integration",
+		"setup      Detect Bash or Zsh, back up shell files, and install integration",
 		`Run "al help COMMAND" or "al COMMAND --help"`,
 	}
 	for _, check := range checks {
@@ -22,7 +22,7 @@ func TestUsageDescribesImportantCommandEffects(t *testing.T) {
 
 func TestEveryDocumentedCommandHasDetailedUsage(t *testing.T) {
 	commands := []string{
-		"pick", "use", "suggest", "meta", "scan", "history", "undo", "doctor",
+		"pick", "use", "suggest", "meta", "describe", "scan", "history", "undo", "doctor",
 		"setup", "repo", "config", "track", "untrack", "sync", "diff",
 		"autosync", "watch", "shell-init", "--web", "--version",
 	}

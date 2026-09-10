@@ -44,7 +44,7 @@ func secretFindingsError(findings []SecretFinding) error {
 	for _, finding := range findings {
 		labels = append(labels, fmt.Sprintf("line %d: %s", finding.Line, finding.Kind))
 	}
-	return fmt.Errorf("push blocked because ~/.bash_aliases may contain a secret (%s); run al scan", strings.Join(labels, ", "))
+	return fmt.Errorf("push blocked because %s may contain a secret (%s); run al scan", aliasDisplayPath(), strings.Join(labels, ", "))
 }
 
 func runSecretScan() error {
@@ -58,7 +58,7 @@ func runSecretScan() error {
 	}
 	findings := findSecretFindings(contents)
 	if len(findings) == 0 {
-		fmt.Println("No likely secrets found in ~/.bash_aliases.")
+		fmt.Printf("No likely secrets found in %s.\n", aliasDisplayPath())
 		return nil
 	}
 	fmt.Println("Review these lines before syncing. Secret values are hidden:")
