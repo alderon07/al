@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var version = "dev"
@@ -154,16 +153,16 @@ func main() {
 		if err := runStatsCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
-	case "export":
-		if err := runExportCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
-		}
 	case "record-use":
 		if len(os.Args) != 3 {
 			fmt.Fprintln(os.Stderr, "Usage: alias-lens record-use NAME")
 			return
 		}
 		if err := recordAliasUse(os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "export":
+		if err := runExportCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "scan":
@@ -403,12 +402,6 @@ func loadAliases() ([]Alias, error) {
 
 	sort.Slice(aliases, func(i, j int) bool { return strings.ToLower(aliases[i].Name) < strings.ToLower(aliases[j].Name) })
 	annotateUsage(aliases, loadHistoryCounts())
-	if events, usageErr := loadUsageEvents(); usageErr == nil {
-		counts := usageCountsSince(events, time.Time{})
-		for index := range aliases {
-			aliases[index].Usage += counts[aliases[index].Name]
-		}
-	}
 	annotateHealth(aliases)
 	return aliases, nil
 }

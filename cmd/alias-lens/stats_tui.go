@@ -20,6 +20,9 @@ type statsModel struct {
 	height      int
 	theme       Theme
 	now         time.Time
+	appHeader   string
+	closeHint   string
+	errorText   string
 }
 
 func runStatsTUI(data statsData, period string, now time.Time) error {
@@ -69,6 +72,15 @@ func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selected+1 < len(rows) {
 				m.selected++
 			}
+		case "r":
+			data, err := loadStatsData()
+			if err != nil {
+				m.errorText = err.Error()
+				break
+			}
+			m.data = data
+			m.now = time.Now()
+			m.errorText = ""
 		}
 	}
 	return m, nil
@@ -109,10 +121,14 @@ func (m statsModel) View() string {
 	}
 
 	var body strings.Builder
-	if len(rows) == 0 {
+	if m.errorText != "" {
+		body.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Git)).Bold(true).Render("Stats could not load."))
+		body.WriteString("\n")
+		body.WriteString(muted.Render(truncate(m.errorText, inner-4)))
+	} else if len(rows) == 0 {
 		body.WriteString(accent.Render("No uses in this window yet."))
 		body.WriteString("\n")
-		body.WriteString(muted.Render("Run an alias from the picker or use timestamped shell history."))
+		body.WriteString(muted.Render("Run an alias, then refresh after your shell writes its history."))
 	} else {
 		visible := len(rows)
 		if limit := m.height - 14; limit > 0 && visible > limit {
@@ -155,7 +171,97 @@ func (m statsModel) View() string {
 		}
 	}
 
-	foot := muted.Render("←/→ period   ↑/↓ inspect   q close")
-	note := muted.Render("Picker launches + direct aliases found in shell history")
-	return page.Render(header + "\n\n" + strings.Join(tabs, " ") + "\n\n" + panel.Render(strings.TrimRight(body.String(), "\n")) + "\n\n" + note + "\n" + foot)
+	closeHint := m.closeHint
+	if closeHint == "" {
+		closeHint = "q close"
+	}
+	foot := muted.Render("←/→ period   ↑/↓ inspect   r refresh   " + closeHint)
+	note := muted.Render("Counts come only from the active terminal history")
+	content := header + "\n\n" + strings.Join(tabs, " ") + "\n\n" + panel.Render(strings.TrimRight(body.String(), "\n")) + "\n\n" + note + "\n" + foot
+	if m.appHeader != "" {
+		content = m.appHeader + "\n\n" + content
+	}
+	return page.Render(content)
+}
+
+func (m *model) openStatsView() {
+	m.statsOpen = true
+	m.statsPeriod = 0
+	m.statsSelected = 0
+	m.statsNow = time.Now()
+	m.statsErr = ""
+	data, err := loadStatsData()
+	if err != nil {
+		m.statsData = statsData{}
+		m.statsErr = err.Error()
+		return
+	}
+	m.statsData = data
+}
+
+func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch message.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		m.statsOpen = false
+		return m, nil
+	case tea.KeyCtrlS:
+		m.statsOpen = false
+		return m, nil
+	case tea.KeyCtrlR:
+		m.openStatsView()
+		return m, nil
+	case tea.KeyLeft:
+		m.statsPeriod = (m.statsPeriod + len(statsPeriods) - 1) % len(statsPeriods)
+		m.statsSelected = 0
+	case tea.KeyRight, tea.KeyTab:
+		m.statsPeriod = (m.statsPeriod + 1) % len(statsPeriods)
+		m.statsSelected = 0
+	case tea.KeyUp:
+		m.statsSelected = max(0, m.statsSelected-1)
+	case tea.KeyDown:
+		rows, _ := rankedStatsRows(m.statsData, statsPeriods[m.statsPeriod], m.statsNow)
+		m.statsSelected = min(max(0, len(rows)-1), m.statsSelected+1)
+	case tea.KeyRunes:
+		if len(message.Runes) != 1 {
+			return m, nil
+		}
+		switch message.Runes[0] {
+		case 'q':
+			m.statsOpen = false
+		case 'h':
+			m.statsPeriod = (m.statsPeriod + len(statsPeriods) - 1) % len(statsPeriods)
+			m.statsSelected = 0
+		case 'l':
+			m.statsPeriod = (m.statsPeriod + 1) % len(statsPeriods)
+			m.statsSelected = 0
+		case 'k':
+			m.statsSelected = max(0, m.statsSelected-1)
+		case 'j':
+			rows, _ := rankedStatsRows(m.statsData, statsPeriods[m.statsPeriod], m.statsNow)
+			m.statsSelected = min(max(0, len(rows)-1), m.statsSelected+1)
+		case '1', '2', '3', '4':
+			m.statsPeriod = int(message.Runes[0] - '1')
+			m.statsSelected = 0
+		case 'r':
+			m.openStatsView()
+		}
+	}
+	return m, nil
+}
+
+func (m model) statsView(header string) string {
+	return (statsModel{
+		data:        m.statsData,
+		periodIndex: m.statsPeriod,
+		selected:    m.statsSelected,
+		width:       m.width,
+		height:      m.height,
+		theme:       m.theme,
+		now:         m.statsNow,
+		appHeader:   header,
+		closeHint:   "esc return",
+		errorText:   m.statsErr,
+	}).View()
 }

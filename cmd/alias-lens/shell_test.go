@@ -108,6 +108,9 @@ func TestZshIntegrationExecutesAliasName(t *testing.T) {
 	if !strings.Contains(zshIntegration, `alias-lens entry-summary "$_alias_lens_name"`) {
 		t.Fatal("Zsh integration does not show the expanded command after execution")
 	}
+	if !strings.Contains(zshIntegration, `setopt localoptions extendedhistory`) || !strings.Contains(zshIntegration, `print -s -- "$_alias_lens_name"`) || !strings.Contains(zshIntegration, `fc -AI "${HISTFILE:-$HOME/.zsh_history}"`) {
+		t.Fatal("Zsh integration does not record picker runs in native history")
+	}
 	if !strings.Contains(zshIntegration, `bindkey '^G' _alias_lens_launch`) {
 		t.Fatal("Zsh integration does not install the ZLE key binding")
 	}
@@ -161,7 +164,7 @@ if [ "${1-}" = "shell-entry" ]; then
   printf "alias cl='printf newly-loaded'\n"
 elif [ "${1-}" = "entry-summary" ]; then
   printf 'Alias Lens ran [cl]: "printf newly-loaded"\n'
-elif [ "${1-}" = "record-use" ] || [ "${1-}" = "watch" ]; then
+elif [ "${1-}" = "watch" ]; then
   :
 else
   printf 'cl\n'

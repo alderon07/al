@@ -25,6 +25,7 @@ func TestSearchCursorDoesNotBlinkWithoutFocus(t *testing.T) {
 		{helpVisible: true},
 		{adding: true},
 		{trackedOnly: true},
+		{statsOpen: true},
 		{terminalBlurred: true},
 	}
 	for _, state := range states {

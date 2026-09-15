@@ -48,6 +48,12 @@ type model struct {
 	themeBefore     Theme
 	helpVisible     bool
 	helpQuery       string
+	statsOpen       bool
+	statsData       statsData
+	statsPeriod     int
+	statsSelected   int
+	statsNow        time.Time
+	statsErr        string
 	tourVisible     bool
 	adding          bool
 	field           int
@@ -184,6 +190,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.helpVisible {
 			return m.updateHelp(message)
 		}
+		if m.statsOpen {
+			return m.updateStatsView(message)
+		}
 		if m.themePicker {
 			return m.updateThemePicker(message)
 		}
@@ -236,6 +245,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyCtrlT:
 			m.openThemePicker()
+		case tea.KeyCtrlS:
+			if !m.selectMode {
+				m.openStatsView()
+			}
 		case tea.KeyCtrlZ:
 			if !m.selectMode {
 				m.openRevisionDrawer()
@@ -348,6 +361,9 @@ func (m model) View() string {
 	if m.helpVisible {
 		return m.helpView(width, height, contentWidth, header)
 	}
+	if m.statsOpen {
+		return m.statsView(header)
+	}
 	if m.runConfirm != nil {
 		return m.runConfirmationView(width, height, contentWidth, header)
 	}
@@ -396,9 +412,9 @@ func (m model) View() string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
+	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  ^s stats  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
 	if contentWidth < 96 {
-		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  ? help  ·  ^t themes  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  ^s stats  ·  ? help  ·  esc quit")
 	}
 	if m.selectMode {
 		footer = dimStyle.Render("type · ↑↓ move · enter select · ? help · esc cancel")
@@ -406,9 +422,9 @@ func (m model) View() string {
 			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
 		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  ^t themes  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ^s stats  ·  ? help  ·  esc quit")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
+			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  ^s stats  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
 		}
 	}
 	if m.status != "" {
@@ -531,6 +547,7 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 		{"Ctrl+E", "Edit description, command, or name"},
 		{"Ctrl+D", "Delete an alias after confirmation"},
 		{"Ctrl+Z", "Browse and restore private revisions"},
+		{"Ctrl+S", "Open alias usage stats"},
 		{"Ctrl+H", "Show aliases with health issues"},
 		{"Ctrl+F", "Show files enrolled in sync"},
 		{"Ctrl+G", "Commit alias changes locally"},
@@ -995,7 +1012,7 @@ func (m model) currentAliases() []Alias {
 }
 
 func (m model) searchFocused() bool {
-	return !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.helpVisible && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
+	return !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.helpVisible && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
 }
 
 func renderAlias(alias Alias, active bool, width int) string {

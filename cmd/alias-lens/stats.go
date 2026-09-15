@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -25,63 +24,6 @@ type statsRow struct {
 type statsData struct {
 	Aliases []Alias
 	Events  []usageEvent
-}
-
-func usageLogPath() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, ".local", "share", "alias-lens", "usage.tsv"), nil
-}
-
-func recordAliasUse(name string) error {
-	if !aliasName.MatchString(name) {
-		return fmt.Errorf("invalid alias name %q", name)
-	}
-	path, err := usageLogPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	if err := file.Chmod(0o600); err != nil {
-		return err
-	}
-	_, err = fmt.Fprintf(file, "%d\t%s\n", time.Now().Unix(), name)
-	return err
-}
-
-func loadUsageEvents() ([]usageEvent, error) {
-	path, err := usageLogPath()
-	if err != nil {
-		return nil, err
-	}
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	var events []usageEvent
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		stamp, name, found := strings.Cut(scanner.Text(), "\t")
-		unix, parseErr := strconv.ParseInt(stamp, 10, 64)
-		if !found || parseErr != nil || !aliasName.MatchString(name) {
-			continue
-		}
-		events = append(events, usageEvent{Name: name, Time: time.Unix(unix, 0)})
-	}
-	return events, scanner.Err()
 }
 
 func usageCountsSince(events []usageEvent, since time.Time) map[string]int {
@@ -193,15 +135,11 @@ func loadStatsData() (statsData, error) {
 	if err != nil {
 		return statsData{}, err
 	}
-	events, err := loadUsageEvents()
-	if err != nil {
-		return statsData{}, err
-	}
 	historyEvents, err := loadHistoryUsageEvents(aliases)
 	if err != nil {
 		return statsData{}, err
 	}
-	return statsData{Aliases: aliases, Events: append(events, historyEvents...)}, nil
+	return statsData{Aliases: aliases, Events: historyEvents}, nil
 }
 
 func runStatsCommand(arguments []string) error {

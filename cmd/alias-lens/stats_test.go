@@ -1,30 +1,16 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
-
-func TestUsageLogStoresOnlyTimeAndAliasNamePrivately(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	if err := recordAliasUse("gs"); err != nil {
-		t.Fatal(err)
-	}
-	events, err := loadUsageEvents()
-	if err != nil || len(events) != 1 || events[0].Name != "gs" {
-		t.Fatalf("unexpected usage events: %#v, %v", events, err)
-	}
-	info, err := os.Stat(filepath.Join(home, ".local", "share", "alias-lens", "usage.tsv"))
-	if err != nil || info.Mode().Perm() != 0o600 {
-		t.Fatalf("usage log is not private: %v, %v", info, err)
-	}
-}
 
 func TestStatsDashboardFitsTerminalWidth(t *testing.T) {
 	theme := builtInTheme("phosphor")
@@ -42,6 +28,64 @@ func TestStatsDashboardFitsTerminalWidth(t *testing.T) {
 	}
 	if strings.Contains(view, "\n    1                                                                   \n") {
 		t.Fatal("usage count wrapped onto its own line")
+	}
+}
+
+func TestStatsIgnorePrivateUsageDatabase(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias gs='git status'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".bash_history"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := recordAliasUse("gs"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := loadStatsData()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(data.Events) != 0 {
+		t.Fatalf("private usage database affected history-only stats: %#v", data.Events)
+	}
+	info, err := os.Stat(filepath.Join(home, ".local", "share", "alias-lens", "usage.tsv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("private usage database mode = %v", info.Mode().Perm())
+	}
+}
+
+func TestMainTUIOpensStatsAndReturnsToAliases(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias ll='ls -al'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	history := fmt.Sprintf("#%d\nll\n", time.Now().Unix())
+	if err := os.WriteFile(filepath.Join(home, ".bash_history"), []byte(history), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	updated, _ := (model{aliases: []Alias{{Name: "ll", Command: "ls -al"}}, width: 90, height: 24, theme: builtInTheme("phosphor")}).Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	stats := updated.(model)
+	if !stats.statsOpen {
+		t.Fatal("Ctrl+S did not open stats inside the main TUI")
+	}
+	view := stats.View()
+	for _, expected := range []string{"ALIAS LENS", "Alias rhythm", "ll", "esc return"} {
+		if !strings.Contains(view, expected) {
+			t.Fatalf("embedded stats view is missing %q:\n%s", expected, view)
+		}
+	}
+	returned, command := stats.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	if returned.(model).statsOpen || command != nil {
+		t.Fatal("Esc did not return from stats to the alias browser")
 	}
 }
 

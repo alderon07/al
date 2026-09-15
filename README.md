@@ -107,6 +107,7 @@ The help text marks commands that execute aliases, edit shell files, create Git 
 - `Ctrl+E`: edit the selected alias, starting with its description
 - `Ctrl+D`: delete the selected alias after confirmation
 - `Ctrl+Z`: browse private revisions and restore one after confirmation
+- `Ctrl+S`: open alias usage stats inside the TUI
 - `Ctrl+H`: show aliases with health warnings
 - `Ctrl+F`: show tracked config files and their sync status
 - `Ctrl+G`: commit aliases to the configured repository while the TUI is open
@@ -148,7 +149,7 @@ al search git
 al search --json daily
 ```
 
-Open the interactive usage dashboard. It combines picker launches with direct alias uses found in the active shell history. Time-based periods include direct uses only when the history entries have timestamps. Use `--plain` for scripts.
+Press `Ctrl+S` in the main TUI to open the usage dashboard without leaving Alias Lens. `al stats` opens the same dashboard directly. Counts come only from the active terminal history. Picker launches add the selected alias through the shell's native history support. Time-based periods require history timestamps. Use `--plain` for scripts.
 
 ```bash
 al stats
@@ -339,7 +340,7 @@ Run `al --web` and open `http://127.0.0.1:8787`.
 | `~/.config/alias-lens/config.json` | Repository and sync settings |
 | `~/.config/alias-lens/theme.json` | Selected theme and color overrides |
 | `~/.local/share/alias-lens/revisions/` | Timestamped private alias revisions |
-| `~/.local/share/alias-lens/usage.tsv` | Private alias names and picker launch times combined with shell history by `al stats` |
+| `~/.local/share/alias-lens/usage.tsv` | Private picker-launch log; alias count stats use terminal history instead |
 | `~/.local/state/alias-lens/sync-state.json` | Automatic sync hashes and status |
 | `~/.local/state/alias-lens/conflicts/` | Private local and remote conflict copies |
 

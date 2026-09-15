@@ -310,11 +310,13 @@ _alias_lens_report() {
   printf '\n%s\n' "$_alias_lens_receipt"
 }
 _alias_lens_execute() {
-  local _alias_lens_name="$1" _alias_lens_definition _alias_lens_receipt _alias_lens_status
+  local _alias_lens_name="$1" _alias_lens_definition _alias_lens_receipt _alias_lens_status HISTTIMEFORMAT='%s '
   _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
   _alias_lens_receipt="$(command env ALIAS_LENS_SHELL=bash alias-lens entry-summary "$_alias_lens_name")" || return
   builtin eval "$_alias_lens_definition" || return
   command env ALIAS_LENS_SHELL=bash alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+  builtin history -s "$_alias_lens_name"
+  builtin history -a
   builtin eval "$_alias_lens_name"
   _alias_lens_status=$?
   _alias_lens_report "$_alias_lens_receipt" "$_alias_lens_status"
@@ -374,6 +376,9 @@ _alias_lens_execute() {
   _alias_lens_receipt="$(command env ALIAS_LENS_SHELL=zsh alias-lens entry-summary "$_alias_lens_name")" || return
   builtin eval "$_alias_lens_definition" || return
   command env ALIAS_LENS_SHELL=zsh alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+  setopt localoptions extendedhistory
+  print -s -- "$_alias_lens_name"
+  fc -AI "${HISTFILE:-$HOME/.zsh_history}"
   builtin eval "$_alias_lens_name"
   _alias_lens_status=$?
   _alias_lens_report "$_alias_lens_receipt" "$_alias_lens_status"
