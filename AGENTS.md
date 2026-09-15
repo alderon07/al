@@ -2,8 +2,9 @@
 
 ## General
 
-Code for reliability, maintainability, and operability.
-Go Best Practices https://go.dev/doc/effective_go
+- Code for reliability, maintainability, and operability.
+- Go Best Practices https://go.dev/doc/effective_go
+- Always code with the mindset that we'll expand the current feature in one way or another. So write modular code.
 
 ## Product rules
 
