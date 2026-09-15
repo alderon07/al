@@ -31,6 +31,23 @@ func TestStatsDashboardFitsTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestStatsDashboardFillsWideTerminal(t *testing.T) {
+	view := (statsModel{
+		data:   statsData{Aliases: []Alias{{Name: "ll", Command: "ls -al"}}, Events: []usageEvent{{Name: "ll", Time: time.Now()}}},
+		width:  160,
+		height: 36,
+		theme:  builtInTheme("phosphor"),
+		now:    time.Now(),
+	}).View()
+	lines := strings.Split(view, "\n")
+	if lipgloss.Width(lines[0]) != 160 {
+		t.Fatalf("wide dashboard uses %d of 160 columns", lipgloss.Width(lines[0]))
+	}
+	if lipgloss.Height(view) != 36 {
+		t.Fatalf("dashboard uses %d of 36 rows", lipgloss.Height(view))
+	}
+}
+
 func TestStatsIgnorePrivateUsageDatabase(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

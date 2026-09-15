@@ -646,7 +646,7 @@ func TestBashIntegrationExecutesAliasNameInsteadOfCommandText(t *testing.T) {
 	if !strings.Contains(bashIntegration, `alias-lens shell-entry "$_alias_lens_name"`) {
 		t.Fatal("shell integration does not load a newly added alias before executing it")
 	}
-	if !strings.Contains(bashIntegration, `HISTTIMEFORMAT='%s '`) || !strings.Contains(bashIntegration, `builtin history -s "$_alias_lens_name"`) || !strings.Contains(bashIntegration, `builtin history -a`) {
+	if !strings.Contains(bashIntegration, `_alias_lens_flush_history 2>/dev/null || true`) || !strings.Contains(bashIntegration, `HISTTIMEFORMAT='%s '`) || !strings.Contains(bashIntegration, `builtin history -s "$_alias_lens_name"`) || !strings.Contains(bashIntegration, `builtin history -a`) {
 		t.Fatal("Bash integration does not record picker runs in native history")
 	}
 	if !strings.Contains(bashIntegration, `alias-lens pick --execute "$@"`) {

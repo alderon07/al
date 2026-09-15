@@ -149,7 +149,7 @@ al search git
 al search --json daily
 ```
 
-Press `F2` in the main TUI to open the usage dashboard without leaving Alias Lens. `Ctrl+S` is a secondary binding because some terminals reserve it for flow control. `al stats` opens the same dashboard directly. Counts come only from the active terminal history. Picker launches add the selected alias through the shell's native history support. Time-based periods require history timestamps. Use `--plain` for scripts.
+Press `F2` in the main TUI to open the full-terminal usage dashboard. Some terminals reserve `Ctrl+S` for flow control, so it is only a secondary binding. `al stats` opens the same dashboard directly. Counts come only from the active terminal history. The shell integration flushes current-session history before Alias Lens reads it. Picker launches add the selected alias through native history support. Time-based periods require history timestamps. Use `--plain` for scripts.
 
 ```bash
 al stats

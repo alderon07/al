@@ -93,17 +93,16 @@ func (m statsModel) View() string {
 	if width < 48 {
 		width = 48
 	}
-	if width > 96 {
-		width = 96
+	height := m.height
+	if height < 18 {
+		height = 18
 	}
-	// Leave a small right gutter. Some terminals render box-drawing runes wider
-	// than their reported cell width, so an exact-width meter can wrap its count.
-	inner := width - 12
+	inner := width - 4
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Accent)).Bold(true)
 	text := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text))
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Muted))
 	panel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Panel)).Padding(1, 2).Width(inner)
-	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background)).Padding(1, 2).Width(width - 8)
+	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background)).Padding(1, 2).Width(width).Height(height)
 
 	total := 0
 	for _, row := range rows {
@@ -128,7 +127,7 @@ func (m statsModel) View() string {
 	} else if len(rows) == 0 {
 		body.WriteString(accent.Render("No uses in this window yet."))
 		body.WriteString("\n")
-		body.WriteString(muted.Render("Run an alias, then refresh after your shell writes its history."))
+		body.WriteString(muted.Render("No matching aliases were found in terminal history."))
 	} else {
 		visible := len(rows)
 		if limit := m.height - 14; limit > 0 && visible > limit {

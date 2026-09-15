@@ -108,7 +108,7 @@ func TestZshIntegrationExecutesAliasName(t *testing.T) {
 	if !strings.Contains(zshIntegration, `alias-lens entry-summary "$_alias_lens_name"`) {
 		t.Fatal("Zsh integration does not show the expanded command after execution")
 	}
-	if !strings.Contains(zshIntegration, `setopt localoptions extendedhistory`) || !strings.Contains(zshIntegration, `print -s -- "$_alias_lens_name"`) || !strings.Contains(zshIntegration, `fc -AI "${HISTFILE:-$HOME/.zsh_history}"`) {
+	if !strings.Contains(zshIntegration, `_alias_lens_flush_history 2>/dev/null || true`) || !strings.Contains(zshIntegration, `setopt localoptions extendedhistory`) || !strings.Contains(zshIntegration, `print -s -- "$_alias_lens_name"`) || !strings.Contains(zshIntegration, `fc -AI "${HISTFILE:-$HOME/.zsh_history}"`) {
 		t.Fatal("Zsh integration does not record picker runs in native history")
 	}
 	if !strings.Contains(zshIntegration, `bindkey '^G' _alias_lens_launch`) {

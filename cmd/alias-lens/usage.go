@@ -92,7 +92,8 @@ Examples:
 Rank aliases found in the active terminal history. The default period is all.
 Today starts at local midnight. Week and year mean the previous 7 days and 12
 months. A terminal opens the interactive dashboard; --plain prints rows.
-Time-based periods require timestamped Bash or Zsh history.
+The shell integration flushes the current session before reading the history
+file. Time-based periods require timestamped Bash or Zsh history.
 `,
 	"export": `Usage: al export aliases|stats [--format json|yaml|csv] [--period PERIOD] [--output PATH]
 

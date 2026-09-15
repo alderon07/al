@@ -309,6 +309,10 @@ _alias_lens_report() {
   fi
   printf '\n%s\n' "$_alias_lens_receipt"
 }
+_alias_lens_flush_history() {
+  local HISTTIMEFORMAT='%s '
+  builtin history -a
+}
 _alias_lens_execute() {
   local _alias_lens_name="$1" _alias_lens_definition _alias_lens_receipt _alias_lens_status HISTTIMEFORMAT='%s '
   _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
@@ -323,6 +327,7 @@ _alias_lens_execute() {
   return "$_alias_lens_status"
 }
 al() {
+  _alias_lens_flush_history 2>/dev/null || true
   if [ "$#" -eq 0 ]; then
     local _alias_lens_name
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens)" || return
@@ -350,6 +355,7 @@ _alias_lens_launch() {
     READLINE_POINT=0
     return
   fi
+  _alias_lens_flush_history 2>/dev/null || true
   local _alias_lens_name
   _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens)" || return
   [ -z "$_alias_lens_name" ] && return
@@ -370,6 +376,10 @@ _alias_lens_report() {
   fi
   printf '\n%s\n' "$_alias_lens_receipt"
 }
+_alias_lens_flush_history() {
+  setopt localoptions extendedhistory
+  fc -AI "${HISTFILE:-$HOME/.zsh_history}"
+}
 _alias_lens_execute() {
   local _alias_lens_name="$1" _alias_lens_definition _alias_lens_receipt _alias_lens_status
   _alias_lens_definition="$(command env ALIAS_LENS_SHELL=zsh alias-lens shell-entry "$_alias_lens_name")" || return
@@ -385,6 +395,7 @@ _alias_lens_execute() {
   return "$_alias_lens_status"
 }
 al() {
+  _alias_lens_flush_history 2>/dev/null || true
   if (( $# == 0 )); then
     local _alias_lens_name
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens)" || return
@@ -411,6 +422,7 @@ _alias_lens_launch() {
     zle send-break
     return
   fi
+  _alias_lens_flush_history 2>/dev/null || true
   local _alias_lens_name _alias_lens_status
   _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens)" || return
   [[ -z "$_alias_lens_name" ]] && return
