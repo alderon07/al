@@ -181,6 +181,7 @@ A path selects an existing local Git repository.
 
 Selecting a repository updates Alias Lens configuration and enables automatic
 sync. It does not add provider tokens to the repository or configuration file.
+"al repo github" starts GitHub CLI sign-in when needed, then opens the picker.
 `,
 	"config": `Usage:
   al config

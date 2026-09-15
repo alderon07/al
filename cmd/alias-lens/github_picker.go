@@ -34,6 +34,25 @@ func runRepoPicker(only string) error {
 	if err != nil {
 		return err
 	}
+	if only == "github" {
+		settings := config.Providers["github"]
+		provider := githubProvider{
+			host:     defaultString(settings.Host, "github.com"),
+			protocol: defaultString(settings.Protocol, "auto"),
+		}
+		if err := provider.Connect(context.Background()); err != nil {
+			return err
+		}
+		if !settings.Enabled {
+			settings.Enabled = true
+			settings.Host = provider.host
+			settings.Protocol = provider.protocol
+			config.Providers["github"] = settings
+			if err := saveConfig(config); err != nil {
+				return err
+			}
+		}
+	}
 	repos, warnings := listRemoteRepositories(context.Background(), config, only)
 	if len(repos) == 0 {
 		if len(warnings) > 0 {

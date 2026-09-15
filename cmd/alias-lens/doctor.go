@@ -100,7 +100,7 @@ func providerCredentialStatus(provider RepoProvider) (bool, string) {
 			return false, "install gh"
 		}
 		if err := exec.Command("gh", "auth", "status").Run(); err != nil {
-			return false, "run gh auth login"
+			return false, "run al repo github"
 		}
 		return true, "GitHub CLI authenticated"
 	case "bitbucket":

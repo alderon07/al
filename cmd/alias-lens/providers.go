@@ -89,12 +89,35 @@ type githubProvider struct {
 func (p githubProvider) ID() string    { return "github" }
 func (p githubProvider) Label() string { return "GitHub" }
 
+func (p githubProvider) Connect(ctx context.Context) error {
+	gh, err := exec.LookPath("gh")
+	if err != nil {
+		return fmt.Errorf("GitHub CLI is required; install gh, then rerun al repo github")
+	}
+	if err := exec.CommandContext(ctx, gh, "auth", "status", "--hostname", p.host).Run(); err == nil {
+		return nil
+	}
+
+	fmt.Fprintln(os.Stderr, "Alias Lens: GitHub sign-in is required. Opening GitHub CLI login...")
+	login := exec.CommandContext(ctx, gh, "auth", "login", "--hostname", p.host, "--web", "--git-protocol", "https")
+	login.Stdin = os.Stdin
+	login.Stdout = os.Stdout
+	login.Stderr = os.Stderr
+	if err := login.Run(); err != nil {
+		return fmt.Errorf("GitHub sign-in failed: %w", err)
+	}
+	if err := exec.CommandContext(ctx, gh, "auth", "status", "--hostname", p.host).Run(); err != nil {
+		return fmt.Errorf("GitHub CLI did not report an authenticated account after sign-in")
+	}
+	return nil
+}
+
 func (p githubProvider) List(ctx context.Context) ([]RemoteRepo, error) {
 	if _, err := exec.LookPath("gh"); err != nil {
-		return nil, fmt.Errorf("install GitHub CLI and run gh auth login")
+		return nil, fmt.Errorf("GitHub CLI is not installed; install gh, then run al repo github")
 	}
 	if output, err := exec.CommandContext(ctx, "gh", "auth", "status", "--hostname", p.host).CombinedOutput(); err != nil {
-		return nil, fmt.Errorf("run gh auth login: %s", cleanCommandOutput(output))
+		return nil, fmt.Errorf("run al repo github to sign in: %s", cleanCommandOutput(output))
 	}
 	endpoint := "user/repos?affiliation=owner,collaborator,organization_member&per_page=100&sort=pushed"
 	output, err := exec.CommandContext(ctx, "gh", "api", "--hostname", p.host, endpoint, "--paginate", "--slurp").CombinedOutput()

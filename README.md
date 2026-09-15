@@ -222,12 +222,13 @@ al theme tokyo-night
 
 ## Git repository tracking
 
-GitHub is enabled by default. Authenticate GitHub CLI once, then open the interactive picker:
+GitHub is enabled by default. Open the interactive picker:
 
 ```bash
-gh auth login
-al repo
+al repo github
 ```
+
+If GitHub CLI is not signed in, Alias Lens starts its browser-based login and then continues to the picker. GitHub CLI is an optional runtime dependency for GitHub repository discovery and cloning; it is not a Go module dependency. Running `al repo` without a provider still shows every provider that is already connected.
 
 Add Bitbucket Cloud or GitLab to the same picker through the provider configuration layer:
 
