@@ -90,20 +90,30 @@ func main() {
 		}
 	case "pick":
 		commandOnly := false
+		executeSelection := false
 		arguments := os.Args[2:]
-		if len(arguments) > 0 && arguments[0] == "--command" {
-			commandOnly = true
-			arguments = arguments[1:]
+		for len(arguments) > 0 {
+			switch arguments[0] {
+			case "--command":
+				commandOnly = true
+				arguments = arguments[1:]
+			case "--execute":
+				executeSelection = true
+				arguments = arguments[1:]
+			default:
+				goto pickerArgumentsParsed
+			}
 		}
+	pickerArgumentsParsed:
 		if len(arguments) > 1 {
-			fmt.Fprintln(os.Stderr, "Usage: al pick [--command] [QUERY]")
+			fmt.Fprintln(os.Stderr, "Usage: al pick [--command] [--execute] [QUERY]")
 			return
 		}
 		query := ""
 		if len(arguments) == 1 {
 			query = arguments[0]
 		}
-		if err := runAliasPicker(query, commandOnly); err != nil {
+		if err := runAliasPicker(query, commandOnly, executeSelection); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "shell-init":
@@ -123,6 +133,15 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			os.Exit(1)
 		}
+	case "entry-summary":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "Usage: alias-lens entry-summary NAME")
+			return
+		}
+		if err := printAliasReceipt(os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			os.Exit(1)
+		}
 	case "suggest":
 		if err := runHistorySuggestions(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
@@ -133,6 +152,10 @@ func main() {
 		}
 	case "stats":
 		if err := runStatsCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "export":
+		if err := runExportCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "record-use":

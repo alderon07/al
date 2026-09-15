@@ -17,7 +17,8 @@ Find and use aliases:
   pick       Select an alias and print its name or command; never executes it
   use        Select and immediately execute an alias; requires al setup
   search     Print aliases that match a name, command, description, or tag
-  stats      Rank aliases launched through Alias Lens by time period
+  stats      Rank aliases used directly or launched through Alias Lens
+  export     Export aliases or usage stats as JSON, YAML, or CSV
   suggest    Find repeated commands in local shell history and optionally add one
   meta       Set tags, supported platforms, or favorite status on an alias
   describe   Add generated comments to aliases that do not have descriptions
@@ -86,11 +87,24 @@ Examples:
   al search git
   al search --json daily
 `,
-	"stats": `Usage: al stats [all|today|week|year]
+	"stats": `Usage: al stats [--plain] [all|today|week|year]
 
-Rank aliases launched through the Alias Lens picker. The default period is all.
-Today starts at local midnight. Week and year mean the previous 7 days and 12
-months. Alias Lens stores only the alias name and launch time in a private file.
+Rank aliases typed directly or launched through Alias Lens. The default period
+is all. Today starts at local midnight. Week and year mean the previous 7 days
+and 12 months. A terminal opens the interactive dashboard; --plain prints rows.
+Direct uses require timestamped history for time-based periods. Alias Lens stores
+picker launches as an alias name and time in a private file.
+`,
+	"export": `Usage: al export aliases|stats [--format json|yaml|csv] [--period PERIOD] [--output PATH]
+
+Export aliases or ranked usage stats without executing alias commands. JSON is
+the default format. Stats periods are all, today, week, and year. --output writes
+the export atomically with private file permissions; otherwise output goes to
+standard output.
+
+Examples:
+  al export aliases --format yaml
+  al export stats --format csv --period week --output weekly-aliases.csv
 `,
 	"meta": `Usage: al meta ALIAS key=value [key=value ...]
 

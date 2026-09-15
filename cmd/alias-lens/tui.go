@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -68,7 +69,13 @@ type model struct {
 	selectMode      bool
 	executeMode     bool
 	selected        *Alias
+	cursorHidden    bool
+	terminalBlurred bool
 }
+
+type cursorBlinkMsg struct{}
+
+const cursorBlinkInterval = 500 * time.Millisecond
 
 type trackedFileItem struct {
 	Config TrackedFileConfig
@@ -88,7 +95,7 @@ func runTUI() {
 		status = themeErr.Error()
 	}
 
-	options := []tea.ProgramOption{tea.WithAltScreen()}
+	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	var terminal *os.File
 	if openedTerminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
 		terminal = openedTerminal
@@ -104,36 +111,28 @@ func runTUI() {
 	}
 	selected, ok := finished.(model)
 	if ok && selected.selected != nil {
-		writeAliasSelection(os.Stdout, terminal, selected.selected.Name, fileIsTerminal(os.Stdout))
+		writeAliasSelection(os.Stdout, selected.selected.Name)
 	}
 }
 
-func fileIsTerminal(file *os.File) bool {
-	info, err := file.Stat()
-	return err == nil && info.Mode()&os.ModeCharDevice != 0
-}
-
-func writeAliasSelection(stdout, terminal io.Writer, name string, stdoutIsTerminal bool) {
-	if terminal != nil && !stdoutIsTerminal {
-		fmt.Fprintf(terminal, "$ %s\n", name)
-	}
+func writeAliasSelection(stdout io.Writer, name string) {
 	fmt.Fprintln(stdout, name)
 }
 
-func runAliasPicker(query string, commandOnly bool) error {
+func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 	aliases, err := loadAliases()
 	if err != nil {
 		return err
 	}
 	theme, _ := loadTheme()
-	options := []tea.ProgramOption{tea.WithAltScreen()}
+	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	if terminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
 		defer terminal.Close()
 		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: true}
+	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection}
 	finished, err := tea.NewProgram(initial, options...).Run()
 	if err != nil {
 		return err
@@ -150,15 +149,35 @@ func runAliasPicker(query string, commandOnly bool) error {
 	return nil
 }
 
-func (model) Init() tea.Cmd { return nil }
+func (model) Init() tea.Cmd { return blinkCursor() }
+
+func blinkCursor() tea.Cmd {
+	return tea.Tick(cursorBlinkInterval, func(time.Time) tea.Msg { return cursorBlinkMsg{} })
+}
 
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
+	case cursorBlinkMsg:
+		if m.searchFocused() {
+			m.cursorHidden = !m.cursorHidden
+		} else {
+			m.cursorHidden = true
+		}
+		return m, blinkCursor()
+	case tea.FocusMsg:
+		m.terminalBlurred = false
+		m.cursorHidden = false
+		return m, nil
+	case tea.BlurMsg:
+		m.terminalBlurred = true
+		m.cursorHidden = true
+		return m, nil
 	case tea.WindowSizeMsg:
 		m.width = message.Width
 		m.height = message.Height
 		return m, nil
 	case tea.KeyMsg:
+		m.cursorHidden = false
 		if m.tourVisible {
 			return m.updateTour(message)
 		}
@@ -343,7 +362,7 @@ func (m model) View() string {
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(acidColor).
-		Render(acidStyle("$") + " " + searchText(m.query))
+		Render(acidStyle("$") + " " + searchTextCursor(m.query, m.searchFocused() && !m.cursorHidden))
 
 	var body strings.Builder
 	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
@@ -975,6 +994,10 @@ func (m model) currentAliases() []Alias {
 	return filterAliases(m.aliases, m.query)
 }
 
+func (m model) searchFocused() bool {
+	return !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.helpVisible && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
+}
+
 func renderAlias(alias Alias, active bool, width int) string {
 	cardWidth := max(34, width-3)
 	marker := "  "
@@ -1274,11 +1297,23 @@ func searchText(query string) string {
 	return searchTextWithPlaceholder(query, "search aliases…")
 }
 
+func searchTextCursor(query string, visible bool) string {
+	return searchTextWithCursor(query, "search aliases…", visible)
+}
+
 func searchTextWithPlaceholder(query, placeholder string) string {
-	if query == "" {
-		return dimStyle.Render(placeholder) + acidStyle("█")
+	return searchTextWithCursor(query, placeholder, true)
+}
+
+func searchTextWithCursor(query, placeholder string, visible bool) string {
+	cursor := " "
+	if visible {
+		cursor = acidStyle("█")
 	}
-	return lipgloss.NewStyle().Foreground(inkColor).Render(query) + acidStyle("█")
+	if query == "" {
+		return dimStyle.Render(placeholder) + cursor
+	}
+	return lipgloss.NewStyle().Foreground(inkColor).Render(query) + cursor
 }
 
 func truncate(value string, width int) string {

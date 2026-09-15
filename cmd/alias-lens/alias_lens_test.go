@@ -646,7 +646,7 @@ func TestBashIntegrationExecutesAliasNameInsteadOfCommandText(t *testing.T) {
 	if !strings.Contains(bashIntegration, `alias-lens shell-entry "$_alias_lens_name"`) {
 		t.Fatal("shell integration does not load a newly added alias before executing it")
 	}
-	if !strings.Contains(bashIntegration, `alias-lens pick "$@"`) {
+	if !strings.Contains(bashIntegration, `alias-lens pick --execute "$@"`) {
 		t.Fatal("al use does not request the selected alias")
 	}
 	if !strings.Contains(bashIntegration, `ALIAS_LENS_NOBIND`) || !strings.Contains(bashIntegration, `[ -n "${READLINE_LINE-}" ]`) {

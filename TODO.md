@@ -81,12 +81,17 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Add `al search [--json] [QUERY]` for non-interactive search.
 - [x] Record picker launches without storing the command text.
 - [x] Add `al stats` views for all time, today, the last 7 days, and the last 12 months.
+- [x] Count aliases typed directly when the active shell history contains them.
+- [x] Add a themed interactive stats dashboard with plain output for scripts.
+- [x] Export aliases and stats as JSON, YAML, or CSV.
+- [x] Show the expanded command in the terminal after a picker launch.
 - [x] Make `Ctrl+G` launch the picker from an empty Bash or Zsh prompt.
 - [x] Preserve `Ctrl+G` cancel behavior when the prompt contains text.
 - [x] Let users disable the binding with `ALIAS_LENS_NOBIND=1` and bind `_alias_lens_launch` themselves.
 - [x] Move the executable package and embedded browser assets under `cmd/alias-lens/`.
 - [x] Add `al check` for definitions, metadata, duplicate names, native shell syntax, and warnings.
 - [x] Run the syntax checker as part of `al doctor`.
+- [x] Extract export encoding and private file writes into an internal package.
 
 ## Reduce the next alias pain points
 

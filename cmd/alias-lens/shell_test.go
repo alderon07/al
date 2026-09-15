@@ -105,6 +105,9 @@ func TestZshIntegrationExecutesAliasName(t *testing.T) {
 	if !strings.Contains(zshIntegration, `alias-lens shell-entry "$_alias_lens_name"`) {
 		t.Fatal("Zsh integration does not load a newly added alias before executing it")
 	}
+	if !strings.Contains(zshIntegration, `alias-lens entry-summary "$_alias_lens_name"`) {
+		t.Fatal("Zsh integration does not show the expanded command after execution")
+	}
 	if !strings.Contains(zshIntegration, `bindkey '^G' _alias_lens_launch`) {
 		t.Fatal("Zsh integration does not install the ZLE key binding")
 	}
@@ -156,6 +159,10 @@ func TestBashIntegrationLoadsNewAliasBeforeRunningIt(t *testing.T) {
 	contents := `#!/bin/sh
 if [ "${1-}" = "shell-entry" ]; then
   printf "alias cl='printf newly-loaded'\n"
+elif [ "${1-}" = "entry-summary" ]; then
+  printf 'Alias Lens ran [cl]: "printf newly-loaded"\n'
+elif [ "${1-}" = "record-use" ] || [ "${1-}" = "watch" ]; then
+  :
 else
   printf 'cl\n'
 fi
@@ -172,6 +179,16 @@ fi
 	}
 	if !strings.Contains(string(output), "newly-loaded") {
 		t.Fatalf("new alias did not run in the existing shell:\n%s", output)
+	}
+	if !strings.Contains(string(output), `Alias Lens ran [cl]: "printf newly-loaded"`) {
+		t.Fatalf("executed command was not shown after the alias output:\n%s", output)
+	}
+}
+
+func TestAliasReceiptEscapesTerminalControlCharacters(t *testing.T) {
+	receipt := formatAliasReceipt(Alias{Name: "cl", Command: "clear\n\x1b[2J"})
+	if receipt != `Alias Lens ran [cl]: "clear\n\x1b[2J"` {
+		t.Fatalf("unsafe or unclear receipt: %q", receipt)
 	}
 }
 

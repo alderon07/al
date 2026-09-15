@@ -128,7 +128,7 @@ al setup
 
 The first launch after setup shows a short keyboard tour. Press `Enter` to dismiss it or `?` to open the complete searchable guide. Alias Lens records the dismissal locally and does not show the tour again.
 
-Press `Ctrl+G` on an empty prompt, select an alias, and press `Enter`. Alias Lens closes, loads that alias definition into the current shell, and executes it by name. Newly added or edited aliases work immediately without restarting the shell. `al` opens the same picker, and `al use QUERY` opens it with an initial search.
+Press `Ctrl+G` on an empty prompt, select an alias, and press `Enter`. Alias Lens closes, loads that alias definition into the current shell, and executes it by name. After the command finishes, the terminal shows the expanded command and its exit status when it failed. Newly added or edited aliases work immediately without restarting the shell. `al` opens the same picker, and `al use QUERY` opens it with an initial search.
 
 On a non-empty prompt, `Ctrl+G` keeps its normal cancel behavior. To install no Alias Lens key binding, set `ALIAS_LENS_NOBIND=1` before the integration loads. The shell integration exposes `_alias_lens_launch` for users who want to bind another key.
 
@@ -148,13 +148,19 @@ al search git
 al search --json daily
 ```
 
-Show the aliases launched most often through the picker:
+Open the interactive usage dashboard. It combines picker launches with direct alias uses found in the active shell history. Time-based periods include direct uses only when the history entries have timestamps. Use `--plain` for scripts.
 
 ```bash
 al stats
 al stats today
-al stats week
-al stats year
+al stats --plain week
+```
+
+Export aliases or ranked stats as JSON, YAML, or CSV. JSON is the default. An output file is written atomically with mode `0600` because alias commands are private user data.
+
+```bash
+al export aliases --format yaml
+al export stats --format csv --period week --output weekly-aliases.csv
 ```
 
 ## Turn repeated commands into aliases
@@ -333,7 +339,7 @@ Run `al --web` and open `http://127.0.0.1:8787`.
 | `~/.config/alias-lens/config.json` | Repository and sync settings |
 | `~/.config/alias-lens/theme.json` | Selected theme and color overrides |
 | `~/.local/share/alias-lens/revisions/` | Timestamped private alias revisions |
-| `~/.local/share/alias-lens/usage.tsv` | Private alias names and picker launch times used by `al stats` |
+| `~/.local/share/alias-lens/usage.tsv` | Private alias names and picker launch times combined with shell history by `al stats` |
 | `~/.local/state/alias-lens/sync-state.json` | Automatic sync hashes and status |
 | `~/.local/state/alias-lens/conflicts/` | Private local and remote conflict copies |
 
