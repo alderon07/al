@@ -1,5 +1,9 @@
 # Working on Alias Lens
 
+## General
+
+Code for reliability, maintainability, and operability.
+
 ## Product rules
 
 Alias Lens is a terminal-first Bash and Zsh alias manager. Keep the Bubble Tea interface as the default experience. The browser endpoint must remain optional.
