@@ -151,3 +151,17 @@ func TestBashHistoryUsageKeepsUntimestampedAliasesForAllTime(t *testing.T) {
 		t.Fatalf("untimestamped history leaked into a dated period: %#v", counts)
 	}
 }
+
+func TestStatsViewExplainsUntimestampedBashHistory(t *testing.T) {
+	view := (statsModel{
+		data:        statsData{Aliases: []Alias{{Name: "ll"}}, Events: []usageEvent{{Name: "ll"}}},
+		periodIndex: 1,
+		width:       100,
+		height:      24,
+		theme:       defaultTheme(),
+		now:         time.Now(),
+	}).View()
+	if !strings.Contains(view, "history has no dates") || !strings.Contains(view, "Start a new shell") {
+		t.Fatalf("stats view did not explain untimestamped Bash history:\n%s", view)
+	}
+}

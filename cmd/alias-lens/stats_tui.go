@@ -125,9 +125,15 @@ func (m statsModel) View() string {
 		body.WriteString("\n")
 		body.WriteString(muted.Render(truncate(m.errorText, inner-4)))
 	} else if len(rows) == 0 {
-		body.WriteString(accent.Render("No uses in this window yet."))
-		body.WriteString("\n")
-		body.WriteString(muted.Render("No matching aliases were found in terminal history."))
+		if period != "all" && hasUntimestampedUsage(m.data.Events) {
+			body.WriteString(accent.Render("Your alias history has no dates yet."))
+			body.WriteString("\n")
+			body.WriteString(muted.Render("Start a new shell. Alias Lens will date future commands without changing how history looks."))
+		} else {
+			body.WriteString(accent.Render("No uses in this window yet."))
+			body.WriteString("\n")
+			body.WriteString(muted.Render("No matching aliases were found in terminal history."))
+		}
 	} else {
 		visible := len(rows)
 		if limit := m.height - 14; limit > 0 && visible > limit {

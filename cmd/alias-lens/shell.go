@@ -302,6 +302,11 @@ fi
 
 const bashIntegration = `# Alias Lens Bash integration
 unalias al 2>/dev/null || true
+# Bash records history timestamps only while HISTTIMEFORMAT is set. An empty
+# value keeps the normal history display while preserving dates for stats.
+if [ -z "${HISTTIMEFORMAT+x}" ]; then
+  HISTTIMEFORMAT=
+fi
 _alias_lens_report() {
   local _alias_lens_receipt="$1" _alias_lens_status="$2"
   if [ "$_alias_lens_status" -ne 0 ]; then
@@ -310,11 +315,10 @@ _alias_lens_report() {
   printf '\n%s\n' "$_alias_lens_receipt"
 }
 _alias_lens_flush_history() {
-  local HISTTIMEFORMAT='%s '
   builtin history -a
 }
 _alias_lens_execute() {
-  local _alias_lens_name="$1" _alias_lens_definition _alias_lens_receipt _alias_lens_status HISTTIMEFORMAT='%s '
+  local _alias_lens_name="$1" _alias_lens_definition _alias_lens_receipt _alias_lens_status
   _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
   _alias_lens_receipt="$(command env ALIAS_LENS_SHELL=bash alias-lens entry-summary "$_alias_lens_name")" || return
   builtin eval "$_alias_lens_definition" || return

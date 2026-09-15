@@ -26,6 +26,15 @@ type statsData struct {
 	Events  []usageEvent
 }
 
+func hasUntimestampedUsage(events []usageEvent) bool {
+	for _, event := range events {
+		if event.Time.IsZero() {
+			return true
+		}
+	}
+	return false
+}
+
 func usageCountsSince(events []usageEvent, since time.Time) map[string]int {
 	counts := make(map[string]int)
 	for _, event := range events {
@@ -170,6 +179,10 @@ func runStatsCommand(arguments []string) error {
 		return runStatsTUI(data, period, now)
 	}
 	if len(rows) == 0 {
+		if period != "all" && hasUntimestampedUsage(data.Events) {
+			fmt.Printf("Alias uses exist, but your shell history has no dates for them. Start a new shell so Alias Lens can date future commands, then try again.\n")
+			return nil
+		}
 		fmt.Printf("No alias uses found for %s.\n", period)
 		return nil
 	}
