@@ -230,22 +230,41 @@ al repo github
 
 If GitHub CLI is not signed in, Alias Lens starts its browser-based login and then continues to the picker. GitHub CLI is an optional runtime dependency for GitHub repository discovery and cloning; it is not a Go module dependency. Running `al repo` without a provider still shows every provider that is already connected.
 
-Add Bitbucket Cloud or GitLab to the same picker through the provider configuration layer:
+Connect GitLab through GitLab CLI's browser login and credential storage:
 
 ```bash
-# Bitbucket Cloud: repeat this for each workspace you want to search
-al config provider bitbucket YOUR_WORKSPACE
-export BITBUCKET_API_TOKEN="..."
+al repo gitlab
+```
 
-# GitLab.com, or pass a self-managed GitLab hostname as the final argument
-al config provider gitlab
-export GITLAB_TOKEN="..."
+If `glab` is already authenticated, Alias Lens goes straight to the picker. `GITLAB_TOKEN` remains available for scripts and headless environments. Configure a self-managed host before connecting:
+
+```bash
+al config provider gitlab gitlab.example.com
+al repo gitlab
+```
+
+Bitbucket Cloud has no equivalent authentication CLI. Alias Lens opens a one-command guided flow instead:
+
+```bash
+al repo bitbucket
+```
+
+Create a scoped Bitbucket API token with workspace read and repository read/write access, then paste it into the hidden prompt. Alias Lens keeps the token only in memory for repository discovery and cloning. It discovers accessible workspaces automatically. `BITBUCKET_API_TOKEN` remains available for non-interactive use. You can restrict discovery to one workspace when needed:
+
+```bash
+al config provider bitbucket YOUR_WORKSPACE
+al repo bitbucket
+```
+
+Provider tokens are never written to Alias Lens configuration:
+
+```bash
 
 # See the effective configuration. Tokens are never included.
 al config
 ```
 
-Bitbucket tokens need repository read access to discover repositories. GitLab tokens need API read access. Git push permissions remain controlled by the credentials used by Git itself.
+Git push permissions remain controlled by the credentials used by Git itself.
 
 The picker requests repositories visible to your enabled providers and keeps only non-archived repositories where you can push. It clones selections beneath `~/.local/share/alias-lens/repos/<provider>/`.
 

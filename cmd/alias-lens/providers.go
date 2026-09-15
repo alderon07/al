@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -29,6 +30,8 @@ type RepoProvider interface {
 	List(context.Context) ([]RemoteRepo, error)
 	Clone(context.Context, RemoteRepo, string) error
 }
+
+var providerGetJSON = getJSON
 
 func configuredProviders(config AppConfig) []RepoProvider {
 	var providers []RepoProvider
@@ -163,21 +166,30 @@ func (p githubProvider) Clone(ctx context.Context, repo RemoteRepo, destination 
 type bitbucketProvider struct {
 	workspaces []string
 	protocol   string
+	token      string
 }
 
 func (p bitbucketProvider) ID() string    { return "bitbucket" }
 func (p bitbucketProvider) Label() string { return "Bitbucket" }
 
 func (p bitbucketProvider) List(ctx context.Context) ([]RemoteRepo, error) {
-	token := strings.TrimSpace(os.Getenv("BITBUCKET_API_TOKEN"))
+	token := strings.TrimSpace(p.token)
 	if token == "" {
-		return nil, fmt.Errorf("set BITBUCKET_API_TOKEN (the token is never saved by Alias Lens)")
+		token = strings.TrimSpace(os.Getenv("BITBUCKET_API_TOKEN"))
 	}
-	if len(p.workspaces) == 0 {
-		return nil, fmt.Errorf("add a workspace with: al config provider bitbucket WORKSPACE")
+	if token == "" {
+		return nil, fmt.Errorf("run al repo bitbucket to enter a temporary API token")
+	}
+	workspaces := p.workspaces
+	if len(workspaces) == 0 {
+		var err error
+		workspaces, err = p.listWorkspaces(ctx, token)
+		if err != nil {
+			return nil, err
+		}
 	}
 	var repositories []RemoteRepo
-	for _, workspace := range p.workspaces {
+	for _, workspace := range workspaces {
 		endpoint := "https://api.bitbucket.org/2.0/user/workspaces/" + url.PathEscape(workspace) + "/permissions/repositories?pagelen=100&q=permission%3E%22read%22"
 		for endpoint != "" {
 			var page struct {
@@ -191,7 +203,7 @@ func (p bitbucketProvider) List(ctx context.Context) ([]RemoteRepo, error) {
 					} `json:"repository"`
 				} `json:"values"`
 			}
-			if err := getJSON(ctx, endpoint, "Authorization", "Bearer "+token, &page); err != nil {
+			if err := providerGetJSON(ctx, endpoint, "Authorization", "Bearer "+token, &page); err != nil {
 				return nil, fmt.Errorf("workspace %s: %w", workspace, err)
 			}
 			for _, entry := range page.Values {
@@ -211,7 +223,47 @@ func (p bitbucketProvider) Clone(ctx context.Context, repo RemoteRepo, destinati
 	if useSSH(ctx, p.protocol, "bitbucket.org") {
 		return gitClone(ctx, repo.SSHURL, repo, destination)
 	}
+	token := strings.TrimSpace(p.token)
+	if token == "" {
+		token = strings.TrimSpace(os.Getenv("BITBUCKET_API_TOKEN"))
+	}
+	if token != "" {
+		return gitCloneWithBitbucketToken(ctx, repo.HTTPSURL, repo, destination, token)
+	}
 	return gitClone(ctx, repo.HTTPSURL, repo, destination)
+}
+
+func (p bitbucketProvider) listWorkspaces(ctx context.Context, token string) ([]string, error) {
+	endpoint := "https://api.bitbucket.org/2.0/user/workspaces?pagelen=100"
+	seen := make(map[string]bool)
+	var workspaces []string
+	for endpoint != "" {
+		var page struct {
+			Next   string `json:"next"`
+			Values []struct {
+				Slug      string `json:"slug"`
+				Workspace struct {
+					Slug string `json:"slug"`
+				} `json:"workspace"`
+			} `json:"values"`
+		}
+		if err := providerGetJSON(ctx, endpoint, "Authorization", "Bearer "+token, &page); err != nil {
+			return nil, fmt.Errorf("discover Bitbucket workspaces: %w", err)
+		}
+		for _, entry := range page.Values {
+			slug := defaultString(entry.Workspace.Slug, entry.Slug)
+			if slug != "" && !seen[slug] {
+				seen[slug] = true
+				workspaces = append(workspaces, slug)
+			}
+		}
+		endpoint = trustedNextURL(page.Next, "api.bitbucket.org")
+	}
+	if len(workspaces) == 0 {
+		return nil, fmt.Errorf("no Bitbucket workspaces are visible to this token")
+	}
+	sort.Strings(workspaces)
+	return workspaces, nil
 }
 
 type gitlabProvider struct {
@@ -224,9 +276,6 @@ func (p gitlabProvider) Label() string { return "GitLab" }
 
 func (p gitlabProvider) List(ctx context.Context) ([]RemoteRepo, error) {
 	token := strings.TrimSpace(os.Getenv("GITLAB_TOKEN"))
-	if token == "" {
-		return nil, fmt.Errorf("set GITLAB_TOKEN (the token is never saved by Alias Lens)")
-	}
 	base := strings.TrimRight(p.host, "/")
 	if !strings.Contains(base, "://") {
 		base = "https://" + base
@@ -245,8 +294,27 @@ func (p gitlabProvider) List(ctx context.Context) ([]RemoteRepo, error) {
 			SSHURL            string `json:"ssh_url_to_repo"`
 			HTTPSURL          string `json:"http_url_to_repo"`
 		}
-		if err := getJSON(ctx, endpoint, "PRIVATE-TOKEN", token, &projects); err != nil {
-			return nil, err
+		if token != "" {
+			if err := providerGetJSON(ctx, endpoint, "PRIVATE-TOKEN", token, &projects); err != nil {
+				return nil, err
+			}
+		} else {
+			host, err := p.hostname()
+			if err != nil {
+				return nil, err
+			}
+			glab, err := exec.LookPath("glab")
+			if err != nil {
+				return nil, fmt.Errorf("run al repo gitlab to connect GitLab CLI")
+			}
+			relativeEndpoint := strings.TrimPrefix(endpoint, base+"/api/v4/")
+			output, err := exec.CommandContext(ctx, glab, "api", "--hostname", host, relativeEndpoint).CombinedOutput()
+			if err != nil {
+				return nil, fmt.Errorf("could not list GitLab repositories: %s", cleanCommandOutput(output))
+			}
+			if err := json.Unmarshal(output, &projects); err != nil {
+				return nil, fmt.Errorf("invalid GitLab CLI response: %w", err)
+			}
 		}
 		for _, project := range projects {
 			repositories = append(repositories, RemoteRepo{Provider: p.ID(), ProviderTag: p.Label(), FullName: project.PathWithNamespace, Private: project.Visibility == "private", Description: project.Description, SSHURL: project.SSHURL, HTTPSURL: project.HTTPSURL})
@@ -256,6 +324,18 @@ func (p gitlabProvider) List(ctx context.Context) ([]RemoteRepo, error) {
 		}
 	}
 	return repositories, nil
+}
+
+func (p gitlabProvider) hostname() (string, error) {
+	base := strings.TrimRight(p.host, "/")
+	if !strings.Contains(base, "://") {
+		base = "https://" + base
+	}
+	parsed, err := url.Parse(base)
+	if err != nil || parsed.Host == "" || parsed.Scheme != "https" || parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") {
+		return "", fmt.Errorf("host must be a valid HTTPS GitLab URL")
+	}
+	return parsed.Host, nil
 }
 
 func (p gitlabProvider) Clone(ctx context.Context, repo RemoteRepo, destination string) error {
@@ -275,6 +355,44 @@ func gitClone(ctx context.Context, cloneURL string, repo RemoteRepo, destination
 		return fmt.Errorf("clone %s: %s", repo.FullName, cleanCommandOutput(output))
 	}
 	return nil
+}
+
+func gitCloneWithBitbucketToken(ctx context.Context, cloneURL string, repo RemoteRepo, destination, token string) error {
+	directory, err := os.MkdirTemp("", "alias-lens-askpass-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(directory)
+	askPass := filepath.Join(directory, "askpass")
+	script := "#!/bin/sh\ncase \"$1\" in\n  *sername*) printf '%s\\n' 'x-bitbucket-api-token-auth' ;;\n  *) printf '%s\\n' \"$BITBUCKET_API_TOKEN\" ;;\nesac\n"
+	if err := os.WriteFile(askPass, []byte(script), 0o700); err != nil {
+		return err
+	}
+	command := exec.CommandContext(ctx, "git", "clone", "--depth=1", "--", cloneURL, destination)
+	command.Env = environmentWith(map[string]string{
+		"BITBUCKET_API_TOKEN": token,
+		"GIT_ASKPASS":         askPass,
+		"GIT_TERMINAL_PROMPT": "0",
+	})
+	output, err := command.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("clone %s: %s", repo.FullName, cleanCommandOutput(output))
+	}
+	return nil
+}
+
+func environmentWith(overrides map[string]string) []string {
+	environment := make([]string, 0, len(os.Environ())+len(overrides))
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		if _, replaced := overrides[key]; !replaced {
+			environment = append(environment, entry)
+		}
+	}
+	for key, value := range overrides {
+		environment = append(environment, key+"="+value)
+	}
+	return environment
 }
 
 func useSSH(ctx context.Context, protocol, host string) bool {

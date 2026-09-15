@@ -105,14 +105,28 @@ func providerCredentialStatus(provider RepoProvider) (bool, string) {
 		return true, "GitHub CLI authenticated"
 	case "bitbucket":
 		if os.Getenv("BITBUCKET_API_TOKEN") == "" {
-			return false, "set BITBUCKET_API_TOKEN"
+			return false, "run al repo bitbucket"
 		}
 		return true, "API token available"
 	case "gitlab":
-		if os.Getenv("GITLAB_TOKEN") == "" {
-			return false, "set GITLAB_TOKEN"
+		if os.Getenv("GITLAB_TOKEN") != "" {
+			return true, "API token available"
 		}
-		return true, "API token available"
+		glab, err := exec.LookPath("glab")
+		if err != nil {
+			return false, "install glab, then run al repo gitlab"
+		}
+		host := "gitlab.com"
+		switch configured := provider.(type) {
+		case gitlabProvider:
+			host, _ = configured.hostname()
+		case *gitlabProvider:
+			host, _ = configured.hostname()
+		}
+		if err := exec.Command(glab, "auth", "status", "--hostname", host).Run(); err != nil {
+			return false, "run al repo gitlab"
+		}
+		return true, "GitLab CLI authenticated"
 	default:
 		return false, "unknown provider"
 	}

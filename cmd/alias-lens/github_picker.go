@@ -15,6 +15,7 @@ import (
 type repoPickerModel struct {
 	repos    []RemoteRepo
 	config   AppConfig
+	provider RepoProvider
 	warnings []string
 	query    string
 	cursor   int
@@ -34,26 +35,21 @@ func runRepoPicker(only string) error {
 	if err != nil {
 		return err
 	}
-	if only == "github" {
-		settings := config.Providers["github"]
-		provider := githubProvider{
-			host:     defaultString(settings.Host, "github.com"),
-			protocol: defaultString(settings.Protocol, "auto"),
-		}
-		if err := provider.Connect(context.Background()); err != nil {
+	var provider RepoProvider
+	var repos []RemoteRepo
+	var warnings []string
+	if only != "" {
+		provider, config, err = connectRepoProvider(context.Background(), config, only)
+		if err != nil {
 			return err
 		}
-		if !settings.Enabled {
-			settings.Enabled = true
-			settings.Host = provider.host
-			settings.Protocol = provider.protocol
-			config.Providers["github"] = settings
-			if err := saveConfig(config); err != nil {
-				return err
-			}
+		repos, err = provider.List(context.Background())
+		if err != nil {
+			return fmt.Errorf("no repositories available\n%s: %w", provider.Label(), err)
 		}
+	} else {
+		repos, warnings = listRemoteRepositories(context.Background(), config, "")
 	}
-	repos, warnings := listRemoteRepositories(context.Background(), config, only)
 	if len(repos) == 0 {
 		if len(warnings) > 0 {
 			return fmt.Errorf("no repositories available\n%s", strings.Join(warnings, "\n"))
@@ -62,7 +58,7 @@ func runRepoPicker(only string) error {
 	}
 	theme, _ := loadTheme()
 	applyTheme(theme)
-	program := tea.NewProgram(repoPickerModel{repos: repos, config: config, warnings: warnings, width: 80, height: 24}, tea.WithAltScreen())
+	program := tea.NewProgram(repoPickerModel{repos: repos, config: config, provider: provider, warnings: warnings, width: 80, height: 24}, tea.WithAltScreen())
 	finished, err := program.Run()
 	if err != nil {
 		return err
@@ -108,7 +104,7 @@ func (m repoPickerModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			if len(filtered) > 0 {
 				m.busy = true
-				return m, cloneAndConfigureCmd(m.config, filtered[m.cursor])
+				return m, cloneAndConfigureCmd(m.config, m.provider, filtered[m.cursor])
 			}
 		case tea.KeyRunes:
 			m.query += string(message.Runes)
@@ -183,7 +179,7 @@ func filterRemoteRepos(repos []RemoteRepo, query string) []RemoteRepo {
 	return filtered
 }
 
-func cloneAndConfigureCmd(config AppConfig, repo RemoteRepo) tea.Cmd {
+func cloneAndConfigureCmd(config AppConfig, connected RepoProvider, repo RemoteRepo) tea.Cmd {
 	return func() tea.Msg {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -198,7 +194,10 @@ func cloneAndConfigureCmd(config AppConfig, repo RemoteRepo) tea.Cmd {
 			return repoConfiguredMsg{err: err}
 		}
 		if _, err := os.Stat(filepath.Join(destination, ".git")); os.IsNotExist(err) {
-			provider := providerByID(config, repo.Provider)
+			provider := connected
+			if provider == nil || provider.ID() != repo.Provider {
+				provider = providerByID(config, repo.Provider)
+			}
 			if provider == nil {
 				return repoConfiguredMsg{err: fmt.Errorf("provider %s is no longer configured", repo.Provider)}
 			}
