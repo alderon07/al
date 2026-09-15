@@ -105,8 +105,8 @@ func TestZshIntegrationExecutesAliasName(t *testing.T) {
 	if !strings.Contains(zshIntegration, `alias-lens shell-entry "$_alias_lens_name"`) {
 		t.Fatal("Zsh integration does not load a newly added alias before executing it")
 	}
-	if !strings.Contains(zshIntegration, `alias-lens entry-summary "$_alias_lens_name"`) {
-		t.Fatal("Zsh integration does not show the expanded command after execution")
+	if strings.Contains(zshIntegration, "entry-summary") || strings.Contains(zshIntegration, "Alias Lens ran") {
+		t.Fatal("Zsh integration still prints a post-execution receipt")
 	}
 	if !strings.Contains(zshIntegration, `_alias_lens_flush_history 2>/dev/null || true`) || !strings.Contains(zshIntegration, `setopt localoptions extendedhistory`) || !strings.Contains(zshIntegration, `print -s -- "$_alias_lens_name"`) || !strings.Contains(zshIntegration, `fc -AI "${HISTFILE:-$HOME/.zsh_history}"`) {
 		t.Fatal("Zsh integration does not record picker runs in native history")
@@ -162,8 +162,6 @@ func TestBashIntegrationLoadsNewAliasBeforeRunningIt(t *testing.T) {
 	contents := `#!/bin/sh
 if [ "${1-}" = "shell-entry" ]; then
   printf "alias cl='printf newly-loaded'\n"
-elif [ "${1-}" = "entry-summary" ]; then
-  printf 'Alias Lens ran [cl]: "printf newly-loaded"\n'
 elif [ "${1-}" = "watch" ]; then
   :
 else
@@ -183,15 +181,8 @@ fi
 	if !strings.Contains(string(output), "newly-loaded") {
 		t.Fatalf("new alias did not run in the existing shell:\n%s", output)
 	}
-	if !strings.Contains(string(output), `Alias Lens ran [cl]: "printf newly-loaded"`) {
-		t.Fatalf("executed command was not shown after the alias output:\n%s", output)
-	}
-}
-
-func TestAliasReceiptEscapesTerminalControlCharacters(t *testing.T) {
-	receipt := formatAliasReceipt(Alias{Name: "cl", Command: "clear\n\x1b[2J"})
-	if receipt != `Alias Lens ran [cl]: "clear\n\x1b[2J"` {
-		t.Fatalf("unsafe or unclear receipt: %q", receipt)
+	if strings.Contains(string(output), "Alias Lens ran") {
+		t.Fatalf("integration printed an unwanted execution receipt:\n%s", output)
 	}
 }
 

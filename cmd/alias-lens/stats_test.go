@@ -48,6 +48,24 @@ func TestStatsDashboardFillsWideTerminal(t *testing.T) {
 	}
 }
 
+func TestStatsDashboardShowsAliasCoveragePie(t *testing.T) {
+	view := (statsModel{
+		data: statsData{
+			Aliases: []Alias{{Name: "ll"}, {Name: "gs"}, {Name: "unused"}},
+			Events:  []usageEvent{{Name: "ll", Time: time.Now()}, {Name: "gs", Time: time.Now()}},
+		},
+		width:  100,
+		height: 28,
+		theme:  builtInTheme("phosphor"),
+		now:    time.Now(),
+	}).View()
+	for _, expected := range []string{"Alias coverage", "2 of 3 used", "unused"} {
+		if !strings.Contains(view, expected) {
+			t.Fatalf("coverage pie is missing %q:\n%s", expected, view)
+		}
+	}
+}
+
 func TestStatsIgnorePrivateUsageDatabase(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

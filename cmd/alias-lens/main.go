@@ -132,15 +132,6 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			os.Exit(1)
 		}
-	case "entry-summary":
-		if len(os.Args) != 3 {
-			fmt.Fprintln(os.Stderr, "Usage: alias-lens entry-summary NAME")
-			return
-		}
-		if err := printAliasReceipt(os.Args[2]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
-			os.Exit(1)
-		}
 	case "suggest":
 		if err := runHistorySuggestions(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)

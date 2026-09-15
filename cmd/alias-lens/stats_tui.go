@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -120,10 +121,16 @@ func (m statsModel) View() string {
 	}
 
 	var body strings.Builder
+	bodyWidth := inner
+	showCoverage := m.errorText == "" && len(m.data.Aliases) > 0
+	wideCoverage := showCoverage && inner >= 76
+	if wideCoverage {
+		bodyWidth -= 30
+	}
 	if m.errorText != "" {
 		body.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Git)).Bold(true).Render("Stats could not load."))
 		body.WriteString("\n")
-		body.WriteString(muted.Render(truncate(m.errorText, inner-4)))
+		body.WriteString(muted.Render(truncate(m.errorText, bodyWidth-4)))
 	} else if len(rows) == 0 {
 		if period != "all" && hasUntimestampedUsage(m.data.Events) {
 			body.WriteString(accent.Render("Your alias history has no dates yet."))
@@ -144,7 +151,7 @@ func (m statsModel) View() string {
 		}
 		maxCount := rows[0].Count
 		nameWidth := 16
-		barWidth := inner - nameWidth - 17
+		barWidth := bodyWidth - nameWidth - 17
 		if barWidth < 8 {
 			barWidth = 8
 		}
@@ -168,11 +175,20 @@ func (m statsModel) View() string {
 		selected := rows[m.selected].Alias
 		body.WriteString("\n")
 		body.WriteString(muted.Render("expands to  "))
-		body.WriteString(text.Render(truncate(selected.Command, inner-12)))
+		body.WriteString(text.Render(truncate(selected.Command, bodyWidth-12)))
 		if len(selected.Tags) > 0 {
 			body.WriteString("\n")
 			body.WriteString(muted.Render("tags        "))
 			body.WriteString(accent.Render(strings.Join(selected.Tags, "  ")))
+		}
+	}
+	bodyContent := strings.TrimRight(body.String(), "\n")
+	if showCoverage {
+		coverage := renderCoveragePie(len(rows), len(m.data.Aliases), m.theme)
+		if wideCoverage {
+			bodyContent = lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Width(bodyWidth).Render(bodyContent), strings.Repeat(" ", 3), coverage)
+		} else {
+			bodyContent = coverage + "\n\n" + bodyContent
 		}
 	}
 
@@ -182,11 +198,55 @@ func (m statsModel) View() string {
 	}
 	foot := muted.Render("←/→ period   ↑/↓ inspect   r refresh   " + closeHint)
 	note := muted.Render("Counts come only from the active terminal history")
-	content := header + "\n\n" + strings.Join(tabs, " ") + "\n\n" + panel.Render(strings.TrimRight(body.String(), "\n")) + "\n\n" + note + "\n" + foot
+	content := header + "\n\n" + strings.Join(tabs, " ") + "\n\n" + panel.Render(bodyContent) + "\n\n" + note + "\n" + foot
 	if m.appHeader != "" {
 		content = m.appHeader + "\n\n" + content
 	}
 	return page.Render(content)
+}
+
+func renderCoveragePie(used, total int, theme Theme) string {
+	const (
+		columns = 10
+		rows    = 5
+		width   = columns * 2
+	)
+	share := 0.0
+	if total > 0 {
+		share = float64(used) / float64(total)
+	}
+	usedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Accent))
+	unusedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Text)).Bold(true).Width(width).Align(lipgloss.Center)
+	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
+
+	lines := []string{labelStyle.Render("Alias coverage")}
+	for row := 0; row < rows; row++ {
+		var line strings.Builder
+		for column := 0; column < columns; column++ {
+			x := (float64(column) + 0.5 - float64(columns)/2) / (float64(columns) / 2)
+			y := (float64(row) + 0.5 - float64(rows)/2) / (float64(rows) / 2)
+			if x*x+y*y > 1 {
+				line.WriteString("  ")
+				continue
+			}
+			angle := math.Atan2(x, -y)
+			if angle < 0 {
+				angle += 2 * math.Pi
+			}
+			if angle/(2*math.Pi) < share {
+				line.WriteString(usedStyle.Render("██"))
+			} else {
+				line.WriteString(unusedStyle.Render("██"))
+			}
+		}
+		lines = append(lines, line.String())
+	}
+	lines = append(lines,
+		labelStyle.Render(fmt.Sprintf("%d of %d used", used, total)),
+		usedStyle.Render("■")+muted.Render(" used  ")+unusedStyle.Render("■")+muted.Render(" unused"),
+	)
+	return strings.Join(lines, "\n")
 }
 
 func (m *model) openStatsView() {
