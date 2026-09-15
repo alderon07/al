@@ -207,9 +207,9 @@ func (m statsModel) View() string {
 
 func renderCoveragePie(used, total int, theme Theme) string {
 	const (
-		columns = 10
-		rows    = 5
-		width   = columns * 2
+		columns = 20
+		rows    = 10
+		width   = columns
 	)
 	share := 0.0
 	if total > 0 {
@@ -227,7 +227,7 @@ func renderCoveragePie(used, total int, theme Theme) string {
 			x := (float64(column) + 0.5 - float64(columns)/2) / (float64(columns) / 2)
 			y := (float64(row) + 0.5 - float64(rows)/2) / (float64(rows) / 2)
 			if x*x+y*y > 1 {
-				line.WriteString("  ")
+				line.WriteString(" ")
 				continue
 			}
 			angle := math.Atan2(x, -y)
@@ -235,16 +235,16 @@ func renderCoveragePie(used, total int, theme Theme) string {
 				angle += 2 * math.Pi
 			}
 			if angle/(2*math.Pi) < share {
-				line.WriteString(usedStyle.Render("██"))
+				line.WriteString(usedStyle.Render("●"))
 			} else {
-				line.WriteString(unusedStyle.Render("██"))
+				line.WriteString(unusedStyle.Render("●"))
 			}
 		}
 		lines = append(lines, line.String())
 	}
 	lines = append(lines,
 		labelStyle.Render(fmt.Sprintf("%d of %d used", used, total)),
-		usedStyle.Render("■")+muted.Render(" used  ")+unusedStyle.Render("■")+muted.Render(" unused"),
+		usedStyle.Render("▪")+muted.Render(" used  ")+unusedStyle.Render("▪")+muted.Render(" unused"),
 	)
 	return strings.Join(lines, "\n")
 }

@@ -64,6 +64,9 @@ func TestStatsDashboardShowsAliasCoveragePie(t *testing.T) {
 			t.Fatalf("coverage pie is missing %q:\n%s", expected, view)
 		}
 	}
+	if !strings.Contains(view, "●") || strings.Contains(view, "██") {
+		t.Fatalf("coverage pie did not use the high-resolution dot style:\n%s", view)
+	}
 }
 
 func TestStatsIgnorePrivateUsageDatabase(t *testing.T) {
