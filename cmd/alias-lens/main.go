@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var version = "dev"
@@ -113,8 +114,33 @@ func main() {
 		if err := printShellIntegration(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
+	case "shell-entry":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "Usage: alias-lens shell-entry NAME")
+			return
+		}
+		if err := printShellEntry(os.Args[2]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			os.Exit(1)
+		}
 	case "suggest":
 		if err := runHistorySuggestions(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "search":
+		if err := runSearchCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "stats":
+		if err := runStatsCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "record-use":
+		if len(os.Args) != 3 {
+			fmt.Fprintln(os.Stderr, "Usage: alias-lens record-use NAME")
+			return
+		}
+		if err := recordAliasUse(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "scan":
@@ -124,6 +150,14 @@ func main() {
 		}
 		if err := runSecretScan(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "check":
+		exitCode, err := runAliasCheck(os.Args[2:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+		if exitCode != 0 {
+			os.Exit(exitCode)
 		}
 	case "meta":
 		if err := runMetadataCommand(os.Args[2:]); err != nil {
@@ -346,6 +380,12 @@ func loadAliases() ([]Alias, error) {
 
 	sort.Slice(aliases, func(i, j int) bool { return strings.ToLower(aliases[i].Name) < strings.ToLower(aliases[j].Name) })
 	annotateUsage(aliases, loadHistoryCounts())
+	if events, usageErr := loadUsageEvents(); usageErr == nil {
+		counts := usageCountsSince(events, time.Time{})
+		for index := range aliases {
+			aliases[index].Usage += counts[aliases[index].Name]
+		}
+	}
 	annotateHealth(aliases)
 	return aliases, nil
 }

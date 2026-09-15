@@ -13,9 +13,11 @@ type EntryMetadata struct {
 	Tags      []string
 	Platforms []string
 	Favorite  bool
+	Category  string
 }
 
 var functionStart = regexp.MustCompile(`^\s*(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)(?:\s*\(\s*\))?\s*\{(.*)$`)
+var functionName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 func parseMetadataComment(line string) (EntryMetadata, bool) {
 	trimmed := strings.TrimSpace(line)
@@ -36,6 +38,8 @@ func parseMetadataComment(line string) (EntryMetadata, bool) {
 			metadata.Platforms = values
 		case "favorite":
 			metadata.Favorite = strings.EqualFold(value, "true") || value == "1" || strings.EqualFold(value, "yes")
+		case "category":
+			metadata.Category = normalizeCategory(value)
 		}
 	}
 	return metadata, true
@@ -59,6 +63,13 @@ func applyMetadata(alias *Alias, metadata EntryMetadata) {
 	alias.Tags = append([]string(nil), metadata.Tags...)
 	alias.Platforms = append([]string(nil), metadata.Platforms...)
 	alias.Favorite = metadata.Favorite
+	if metadata.Category != "" {
+		alias.Category = metadata.Category
+	}
+}
+
+func normalizeCategory(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
 }
 
 func parseFunctions(contents string) []Alias {
@@ -149,6 +160,9 @@ func metadataLine(metadata EntryMetadata) string {
 	if metadata.Favorite {
 		fields = append(fields, "favorite=true")
 	}
+	if metadata.Category != "" {
+		fields = append(fields, "category="+metadata.Category)
+	}
 	if len(fields) == 0 {
 		return ""
 	}
@@ -168,6 +182,9 @@ func runMetadataCommand(arguments []string) error {
 	for _, alias := range aliases {
 		if alias.Name == arguments[0] {
 			metadata = EntryMetadata{Tags: alias.Tags, Platforms: alias.Platforms, Favorite: alias.Favorite}
+			if alias.Category != category(alias.Command) {
+				metadata.Category = alias.Category
+			}
 			foundEntry = true
 			break
 		}
@@ -187,6 +204,11 @@ func runMetadataCommand(arguments []string) error {
 			metadata.Platforms = splitMetadataValues(value)
 		case "favorite":
 			metadata.Favorite = strings.EqualFold(value, "true") || value == "1" || strings.EqualFold(value, "yes")
+		case "category":
+			metadata.Category = normalizeCategory(value)
+			if metadata.Category != "" && !aliasName.MatchString(metadata.Category) {
+				return fmt.Errorf("category may only use letters, numbers, dot, dash, and underscore")
+			}
 		default:
 			return fmt.Errorf("unknown metadata field %q", key)
 		}

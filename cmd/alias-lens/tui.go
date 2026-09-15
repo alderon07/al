@@ -50,8 +50,9 @@ type model struct {
 	tourVisible     bool
 	adding          bool
 	field           int
-	form            [3]string
+	form            [5]string
 	editingName     string
+	editingMetadata EntryMetadata
 	deleteName      string
 	runConfirm      *Alias
 	revisionOpen    bool
@@ -228,7 +229,8 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.adding = true
 				m.editingName = selected.Name
 				m.field = 2
-				m.form = [3]string{selected.Name, selected.Command, selected.Description}
+				m.form = [5]string{selected.Name, selected.Command, selected.Description, strings.Join(selected.Tags, ","), selected.Category}
+				m.editingMetadata = EntryMetadata{Platforms: selected.Platforms, Favorite: selected.Favorite}
 			}
 		case tea.KeyCtrlD:
 			if len(matches) > 0 {
@@ -408,8 +410,9 @@ func (m model) View() string {
 func (m *model) startAddForm() {
 	m.adding = true
 	m.field = 0
-	m.form = [3]string{}
+	m.form = [5]string{}
 	m.editingName = ""
+	m.editingMetadata = EntryMetadata{}
 }
 
 func (m model) emptyStateView(contentWidth int) string {
@@ -852,11 +855,21 @@ func (m model) updateAddForm(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) saveAliasForm() (tea.Model, tea.Cmd) {
+	metadata := m.editingMetadata
+	metadata.Tags = splitMetadataValues(m.form[3])
+	metadata.Category = normalizeCategory(m.form[4])
+	if metadata.Category == category(m.form[1]) {
+		metadata.Category = ""
+	}
+	if metadata.Category != "" && !aliasName.MatchString(metadata.Category) {
+		m.status = "Category may only use letters, numbers, dot, dash, and underscore"
+		return m, nil
+	}
 	var saveErr error
 	if m.editingName == "" {
-		saveErr = addAlias(m.form[0], m.form[1], m.form[2])
+		saveErr = addAliasWithMetadata(m.form[0], m.form[1], m.form[2], metadata)
 	} else {
-		saveErr = editAlias(m.editingName, m.form[0], m.form[1], m.form[2])
+		saveErr = editAliasWithMetadata(m.editingName, m.form[0], m.form[1], m.form[2], metadata)
 	}
 	if saveErr != nil {
 		m.status = saveErr.Error()
@@ -877,6 +890,7 @@ func (m model) saveAliasForm() (tea.Model, tea.Cmd) {
 		m.status = "Updated " + m.query + " and regrouped it"
 	}
 	m.editingName = ""
+	m.editingMetadata = EntryMetadata{}
 	return m, nil
 }
 
@@ -911,14 +925,14 @@ func (m model) updateDeleteConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd)
 }
 
 func (m model) addFormView(width, height, contentWidth int, header string) string {
-	labels := []string{"ALIAS NAME", "COMMAND", "WHAT IT DOES"}
-	hints := []string{"ex: gpf", "ex: git push --force-with-lease", "ex: Safely force-push the current branch"}
+	labels := []string{"ALIAS NAME", "COMMAND", "WHAT IT DOES", "TAGS", "CATEGORY"}
+	hints := []string{"ex: gpf", "ex: git push --force-with-lease", "ex: Safely force-push the current branch", "ex: git,daily", "ex: git"}
 	var form strings.Builder
 	heading := "＋ ADD AN ALIAS"
 	message := "It will be placed beside related commands in " + aliasDisplayPath() + "."
 	if m.editingName != "" {
 		heading = "✎ EDIT " + m.editingName
-		message = "Update its description, command, or name. Saving keeps related commands together."
+		message = "Update its description, command, or name. Tags and category are editable here too."
 	}
 	form.WriteString(lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(heading))
 	form.WriteString("\n" + dimStyle.Render(message))
@@ -933,8 +947,9 @@ func (m model) addFormView(width, height, contentWidth int, header string) strin
 		if value == "" && index != m.field {
 			value = dimStyle.Render(hints[index])
 		}
-		field := lipgloss.NewStyle().Width(contentWidth-5).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(border).Render(value + cursor)
-		form.WriteString("\n\n" + lipgloss.NewStyle().Bold(true).Foreground(colorForField(index)).Render(labels[index]) + "\n" + field)
+		label := lipgloss.NewStyle().Bold(true).Width(14).Foreground(colorForField(index)).Render(labels[index])
+		field := lipgloss.NewStyle().Width(max(20, contentWidth-20)).Padding(0, 1).Background(panelColor).Foreground(inkColor).Border(lipgloss.ThickBorder(), false, false, false, true).BorderForeground(border).Render(value + cursor)
+		form.WriteString("\n\n" + label + field)
 	}
 	footer := dimStyle.Render("tab/enter next  ·  ctrl+s save  ·  esc cancel")
 	if m.status != "" {
@@ -1111,6 +1126,8 @@ func filterAliases(aliases []Alias, query string) []Alias {
 			score = 30
 		case wordsMatch(alias.Description, needle):
 			score = 40
+		case wordsMatch(alias.Category, needle):
+			score = 42
 		case wordsMatch(strings.Join(alias.Tags, " "), needle):
 			score = 45
 		case wordsMatch(strings.Join(alias.Platforms, " "), needle):

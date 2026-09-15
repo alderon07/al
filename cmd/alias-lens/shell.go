@@ -61,6 +61,49 @@ func requestedShellAdapter(name string) (ShellAdapter, error) {
 	return activeShellAdapter(), nil
 }
 
+func printShellEntry(name string) error {
+	definition, err := loadShellEntry(name)
+	if err != nil {
+		return err
+	}
+	fmt.Println(definition)
+	return nil
+}
+
+func loadShellEntry(name string) (string, error) {
+	if !aliasName.MatchString(name) {
+		return "", fmt.Errorf("invalid alias name %q", name)
+	}
+	aliases, err := loadAliases()
+	if err != nil {
+		return "", err
+	}
+	for _, alias := range aliases {
+		if alias.Name != name {
+			continue
+		}
+		definition, err := shellEntryDefinition(alias)
+		if err != nil {
+			return "", err
+		}
+		return definition, nil
+	}
+	return "", fmt.Errorf("alias %q is no longer in %s", name, aliasDisplayPath())
+}
+
+func shellEntryDefinition(alias Alias) (string, error) {
+	if !aliasName.MatchString(alias.Name) {
+		return "", fmt.Errorf("invalid alias name %q", alias.Name)
+	}
+	if alias.Type == "function" {
+		if !functionName.MatchString(alias.Name) {
+			return "", fmt.Errorf("invalid function name %q", alias.Name)
+		}
+		return fmt.Sprintf("%s() {\n%s\n}", alias.Name, alias.Command), nil
+	}
+	return "alias " + alias.Name + "=" + shellQuote(alias.Command), nil
+}
+
 func aliasPathFor(adapter ShellAdapter) (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -244,9 +287,13 @@ const bashIntegration = `# Alias Lens Bash integration
 unalias al 2>/dev/null || true
 al() {
   if [ "$#" -eq 0 ]; then
-    local _alias_lens_name
+    local _alias_lens_name _alias_lens_definition
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens)" || return
-    [ -n "$_alias_lens_name" ] && builtin eval "$_alias_lens_name"
+    [ -z "$_alias_lens_name" ] && return
+    _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
+    builtin eval "$_alias_lens_definition" || return
+    command env ALIAS_LENS_SHELL=bash alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+    builtin eval "$_alias_lens_name"
     return
   fi
   if [ "${1-}" = "use" ]; then
@@ -255,21 +302,34 @@ al() {
       command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens help use
       return
     fi
-    local _alias_lens_command
-    _alias_lens_command="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens pick --command "$@")" || return
-    [ -n "$_alias_lens_command" ] && builtin eval "$_alias_lens_command"
+    local _alias_lens_name _alias_lens_definition
+    _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens pick "$@")" || return
+    [ -z "$_alias_lens_name" ] && return
+    _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
+    builtin eval "$_alias_lens_definition" || return
+    command env ALIAS_LENS_SHELL=bash alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+    builtin eval "$_alias_lens_name"
     return
   fi
   command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens "$@"
 }
-_alias_lens_insert() {
-  local _alias_lens_name
+_alias_lens_launch() {
+  if [ -n "${READLINE_LINE-}" ]; then
+    READLINE_LINE=""
+    READLINE_POINT=0
+    return
+  fi
+  local _alias_lens_name _alias_lens_definition
   _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens pick)" || return
   [ -z "$_alias_lens_name" ] && return
-  READLINE_LINE="${READLINE_LINE:0:READLINE_POINT}${_alias_lens_name}${READLINE_LINE:READLINE_POINT}"
-  READLINE_POINT=$((READLINE_POINT + ${#_alias_lens_name}))
+  _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
+  builtin eval "$_alias_lens_definition" || return
+  command env ALIAS_LENS_SHELL=bash alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+  builtin eval "$_alias_lens_name"
 }
-bind -x '"\C-g":_alias_lens_insert'
+if [ -z "${ALIAS_LENS_NOBIND-}" ]; then
+  bind -x '"\C-g":_alias_lens_launch'
+fi
 command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens watch --ensure >/dev/null 2>&1
 `
 
@@ -277,9 +337,13 @@ const zshIntegration = `# Alias Lens Zsh integration
 unalias al 2>/dev/null || true
 al() {
   if (( $# == 0 )); then
-    local _alias_lens_name
+    local _alias_lens_name _alias_lens_definition
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens)" || return
-    [[ -n "$_alias_lens_name" ]] && builtin eval "$_alias_lens_name"
+    [[ -z "$_alias_lens_name" ]] && return
+    _alias_lens_definition="$(command env ALIAS_LENS_SHELL=zsh alias-lens shell-entry "$_alias_lens_name")" || return
+    builtin eval "$_alias_lens_definition" || return
+    command env ALIAS_LENS_SHELL=zsh alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+    builtin eval "$_alias_lens_name"
     return
   fi
   if [[ "${1-}" == "use" ]]; then
@@ -288,21 +352,34 @@ al() {
       command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens help use
       return
     fi
-    local _alias_lens_command
-    _alias_lens_command="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens pick --command "$@")" || return
-    [[ -n "$_alias_lens_command" ]] && builtin eval "$_alias_lens_command"
+    local _alias_lens_name _alias_lens_definition
+    _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens pick "$@")" || return
+    [[ -z "$_alias_lens_name" ]] && return
+    _alias_lens_definition="$(command env ALIAS_LENS_SHELL=zsh alias-lens shell-entry "$_alias_lens_name")" || return
+    builtin eval "$_alias_lens_definition" || return
+    command env ALIAS_LENS_SHELL=zsh alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+    builtin eval "$_alias_lens_name"
     return
   fi
   command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens "$@"
 }
-_alias_lens_insert() {
-  local _alias_lens_name
+_alias_lens_launch() {
+  if [[ -n "$BUFFER" ]]; then
+    zle send-break
+    return
+  fi
+  local _alias_lens_name _alias_lens_definition
   _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens pick)" || return
   [[ -z "$_alias_lens_name" ]] && return
-  LBUFFER+="$_alias_lens_name"
-  zle redisplay
+  _alias_lens_definition="$(command env ALIAS_LENS_SHELL=zsh alias-lens shell-entry "$_alias_lens_name")" || return
+  builtin eval "$_alias_lens_definition" || return
+  command env ALIAS_LENS_SHELL=zsh alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+  builtin eval "$_alias_lens_name"
+  zle reset-prompt
 }
-zle -N _alias_lens_insert
-bindkey '^G' _alias_lens_insert
+if [[ -z "${ALIAS_LENS_NOBIND-}" ]]; then
+  zle -N _alias_lens_launch
+  bindkey '^G' _alias_lens_launch
+fi
 command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens watch --ensure >/dev/null 2>&1
 `

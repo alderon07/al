@@ -4,7 +4,7 @@ project_name: alias-lens
 
 builds:
   - id: alias-lens
-    main: .
+    main: ./cmd/alias-lens
     binary: alias-lens
     env:
       - CGO_ENABLED=0

@@ -334,16 +334,41 @@ function gopen() {
 func TestMetadataEditPreservesUnchangedFields(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, ".bash_aliases")
-	original := "# al: tags=git platforms=linux\nalias gs='git status'\n"
+	original := "# al: tags=git platforms=linux category=work\nalias gs='git status'\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := setEntryMetadata(path, "gs", EntryMetadata{Tags: []string{"git"}, Platforms: []string{"linux"}, Favorite: true}); err != nil {
+	if err := setEntryMetadata(path, "gs", EntryMetadata{Tags: []string{"git"}, Platforms: []string{"linux"}, Favorite: true, Category: "work"}); err != nil {
 		t.Fatal(err)
 	}
 	updated, _ := os.ReadFile(path)
-	if !strings.Contains(string(updated), "tags=git") || !strings.Contains(string(updated), "platforms=linux") || !strings.Contains(string(updated), "favorite=true") {
+	if !strings.Contains(string(updated), "tags=git") || !strings.Contains(string(updated), "platforms=linux") || !strings.Contains(string(updated), "favorite=true") || !strings.Contains(string(updated), "category=work") {
 		t.Fatalf("metadata update lost fields:\n%s", updated)
+	}
+}
+
+func TestAliasFormMetadataWritesEditableCategoryAndTags(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, ".bash_aliases")
+	if err := os.WriteFile(path, []byte("# Clear the screen\nalias cl='clear'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	metadata := EntryMetadata{Tags: []string{"daily", "terminal"}, Category: "utility"}
+	if err := editAliasInFileWithMetadata(path, "cl", "cl", "clear", "Clear this terminal", metadata); err != nil {
+		t.Fatal(err)
+	}
+	updated, _ := os.ReadFile(path)
+	text := string(updated)
+	if !strings.Contains(text, "# Clear this terminal\n# al: tags=daily,terminal category=utility\nalias cl='clear'") {
+		t.Fatalf("editable metadata was not stored beside the alias:\n%s", text)
+	}
+}
+
+func TestSearchMatchesCustomCategory(t *testing.T) {
+	aliases := []Alias{{Name: "cl", Command: "clear", Description: "Clear the screen", Category: "utility"}}
+	results := filterAliases(aliases, "utility")
+	if len(results) != 1 || results[0].Name != "cl" {
+		t.Fatalf("category search returned %#v", results)
 	}
 }
 
@@ -618,8 +643,14 @@ func TestBashIntegrationExecutesAliasNameInsteadOfCommandText(t *testing.T) {
 	if !strings.Contains(bashIntegration, `builtin eval "$_alias_lens_name"`) {
 		t.Fatal("shell integration does not execute the selected alias name")
 	}
-	if !strings.Contains(bashIntegration, `alias-lens pick --command "$@"`) {
-		t.Fatal("al use does not explicitly request the selected command")
+	if !strings.Contains(bashIntegration, `alias-lens shell-entry "$_alias_lens_name"`) {
+		t.Fatal("shell integration does not load a newly added alias before executing it")
+	}
+	if !strings.Contains(bashIntegration, `alias-lens pick "$@"`) {
+		t.Fatal("al use does not request the selected alias")
+	}
+	if !strings.Contains(bashIntegration, `ALIAS_LENS_NOBIND`) || !strings.Contains(bashIntegration, `[ -n "${READLINE_LINE-}" ]`) {
+		t.Fatal("Bash binding cannot be disabled or preserve Ctrl+G on a non-empty prompt")
 	}
 }
 

@@ -4,13 +4,13 @@
 
 Alias Lens is a terminal-first Bash and Zsh alias manager for searching, explaining, editing, and syncing shell shortcuts. It combines fuzzy search, command history suggestions, alias health checks, private revisions, and conflict-aware Git sync in a Bubble Tea TUI.
 
-Launch it with two letters from any directory:
+After setup, launch it from an empty prompt with:
 
-```bash
-al
+```text
+Ctrl+G
 ```
 
-It opens an interactive Bubble Tea interface directly in the terminal. A browser is never required.
+It opens an interactive Bubble Tea interface directly in the terminal. `al` remains the command-line fallback and the entry point for subcommands. A browser is never required.
 
 ## Install locally
 
@@ -61,9 +61,9 @@ Homebrew packaging is in progress. Release maintainers can follow [the release a
 ## What it does
 
 - **Surfaces useful aliases automatically.** The idle screen suggests safe shortcuts you may have forgotten.
-- **Searches as quickly as you type.** Enter one letter to see every matching prefix—`g` shows all aliases beginning with `g`—or keep typing to search commands and descriptions.
+- **Searches as quickly as you type.** Enter one letter to see every matching prefix—`g` shows all aliases beginning with `g`—or keep typing to search commands, descriptions, categories, and tags.
 - **Catches mistakes.** Fuzzy matching recognizes a misspelled alias and ranks likely corrections.
-- **Explains every shortcut.** Alias Lens shows the command and a plain-language description derived from nearby comments and known command patterns.
+- **Explains every shortcut.** Alias Lens shows the command, an editable description, an editable category, and tags derived from nearby comments and known command patterns.
 - **Edits aliases safely.** Add, update, and delete entries without leaving the terminal. Related commands are kept close together in the active alias file.
 - **Checks alias health.** Find missing executables, risky destructive commands, duplicate definitions, and stale paths.
 - **Fits your terminal.** Use every dark theme shipped with Codex, plus the original Phosphor and JetBrains Darcula presets.
@@ -84,6 +84,18 @@ al help sync
 al repo --help
 ```
 
+Validate the alias file without sourcing or executing it:
+
+```bash
+al check
+al check --strict
+```
+
+The checker reports malformed definitions, duplicate names, invalid metadata,
+multiline aliases, likely secrets, and missing executables. It also runs the
+configured shell in syntax-only mode. `--strict` makes warnings fail the check.
+Diagnostics contain line numbers but never print the source line or secret value.
+
 The help text marks commands that execute aliases, edit shell files, create Git commits, push to a remote, or enable automatic sync.
 
 ## Terminal controls
@@ -97,14 +109,14 @@ The help text marks commands that execute aliases, edit shell files, create Git 
 - `Ctrl+Z`: browse private revisions and restore one after confirmation
 - `Ctrl+H`: show aliases with health warnings
 - `Ctrl+F`: show tracked config files and their sync status
-- `Ctrl+G`: commit aliases to the configured repository
+- `Ctrl+G`: commit aliases to the configured repository while the TUI is open
 - `Ctrl+T`: open the theme picker; moving through it previews each theme
 - `Ctrl+R`: reload aliases and theme configuration
 - `Esc`: exit
 
 When the active alias file is empty, Alias Lens shows the file and detected shell instead of an empty search result. Press `Enter` or `Ctrl+A` to create the first alias.
 
-Press `?` and type a word such as `theme`, `edit`, or `restore` to filter the keyboard guide. `Ctrl+E` opens the selected alias with its description focused; use `Shift+Tab` to move back to the command or name.
+Press `?` and type a word such as `theme`, `edit`, or `restore` to filter the keyboard guide. `Ctrl+E` opens the selected alias with its description focused. The same form edits its command, name, tags, and category.
 
 ## Use an alias from the picker
 
@@ -116,7 +128,9 @@ al setup
 
 The first launch after setup shows a short keyboard tour. Press `Enter` to dismiss it or `?` to open the complete searchable guide. Alias Lens records the dismissal locally and does not show the tour again.
 
-Run `al`, select an alias, and press `Enter`. Alias Lens closes, prints `$ NAME` on the next line, and executes that alias by name. It does not display or execute the underlying command directly. The printed name makes subsequent command output easy to identify. `al use QUERY` runs an alias with an initial search. Press `Ctrl+G` at a Bash or Zsh prompt to insert an alias at the current cursor without running it.
+Press `Ctrl+G` on an empty prompt, select an alias, and press `Enter`. Alias Lens closes, loads that alias definition into the current shell, and executes it by name. Newly added or edited aliases work immediately without restarting the shell. `al` opens the same picker, and `al use QUERY` opens it with an initial search.
+
+On a non-empty prompt, `Ctrl+G` keeps its normal cancel behavior. To install no Alias Lens key binding, set `ALIAS_LENS_NOBIND=1` before the integration loads. The shell integration exposes `_alias_lens_launch` for users who want to bind another key.
 
 Aliases containing `sudo`, Docker system pruning, force options, destructive Git operations, recursive deletion, or recursive permission changes open a review screen first. The screen shows the alias command and why Alias Lens flagged it. Press `y` to run the alias or `n`/`Esc` to cancel. Normal aliases still run with one press of `Enter`.
 
@@ -125,6 +139,22 @@ Scripts can use `al pick` to return an alias name. Add `--command` to return its
 ```bash
 al pick
 al pick --command git
+```
+
+Search without opening the TUI, or print JSON for another program:
+
+```bash
+al search git
+al search --json daily
+```
+
+Show the aliases launched most often through the picker:
+
+```bash
+al stats
+al stats today
+al stats week
+al stats year
 ```
 
 ## Turn repeated commands into aliases
@@ -158,7 +188,7 @@ al meta gs tags=git,daily favorite=true
 al meta docker-clean platforms=linux
 ```
 
-Supported metadata fields are `tags`, `collections`, `platforms`, and `favorite`.
+Supported metadata fields are `tags`, `collections`, `category`, `platforms`, and `favorite`.
 
 Add generated comments to aliases that do not already have descriptions:
 
@@ -303,6 +333,7 @@ Run `al --web` and open `http://127.0.0.1:8787`.
 | `~/.config/alias-lens/config.json` | Repository and sync settings |
 | `~/.config/alias-lens/theme.json` | Selected theme and color overrides |
 | `~/.local/share/alias-lens/revisions/` | Timestamped private alias revisions |
+| `~/.local/share/alias-lens/usage.tsv` | Private alias names and picker launch times used by `al stats` |
 | `~/.local/state/alias-lens/sync-state.json` | Automatic sync hashes and status |
 | `~/.local/state/alias-lens/conflicts/` | Private local and remote conflict copies |
 

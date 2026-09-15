@@ -29,21 +29,21 @@ Keep shell behavior behind `ShellAdapter`. Bash owns `.bash_aliases`, `.bash_his
 
 ## Code map
 
-- `main.go` parses aliases and routes CLI commands.
-- `tui.go` contains the Bubble Tea alias browser and picker.
-- `alias_writer.go` performs validated, atomic alias-file edits.
-- `shell.go` owns shell detection and the Bash and Zsh adapters.
-- `metadata.go` handles shell functions, tags, collections, favorites, and platforms.
-- `history.go` analyzes local shell history and creates suggestions.
-- `security.go` detects likely secrets without returning their values.
-- `revisions.go` stores and restores private alias revisions.
-- `repository.go` handles alias-only Git synchronization and comparison.
-- `autosync.go` owns background reconciliation, locking, status, offline retries, and conflict copies.
-- `providers.go` implements GitHub, Bitbucket Cloud, and GitLab repository discovery.
-- `github_picker.go` contains the provider-neutral remote repository picker. The filename remains for Git history.
-- `config.go` owns app and provider configuration.
-- `theme.go` contains verified dark Codex palettes, Alias Lens originals, selection order, and overrides.
-- `web/` contains the optional local browser view.
+- `cmd/alias-lens/main.go` parses aliases and routes CLI commands.
+- `cmd/alias-lens/tui.go` contains the Bubble Tea alias browser and picker.
+- `cmd/alias-lens/alias_writer.go` performs validated, atomic alias-file edits.
+- `cmd/alias-lens/shell.go` owns shell detection and the Bash and Zsh adapters.
+- `cmd/alias-lens/metadata.go` handles shell functions, tags, collections, favorites, and platforms.
+- `cmd/alias-lens/history.go` analyzes local shell history and creates suggestions.
+- `cmd/alias-lens/security.go` detects likely secrets without returning their values.
+- `cmd/alias-lens/revisions.go` stores and restores private alias revisions.
+- `cmd/alias-lens/repository.go` handles alias-only Git synchronization and comparison.
+- `cmd/alias-lens/autosync.go` owns background reconciliation, locking, status, offline retries, and conflict copies.
+- `cmd/alias-lens/providers.go` implements GitHub, Bitbucket Cloud, and GitLab repository discovery.
+- `cmd/alias-lens/github_picker.go` contains the provider-neutral remote repository picker. The filename remains for Git history.
+- `cmd/alias-lens/config.go` owns app and provider configuration.
+- `cmd/alias-lens/theme.go` contains verified dark Codex palettes, Alias Lens originals, selection order, and overrides.
+- `cmd/alias-lens/web/` contains the optional local browser view.
 - `TODO.md` tracks user-facing work and acceptance criteria.
 
 ## Implementation style

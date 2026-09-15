@@ -5,11 +5,17 @@
 *.test
 *.out
 coverage.*
+*.prof
+*.pprof
 
 # Local environment and secrets
 .env
 .env.*
+*.env
+*.env.*
 !.env.example
+.envrc
+.direnv/
 *.pem
 *.key
 *.p12
@@ -20,8 +26,20 @@ secrets.json
 # Alias Lens user data (never commit real aliases or local settings)
 .bash_aliases
 .bash_aliases.*
+.zsh_aliases
+.zsh_aliases.*
+.bash_history
+.zsh_history
+.zsh_history.*
+.alias-lens-history/
+*.alias-lens.bak
 config.json
 theme.json
+usage.tsv
+sync-state.json
+watch.pid
+watch.lock
+conflicts/
 repos/
 
 # Editor and operating-system files

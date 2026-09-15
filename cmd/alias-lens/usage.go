@@ -8,18 +8,22 @@ import (
 const usageText = `Alias Lens manages Bash and Zsh aliases from a terminal interface.
 
 Usage:
-  al                         Open the alias browser; Enter executes the selection
+  Ctrl+G                     Open the alias browser from an empty prompt
+  al                         Open the same browser without using the shortcut
   al COMMAND [ARGUMENTS]     Run a command without opening the browser
   al help [COMMAND]          Explain all commands or one command
 
 Find and use aliases:
   pick       Select an alias and print its name or command; never executes it
   use        Select and immediately execute an alias; requires al setup
+  search     Print aliases that match a name, command, description, or tag
+  stats      Rank aliases launched through Alias Lens by time period
   suggest    Find repeated commands in local shell history and optionally add one
   meta       Set tags, supported platforms, or favorite status on an alias
   describe   Add generated comments to aliases that do not have descriptions
 
 Protect and recover aliases:
+  check      Validate alias syntax and metadata without executing the file
   scan       Report likely secrets by type and line number; hides secret values
   history    List private revisions created before Alias Lens changes the file
   undo       Restore a revision after saving the current alias file first
@@ -61,7 +65,7 @@ Examples:
 
 Open the picker and immediately execute the selected alias command. This action
 is provided by the shell integration, so run "al setup" and start a new shell
-shell first. This is the same Enter behavior as plain "al", with an optional
+first. This is the same Enter behavior as plain "al", with an optional
 starting query. Use "al pick" when you want a result without executing it.
 `,
 	"suggest": `Usage:
@@ -72,10 +76,26 @@ Read the active shell's private history file and list repeated long commands tha
 do not already have aliases. Commands likely to contain credentials are excluded.
 The add form writes the numbered suggestion to the active alias file.
 `,
+	"search": `Usage: al search [--json] [QUERY]
+
+Print every alias that matches QUERY across its name, command, description, tags,
+category, and platform metadata. An empty query lists every alias. Output is plain
+tab-separated text by default. --json emits the complete Alias objects.
+
+Examples:
+  al search git
+  al search --json daily
+`,
+	"stats": `Usage: al stats [all|today|week|year]
+
+Rank aliases launched through the Alias Lens picker. The default period is all.
+Today starts at local midnight. Week and year mean the previous 7 days and 12
+months. Alias Lens stores only the alias name and launch time in a private file.
+`,
 	"meta": `Usage: al meta ALIAS key=value [key=value ...]
 
 Write search and display metadata above an existing alias or shell function.
-Supported keys are tags, collections, platforms, and favorite. Alias Lens saves
+Supported keys are tags, collections, category, platforms, and favorite. Alias Lens saves
 a backup and private revision before changing the active alias file.
 
 Examples:
@@ -94,6 +114,17 @@ Alias Lens writes the file once and saves a backup and private revision first.
 Read the active alias file and report likely credentials by type and line number.
 Secret values are never printed. Alias Lens runs this check before every push.
 `,
+	"check": `Usage: al check [--strict]
+
+Validate the active alias file without sourcing or executing it. Alias Lens
+checks definitions, duplicate names, metadata, multiline aliases, likely
+secrets, and missing executables. It also runs the configured shell in syntax-
+only mode. Diagnostics never include the source line or a secret value.
+
+Exit status 0 means that the file has no errors. Warnings also fail when
+--strict is set. Exit status 1 means that validation failed. Exit status 2 means
+that Alias Lens could not read the file or configuration.
+`,
 	"history": `Usage: al history
 
 List the timestamp, local time, and size of each private alias revision. Alias
@@ -107,14 +138,17 @@ before the restore.
 `,
 	"doctor": `Usage: al doctor
 
-Check the installed binary, alias file, shell startup loading, integration, Git,
+Check the installed binary, alias file syntax, shell startup loading, integration, Git,
 sync repository, automatic sync state, provider credentials, and SSH access.
 Failed checks print the command or action that should fix them.
 `,
 	"setup": `Usage: al setup [bash|zsh]
 
 Detect the current Bash or Zsh shell and install the function used by "al" and
-"al use", plus the Ctrl+G binding. Pass a shell name to override detection.
+"al use", plus a prompt-aware Ctrl+G launcher. Ctrl+G opens Alias Lens when the
+prompt is empty and keeps its cancel behavior when the prompt contains text.
+Set ALIAS_LENS_NOBIND=1 before the integration loads to disable the binding.
+Pass a shell name to override detection.
 Bash uses ~/.bash_aliases and ~/.bashrc; Zsh uses ~/.zsh_aliases and ~/.zshrc.
 On macOS, Bash login-shell precedence is preserved. Files are backed up before
 editing, and missing alias files are created with mode 0600. In an interactive
@@ -206,8 +240,9 @@ Examples:
 `,
 	"shell-init": `Usage: al shell-init bash|zsh
 
-Print the selected shell's function and Ctrl+G binding. This command does not
-edit shell files by itself. "al setup" installs the correct output safely.
+Print the selected shell's functions and prompt-aware Ctrl+G binding. This
+command does not edit shell files by itself. "al setup" installs the correct
+output safely. Set ALIAS_LENS_NOBIND=1 to skip the binding.
 `,
 	"--web": `Usage: al --web
 

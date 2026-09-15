@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,8 +102,76 @@ func TestZshIntegrationExecutesAliasName(t *testing.T) {
 	if !strings.Contains(zshIntegration, `builtin eval "$_alias_lens_name"`) {
 		t.Fatal("Zsh integration does not execute the selected alias name")
 	}
-	if !strings.Contains(zshIntegration, `bindkey '^G' _alias_lens_insert`) {
+	if !strings.Contains(zshIntegration, `alias-lens shell-entry "$_alias_lens_name"`) {
+		t.Fatal("Zsh integration does not load a newly added alias before executing it")
+	}
+	if !strings.Contains(zshIntegration, `bindkey '^G' _alias_lens_launch`) {
 		t.Fatal("Zsh integration does not install the ZLE key binding")
+	}
+	if !strings.Contains(zshIntegration, `ALIAS_LENS_NOBIND`) || !strings.Contains(zshIntegration, `[[ -n "$BUFFER" ]]`) {
+		t.Fatal("Zsh binding cannot be disabled or preserve Ctrl+G on a non-empty prompt")
+	}
+}
+
+func TestShellEntryDefinitionReloadsAliasesAndFunctions(t *testing.T) {
+	definition, err := shellEntryDefinition(Alias{Name: "cl", Command: "printf '%s\\n' cleared", Type: "alias"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, command, ok := parseAliasDefinition(definition)
+	if !ok || name != "cl" || command != "printf '%s\\n' cleared" {
+		t.Fatalf("alias definition did not round trip: %q", definition)
+	}
+
+	definition, err = shellEntryDefinition(Alias{Name: "mkcd", Command: "mkdir -p \"$1\"; cd \"$1\"", Type: "function"})
+	if err != nil || !strings.Contains(definition, "mkcd() {") || !strings.Contains(definition, "mkdir -p") {
+		t.Fatalf("function definition was not reconstructed: %q, %v", definition, err)
+	}
+}
+
+func TestNewlyWrittenAliasCanBeLoadedIntoCurrentShell(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	path := filepath.Join(home, ".bash_aliases")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := addAliasToFile(path, "cl", "printf clear", "Clear the screen"); err != nil {
+		t.Fatal(err)
+	}
+	definition, err := loadShellEntry("cl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	name, command, ok := parseAliasDefinition(definition)
+	if !ok || name != "cl" || command != "printf clear" {
+		t.Fatalf("saved alias could not be loaded: %q", definition)
+	}
+}
+
+func TestBashIntegrationLoadsNewAliasBeforeRunningIt(t *testing.T) {
+	directory := t.TempDir()
+	shim := filepath.Join(directory, "alias-lens")
+	contents := `#!/bin/sh
+if [ "${1-}" = "shell-entry" ]; then
+  printf "alias cl='printf newly-loaded'\n"
+else
+  printf 'cl\n'
+fi
+`
+	if err := os.WriteFile(shim, []byte(contents), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	script := "shopt -s expand_aliases\n" + bashIntegration + "\nal\n"
+	command := exec.Command("bash", "--noprofile", "--norc", "-c", script)
+	command.Env = append(os.Environ(), "PATH="+directory+string(os.PathListSeparator)+os.Getenv("PATH"))
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("Bash integration failed: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), "newly-loaded") {
+		t.Fatalf("new alias did not run in the existing shell:\n%s", output)
 	}
 }
 

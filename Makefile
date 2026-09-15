@@ -33,10 +33,10 @@ help:
 all: build
 
 fmt:
-	$(GOFMT) -w *.go
+	$(GOFMT) -w cmd/alias-lens/*.go
 
 fmt-check:
-	@files="$$($(GOFMT) -l *.go)"; \
+	@files="$$($(GOFMT) -l cmd/alias-lens/*.go)"; \
 	if [ -n "$$files" ]; then \
 		printf 'Run make fmt on these files:\n%s\n' "$$files"; \
 		exit 1; \
@@ -49,7 +49,7 @@ vet:
 	$(GO) vet ./...
 
 build:
-	$(GO) build -buildvcs=false -o "$(OUTPUT)" .
+	$(GO) build -buildvcs=false -o "$(OUTPUT)" ./cmd/alias-lens
 
 diff-check:
 	git diff --check

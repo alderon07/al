@@ -6,7 +6,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 - [x] Add an alias picker that returns the selected command.
 - [x] Add Bash and Zsh integrations that run the selected command in the current shell.
-- [x] Add a Readline binding that inserts the selected alias at the cursor.
+- [x] Add prompt-aware Bash and Zsh bindings that launch the alias picker.
 
 ## Suggest aliases from real usage
 
@@ -72,3 +72,28 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Browse and restore private revisions with `Ctrl+Z`.
 - [x] Distinguish missing, broken, and risky aliases in the wide header.
 - [x] Show a one-time keyboard tour after setup.
+
+## Finish the alias workflow
+
+- [x] Explain that the category badge is inferred from the command by default.
+- [x] Make the description, category, and tags editable in the add and edit form.
+- [x] Preserve platform and favorite metadata when the TUI edits an alias.
+- [x] Add `al search [--json] [QUERY]` for non-interactive search.
+- [x] Record picker launches without storing the command text.
+- [x] Add `al stats` views for all time, today, the last 7 days, and the last 12 months.
+- [x] Make `Ctrl+G` launch the picker from an empty Bash or Zsh prompt.
+- [x] Preserve `Ctrl+G` cancel behavior when the prompt contains text.
+- [x] Let users disable the binding with `ALIAS_LENS_NOBIND=1` and bind `_alias_lens_launch` themselves.
+- [x] Move the executable package and embedded browser assets under `cmd/alias-lens/`.
+- [x] Add `al check` for definitions, metadata, duplicate names, native shell syntax, and warnings.
+- [x] Run the syntax checker as part of `al doctor`.
+
+## Reduce the next alias pain points
+
+- [ ] Let `Tab` return the selected alias to the prompt for editing instead of running it.
+- [ ] Add directory and Git-workspace scopes for suggestions and search ranking.
+- [ ] Add optional completion hooks for success rate, duration, and last-used stats.
+- [ ] Add configurable history exclusions before collecting more execution context.
+- [ ] Add an import preview that finds duplicate names and commands before changing the alias file.
+- [ ] Benchmark startup, large alias files, and search before considering a language rewrite.
+- [ ] Design end-to-end encryption before adding any hosted sync service.

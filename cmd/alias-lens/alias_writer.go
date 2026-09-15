@@ -11,15 +11,27 @@ import (
 var aliasName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
 func addAlias(name, command, description string) error {
+	return addAliasWithMetadata(name, command, description, EntryMetadata{})
+}
+
+func addAliasWithMetadata(name, command, description string, metadata EntryMetadata) error {
 	path, err := aliasesPath()
 	if err != nil {
 		return err
 	}
-	return addAliasToFile(path, name, command, description)
+	return addAliasToFileWithMetadata(path, name, command, description, metadata)
 }
 
 func addAliasToFile(path, name, command, description string) error {
+	return addAliasToFileWithMetadata(path, name, command, description, EntryMetadata{})
+}
+
+func addAliasToFileWithMetadata(path, name, command, description string, metadata EntryMetadata) error {
 	name, command, description, err := validateAliasInput(name, command, description)
+	if err != nil {
+		return err
+	}
+	metadata, err = validateEditableMetadata(metadata)
 	if err != nil {
 		return err
 	}
@@ -40,21 +52,33 @@ func addAliasToFile(path, name, command, description string) error {
 			return fmt.Errorf("alias %q already exists", name)
 		}
 	}
-	lines = insertAliasLines(lines, name, command, description)
+	lines = insertAliasLinesWithMetadata(lines, name, command, description, metadata)
 	updated := []byte(strings.TrimLeft(strings.Join(lines, "\n"), "\n") + "\n")
 	return writeAliasFile(path, contents, updated, mode)
 }
 
 func editAlias(originalName, name, command, description string) error {
+	return editAliasWithMetadata(originalName, name, command, description, EntryMetadata{})
+}
+
+func editAliasWithMetadata(originalName, name, command, description string, metadata EntryMetadata) error {
 	path, err := aliasesPath()
 	if err != nil {
 		return err
 	}
-	return editAliasInFile(path, originalName, name, command, description)
+	return editAliasInFileWithMetadata(path, originalName, name, command, description, metadata)
 }
 
 func editAliasInFile(path, originalName, name, command, description string) error {
+	return editAliasInFileWithMetadata(path, originalName, name, command, description, EntryMetadata{})
+}
+
+func editAliasInFileWithMetadata(path, originalName, name, command, description string, metadata EntryMetadata) error {
 	name, command, description, err := validateAliasInput(name, command, description)
+	if err != nil {
+		return err
+	}
+	metadata, err = validateEditableMetadata(metadata)
 	if err != nil {
 		return err
 	}
@@ -79,11 +103,15 @@ func editAliasInFile(path, originalName, name, command, description string) erro
 		return fmt.Errorf("alias %q no longer exists", originalName)
 	}
 	start := aliasIndex
-	if aliasIndex > 0 && isDescriptionComment(lines[aliasIndex-1]) {
-		start--
+	for start > 0 {
+		if _, ok := parseMetadataComment(lines[start-1]); ok || isDescriptionComment(lines[start-1]) {
+			start--
+			continue
+		}
+		break
 	}
 	lines = append(lines[:start], lines[aliasIndex+1:]...)
-	lines = insertAliasLines(lines, name, command, description)
+	lines = insertAliasLinesWithMetadata(lines, name, command, description, metadata)
 	updated := []byte(strings.TrimLeft(strings.Join(lines, "\n"), "\n") + "\n")
 	return writeAliasFile(path, contents, updated, mode)
 }
@@ -107,8 +135,12 @@ func deleteAliasFromFile(path, name string) error {
 			continue
 		}
 		start := index
-		if index > 0 && isDescriptionComment(lines[index-1]) {
-			start--
+		for start > 0 {
+			if _, metadata := parseMetadataComment(lines[start-1]); metadata || isDescriptionComment(lines[start-1]) {
+				start--
+				continue
+			}
+			break
 		}
 		lines = append(lines[:start], lines[index+1:]...)
 		updated := []byte(strings.TrimLeft(strings.Join(lines, "\n"), "\n") + "\n")
@@ -227,7 +259,20 @@ func validateAliasInput(name, command, description string) (string, string, stri
 	return name, command, description, nil
 }
 
+func validateEditableMetadata(metadata EntryMetadata) (EntryMetadata, error) {
+	metadata.Tags = splitMetadataValues(strings.Join(metadata.Tags, ","))
+	metadata.Category = normalizeCategory(metadata.Category)
+	if metadata.Category != "" && !aliasName.MatchString(metadata.Category) {
+		return EntryMetadata{}, fmt.Errorf("category may only use letters, numbers, dot, dash, and underscore")
+	}
+	return metadata, nil
+}
+
 func insertAliasLines(lines []string, name, command, description string) []string {
+	return insertAliasLinesWithMetadata(lines, name, command, description, EntryMetadata{})
+}
+
+func insertAliasLinesWithMetadata(lines []string, name, command, description string, metadata EntryMetadata) []string {
 	insertAt := len(lines)
 	wantedCategory := category(command)
 	wantedRelation := relationKey(command)
@@ -252,6 +297,9 @@ func insertAliasLines(lines []string, name, command, description string) []strin
 	block := []string{""}
 	if description != "" {
 		block = append(block, "# "+description)
+	}
+	if line := metadataLine(metadata); line != "" {
+		block = append(block, line)
 	}
 	block = append(block, fmt.Sprintf("alias %s=%s", name, shellQuote(command)))
 	lines = append(lines, make([]string, len(block))...)

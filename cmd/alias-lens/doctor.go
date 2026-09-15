@@ -42,6 +42,9 @@ func doctorChecks() []DoctorCheck {
 	aliasPath, aliasErr := aliasesPath()
 	_, aliasStatErr := os.Stat(aliasPath)
 	checks = append(checks, DoctorCheck{Name: adapter.AliasFilename(), OK: aliasErr == nil && aliasStatErr == nil, Message: aliasPath})
+	if aliasErr == nil && aliasStatErr == nil {
+		checks = append(checks, aliasSyntaxDoctorCheck(aliasPath, adapter.Name()))
+	}
 
 	home, _ := os.UserHomeDir()
 	startupOK, startupMessage := adapter.StartupStatus(home, runtime.GOOS)
@@ -166,7 +169,7 @@ func runSetup(shellName string) error {
 		if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
 			return err
 		}
-		fmt.Printf("Installed Alias Lens %s integration. Start a new %s shell to use Enter, al use, and Ctrl+G.\n", adapter.DisplayName(), adapter.Name())
+		fmt.Printf("Installed Alias Lens %s integration. Start a new %s shell, then press Ctrl+G on an empty prompt.\n", adapter.DisplayName(), adapter.Name())
 	}
 	if err := adapter.ConfigureStartup(filepath.Dir(aliasPath), runtime.GOOS); err != nil {
 		return err
