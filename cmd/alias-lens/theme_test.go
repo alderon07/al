@@ -84,7 +84,7 @@ func TestEveryThemeRendersTheAliasBrowser(t *testing.T) {
 			height:  24,
 			theme:   theme,
 		}).View()
-		if !strings.Contains(view, theme.Name) || !strings.Contains(view, "gs") {
+		if !strings.Contains(view, "ALIAS LENS") || !strings.Contains(view, "gs") {
 			t.Errorf("theme %s did not render a complete browser", theme.Preset)
 		}
 	}

@@ -65,3 +65,33 @@ func TestHealthHeaderDistinguishesIssueTypes(t *testing.T) {
 		t.Fatalf("healthy summary = %q", got)
 	}
 }
+
+func TestMainHeaderKeepsOnlyCurrentFileStatus(t *testing.T) {
+	applyTheme(builtInTheme("darcula"))
+	view := (model{
+		aliases: []Alias{
+			{Name: "gs"},
+			{Name: "docker", Issues: []string{"missing executable: docker"}},
+		},
+		width:  120,
+		height: 24,
+		theme:  builtInTheme("darcula"),
+	}).View()
+	header := ""
+	for _, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "ALIAS LENS") {
+			header = line
+			break
+		}
+	}
+	for _, expected := range []string{"ALIAS LENS", aliasDisplayPath(), "2 aliases", "1 issue"} {
+		if !strings.Contains(header, expected) {
+			t.Fatalf("header is missing %q:\n%s", expected, header)
+		}
+	}
+	for _, clutter := range []string{"Darcula", "sync off", "^h", "loaded"} {
+		if strings.Contains(header, clutter) {
+			t.Fatalf("header still contains %q:\n%s", clutter, header)
+		}
+	}
+}

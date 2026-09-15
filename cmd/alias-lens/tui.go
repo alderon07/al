@@ -349,12 +349,13 @@ func (m model) View() string {
 	matches := m.currentAliases()
 	cursor := min(m.cursor, max(0, len(matches)-1))
 
-	headerDetails := fmt.Sprintf("  •  %d aliases  •  %s", len(m.aliases), syncStatusLabel())
-	if contentWidth >= 84 {
-		headerDetails = fmt.Sprintf("  •  %d loaded  •  %d issues ^h  •  %s  •  %s", len(m.aliases), healthIssueCount(m.aliases), m.theme.Name, syncStatusLabel())
-	}
-	if contentWidth >= 96 {
-		headerDetails = fmt.Sprintf("  •  %d loaded  •  %s  •  %s  •  %s", len(m.aliases), healthHeaderSummary(m.aliases), m.theme.Name, syncStatusLabel())
+	headerDetails := fmt.Sprintf("  •  %d aliases", len(m.aliases))
+	if issues := healthIssueCount(m.aliases); issues > 0 {
+		label := "issues"
+		if issues == 1 {
+			label = "issue"
+		}
+		headerDetails += fmt.Sprintf("  •  %d %s", issues, label)
 	}
 	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render(aliasDisplayPath()) + dimStyle.Render(headerDetails)
 	title := titleStyle.Render("Find the shortcut before you forget it.") + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
