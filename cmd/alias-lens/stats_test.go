@@ -49,7 +49,7 @@ func TestStatsDashboardFillsWideTerminal(t *testing.T) {
 	}
 }
 
-func TestStatsDashboardShowsAliasCoveragePie(t *testing.T) {
+func TestStatsDashboardShowsExactAliasCoverageMap(t *testing.T) {
 	view := (statsModel{
 		data: statsData{
 			Aliases: []Alias{{Name: "ll"}, {Name: "gs"}, {Name: "unused"}},
@@ -60,13 +60,20 @@ func TestStatsDashboardShowsAliasCoveragePie(t *testing.T) {
 		theme:  builtInTheme("phosphor"),
 		now:    time.Now(),
 	}).View()
-	for _, expected := range []string{"Alias coverage", "2 of 3 used", "unused"} {
+	for _, expected := range []string{"Alias coverage  67%", "● 2 used", "○ 1 unused", "1 dot = 1 alias"} {
 		if !strings.Contains(view, expected) {
-			t.Fatalf("coverage pie is missing %q:\n%s", expected, view)
+			t.Fatalf("coverage map is missing %q:\n%s", expected, view)
 		}
 	}
-	if !strings.Contains(view, "●") || strings.Contains(view, "██") {
-		t.Fatalf("coverage pie did not use the high-resolution dot style:\n%s", view)
+	if strings.Contains(view, "██") {
+		t.Fatalf("coverage map fell back to the old block style:\n%s", view)
+	}
+}
+
+func TestAliasCoverageMapScalesLargeCollections(t *testing.T) {
+	view := renderCoverageMap(75, 150, builtInTheme("phosphor"))
+	if !strings.Contains(view, "Alias coverage  50%") || !strings.Contains(view, "scaled to 100 dots") {
+		t.Fatalf("large coverage map did not explain its scale:\n%s", view)
 	}
 }
 

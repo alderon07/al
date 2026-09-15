@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"os"
 	"strings"
 	"time"
@@ -184,7 +183,7 @@ func (m statsModel) View() string {
 	}
 	bodyContent := strings.TrimRight(body.String(), "\n")
 	if showCoverage {
-		coverage := renderCoveragePie(len(rows), len(m.data.Aliases), m.theme)
+		coverage := renderCoverageMap(len(rows), len(m.data.Aliases), m.theme)
 		if wideCoverage {
 			bodyContent = lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Width(bodyWidth).Render(bodyContent), strings.Repeat(" ", 3), coverage)
 		} else {
@@ -216,46 +215,51 @@ func preserveStatsBackground(rendered, color string) string {
 	return strings.ReplaceAll(rendered, reset, reset+backgroundSequence) + reset
 }
 
-func renderCoveragePie(used, total int, theme Theme) string {
+func renderCoverageMap(used, total int, theme Theme) string {
 	const (
-		columns = 20
-		rows    = 10
-		width   = columns
+		columns  = 10
+		maxDots  = 100
+		cellSize = 2
+		width    = columns * cellSize
 	)
-	share := 0.0
+	coverage := 0
 	if total > 0 {
-		share = float64(used) / float64(total)
+		coverage = (used*100 + total/2) / total
 	}
+	dots := total
+	usedDots := used
+	scaleNote := "1 dot = 1 alias"
+	if dots > maxDots {
+		dots = maxDots
+		usedDots = (used*maxDots + total/2) / total
+		scaleNote = "scaled to 100 dots"
+	}
+	rows := (dots + columns - 1) / columns
 	usedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Accent))
 	unusedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
 	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Text)).Bold(true).Width(width).Align(lipgloss.Center)
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
 
-	lines := []string{labelStyle.Render("Alias coverage")}
+	lines := []string{labelStyle.Render(fmt.Sprintf("Alias coverage  %d%%", coverage))}
 	for row := 0; row < rows; row++ {
 		var line strings.Builder
 		for column := 0; column < columns; column++ {
-			x := (float64(column) + 0.5 - float64(columns)/2) / (float64(columns) / 2)
-			y := (float64(row) + 0.5 - float64(rows)/2) / (float64(rows) / 2)
-			if x*x+y*y > 1 {
-				line.WriteString(" ")
+			index := row*columns + column
+			if index >= dots {
+				line.WriteString("  ")
 				continue
 			}
-			angle := math.Atan2(x, -y)
-			if angle < 0 {
-				angle += 2 * math.Pi
-			}
-			if angle/(2*math.Pi) < share {
-				line.WriteString(usedStyle.Render("●"))
+			if index < usedDots {
+				line.WriteString(usedStyle.Render("● "))
 			} else {
-				line.WriteString(unusedStyle.Render("●"))
+				line.WriteString(unusedStyle.Render("○ "))
 			}
 		}
-		lines = append(lines, line.String())
+		lines = append(lines, strings.TrimRight(line.String(), " "))
 	}
 	lines = append(lines,
-		labelStyle.Render(fmt.Sprintf("%d of %d used", used, total)),
-		usedStyle.Render("▪")+muted.Render(" used  ")+unusedStyle.Render("▪")+muted.Render(" unused"),
+		usedStyle.Render(fmt.Sprintf("● %d used", used))+muted.Render("  ")+unusedStyle.Render(fmt.Sprintf("○ %d unused", total-used)),
+		muted.Width(width).Align(lipgloss.Center).Render(scaleNote),
 	)
 	return strings.Join(lines, "\n")
 }
