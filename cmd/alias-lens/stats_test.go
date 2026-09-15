@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 func TestStatsDashboardFitsTerminalWidth(t *testing.T) {
@@ -66,6 +67,41 @@ func TestStatsDashboardShowsAliasCoveragePie(t *testing.T) {
 	}
 	if !strings.Contains(view, "●") || strings.Contains(view, "██") {
 		t.Fatalf("coverage pie did not use the high-resolution dot style:\n%s", view)
+	}
+}
+
+func TestStatsDashboardUsesEachThemeCanvasInsteadOfPanel(t *testing.T) {
+	previousRenderer := lipgloss.DefaultRenderer()
+	renderer := lipgloss.NewRenderer(os.Stdout)
+	renderer.SetColorProfile(termenv.TrueColor)
+	lipgloss.SetDefaultRenderer(renderer)
+	defer lipgloss.SetDefaultRenderer(previousRenderer)
+
+	backgroundPrefix := func(color string) string {
+		marker := lipgloss.NewStyle().Background(lipgloss.Color(color)).Render("x")
+		return marker[:strings.IndexByte(marker, 'x')]
+	}
+	for _, theme := range availableThemes() {
+		if theme.Panel == theme.Background {
+			continue
+		}
+		model := statsModel{
+			data:   statsData{Aliases: []Alias{{Name: "ll"}}, Events: []usageEvent{{Name: "ll", Time: time.Now()}}},
+			width:  100,
+			height: 28,
+			theme:  theme,
+			now:    time.Now(),
+		}
+		view := model.View()
+		if strings.Contains(view, backgroundPrefix(theme.Panel)) {
+			t.Fatalf("%s stats still paint the panel background", theme.Name)
+		}
+		if count := strings.Count(view, backgroundPrefix(theme.Background)); count < 3 {
+			t.Fatalf("%s canvas background was restored only %d times", theme.Name, count)
+		}
+		if lipgloss.Width(strings.Split(view, "\n")[0]) != 100 {
+			t.Fatalf("%s canvas background fix changed the dashboard width", theme.Name)
+		}
 	}
 }
 

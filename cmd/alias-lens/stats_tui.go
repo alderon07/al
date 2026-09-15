@@ -102,7 +102,7 @@ func (m statsModel) View() string {
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Accent)).Bold(true)
 	text := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text))
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Muted))
-	panel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Panel)).Padding(1, 2).Width(inner)
+	panel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background)).Padding(1, 2).Width(inner)
 	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background)).Padding(1, 2).Width(width).Height(height)
 
 	total := 0
@@ -202,7 +202,18 @@ func (m statsModel) View() string {
 	if m.appHeader != "" {
 		content = m.appHeader + "\n\n" + content
 	}
-	return page.Render(content)
+	return preserveStatsBackground(page.Render(content), m.theme.Background)
+}
+
+func preserveStatsBackground(rendered, color string) string {
+	const reset = "\x1b[0m"
+	styledMarker := lipgloss.NewStyle().Background(lipgloss.Color(color)).Render("x")
+	markerIndex := strings.IndexByte(styledMarker, 'x')
+	if markerIndex <= 0 || !strings.Contains(rendered, reset) {
+		return rendered
+	}
+	backgroundSequence := styledMarker[:markerIndex]
+	return strings.ReplaceAll(rendered, reset, reset+backgroundSequence) + reset
 }
 
 func renderCoveragePie(used, total int, theme Theme) string {
