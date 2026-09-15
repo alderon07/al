@@ -77,6 +77,162 @@ func TestAliasCoverageMapScalesLargeCollections(t *testing.T) {
 	}
 }
 
+func TestSevenDayActivityBucketsDatedHistory(t *testing.T) {
+	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.Local)
+	days := sevenDayActivity([]usageEvent{
+		{Name: "ll", Time: now.AddDate(0, 0, -6)},
+		{Name: "ll", Time: now},
+		{Name: "gs", Time: now},
+		{Name: "old", Time: now.AddDate(0, 0, -7)},
+		{Name: "unknown"},
+	}, now)
+	if len(days) != 7 || days[0].count != 1 || days[6].count != 2 {
+		t.Fatalf("unexpected seven-day buckets: %#v", days)
+	}
+}
+
+func TestStatsChartsShowConcentrationStalenessAndGroups(t *testing.T) {
+	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.Local)
+	styles := statsChartStyles{
+		accent: lipgloss.NewStyle(),
+		text:   lipgloss.NewStyle(),
+		muted:  lipgloss.NewStyle(),
+		theme:  builtInTheme("phosphor"),
+	}
+	rows := []statsRow{{Alias: Alias{Name: "ll"}, Count: 8}, {Alias: Alias{Name: "gs"}, Count: 2}}
+	if chart := renderConcentration(rows, styles); !strings.Contains(chart, "Top-five share  100%") || !strings.Contains(chart, "10 of 10 executions") {
+		t.Fatalf("unexpected concentration chart:\n%s", chart)
+	}
+	data := statsData{
+		Aliases: []Alias{
+			{Name: "active", Category: "files"},
+			{Name: "old", Tags: []string{"git"}},
+			{Name: "ancient"},
+			{Name: "fresh-zero"},
+			{Name: "unknown"},
+		},
+		Events: []usageEvent{
+			{Name: "active", Time: now},
+			{Name: "old", Time: now.AddDate(0, 0, -100)},
+			{Name: "ancient", Time: now.AddDate(-2, 0, 0)},
+			{Name: "unknown"},
+		},
+	}
+	stale := renderStaleAliases(data, "month", now, 100, 30, styles)
+	for _, expected := range []string{"Unused for a month", "old", "ancient", "3mo", "2y"} {
+		if !strings.Contains(stale, expected) {
+			t.Fatalf("stale chart is missing %q:\n%s", expected, stale)
+		}
+	}
+	never := renderStaleAliases(data, "never", now, 100, 30, styles)
+	if !strings.Contains(never, "Never-used aliases") || !strings.Contains(never, "fresh-zero") || strings.Contains(never, "unknown  ") {
+		t.Fatalf("never-used chart mixed in unknown dates:\n%s", never)
+	}
+	yearly := renderStaleAliases(data, "year", now, 100, 30, styles)
+	if !strings.Contains(yearly, "ancient") || strings.Contains(yearly, "old") {
+		t.Fatalf("year cleanup filter used the wrong threshold:\n%s", yearly)
+	}
+	groups := renderGroupShare(data, "all", now, 100, styles)
+	for _, expected := range []string{"files", "git", "untagged", "Uses category first"} {
+		if !strings.Contains(groups, expected) {
+			t.Fatalf("group chart is missing %q:\n%s", expected, groups)
+		}
+	}
+}
+
+func TestStatsViewKeysOpenEachChart(t *testing.T) {
+	m := statsModel{
+		data:   statsData{Aliases: []Alias{{Name: "ll"}}, Events: []usageEvent{{Name: "ll", Time: time.Now()}}},
+		width:  100,
+		height: 30,
+		theme:  builtInTheme("phosphor"),
+		now:    time.Now(),
+	}
+	for key, expected := range map[string]string{"a": "Seven-day activity", "c": "Unused for a month", "g": "Usage by group", "o": "Alias coverage"} {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+		m = updated.(statsModel)
+		if view := m.View(); !strings.Contains(view, expected) {
+			t.Fatalf("%q did not open %q:\n%s", key, expected, view)
+		}
+	}
+}
+
+func TestActivityViewChangesGranularityWithPeriod(t *testing.T) {
+	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.Local)
+	styles := statsChartStyles{accent: lipgloss.NewStyle(), text: lipgloss.NewStyle(), muted: lipgloss.NewStyle(), theme: builtInTheme("phosphor")}
+	for period, expected := range map[string]string{
+		"all":   "All-time activity by year",
+		"today": "Today's activity",
+		"week":  "Seven-day activity",
+		"year":  "Twelve-month activity",
+	} {
+		view := renderActivityHistogram(nil, period, now, 100, styles)
+		if !strings.Contains(view, expected) {
+			t.Fatalf("%s activity view is missing %q:\n%s", period, expected, view)
+		}
+	}
+}
+
+func TestActivityBucketsMatchSelectedTimeframe(t *testing.T) {
+	now := time.Date(2026, 9, 15, 12, 0, 0, 0, time.Local)
+	events := []usageEvent{
+		{Name: "ll", Time: time.Date(2026, 9, 15, 1, 0, 0, 0, time.Local)},
+		{Name: "ll", Time: time.Date(2026, 9, 15, 22, 0, 0, 0, time.Local)},
+		{Name: "gs", Time: now.AddDate(0, -1, 0)},
+		{Name: "old", Time: now.AddDate(-1, 0, 0)},
+	}
+	_, today := activityBuckets(events, "today", now)
+	if len(today) != 8 || today[0].count != 1 || today[7].count != 1 {
+		t.Fatalf("today did not use three-hour buckets: %#v", today)
+	}
+	_, week := activityBuckets(events, "week", now)
+	if len(week) != 7 || week[6].count != 2 {
+		t.Fatalf("week did not use daily buckets: %#v", week)
+	}
+	_, year := activityBuckets(events, "year", now)
+	if len(year) != 12 || year[10].count != 1 || year[11].count != 2 {
+		t.Fatalf("year did not use monthly buckets: %#v", year)
+	}
+	_, all := activityBuckets(events, "all", now)
+	if len(all) != 2 || all[0].count != 1 || all[1].count != 3 {
+		t.Fatalf("all did not use yearly buckets: %#v", all)
+	}
+}
+
+func TestStatsViewsKeepNarrowFooterOnOneLine(t *testing.T) {
+	for viewIndex := range statsViews {
+		view := (statsModel{
+			data:      statsData{Aliases: []Alias{{Name: "ll"}}, Events: []usageEvent{{Name: "ll", Time: time.Now()}}},
+			viewIndex: viewIndex,
+			width:     60,
+			height:    36,
+			theme:     builtInTheme("phosphor"),
+			now:       time.Now(),
+		}).View()
+		if strings.Contains(view, "\n  close") {
+			t.Fatalf("stats view %d wrapped the close hint:\n%s", viewIndex, view)
+		}
+	}
+}
+
+func TestEmbeddedStatsRefreshPreservesViewAndPeriod(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias ll='ls -al'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".bash_history"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	m := model{statsOpen: true, statsViewIndex: 2, statsPeriod: 3}
+	updated, _ := m.updateStatsView(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	refreshed := updated.(model)
+	if refreshed.statsViewIndex != 2 || refreshed.statsPeriod != 3 {
+		t.Fatalf("refresh changed view=%d period=%d", refreshed.statsViewIndex, refreshed.statsPeriod)
+	}
+}
+
 func TestStatsDashboardUsesEachThemeCanvasInsteadOfPanel(t *testing.T) {
 	previousRenderer := lipgloss.DefaultRenderer()
 	renderer := lipgloss.NewRenderer(os.Stdout)

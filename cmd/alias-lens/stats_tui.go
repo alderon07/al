@@ -10,11 +10,26 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var statsPeriods = []string{"all", "today", "week", "year"}
+var statsPeriods = []string{"all", "today", "month", "year"}
+
+var activityPeriods = []string{"all", "today", "week", "year"}
+
+var cleanupPeriods = []string{"month", "quarter", "year", "never"}
+
+var statsViews = []struct {
+	key   string
+	label string
+}{
+	{"o", "overview"},
+	{"a", "activity"},
+	{"c", "cleanup"},
+	{"g", "groups"},
+}
 
 type statsModel struct {
 	data        statsData
 	periodIndex int
+	viewIndex   int
 	selected    int
 	width       int
 	height      int
@@ -29,7 +44,13 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 	theme, _ := loadTheme()
 	applyTheme(theme)
 	index := 0
-	for candidate, name := range statsPeriods {
+	viewIndex := 0
+	periods := statsPeriods
+	if period == "week" {
+		viewIndex = 1
+		periods = activityPeriods
+	}
+	for candidate, name := range periods {
 		if name == period {
 			index = candidate
 		}
@@ -40,7 +61,7 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
-	_, err := tea.NewProgram(statsModel{data: data, periodIndex: index, width: 80, height: 24, theme: theme, now: now}, options...).Run()
+	_, err := tea.NewProgram(statsModel{data: data, periodIndex: index, viewIndex: viewIndex, width: 80, height: 24, theme: theme, now: now}, options...).Run()
 	return err
 }
 
@@ -57,9 +78,27 @@ func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case "left", "h":
 			m.periodIndex = (m.periodIndex + len(statsPeriods) - 1) % len(statsPeriods)
 			m.selected = 0
-		case "right", "l", "tab":
+		case "right", "l":
 			m.periodIndex = (m.periodIndex + 1) % len(statsPeriods)
 			m.selected = 0
+		case "tab":
+			m.viewIndex = (m.viewIndex + 1) % len(statsViews)
+			m.periodIndex = defaultPeriodForStatsView(m.viewIndex)
+		case "shift+tab":
+			m.viewIndex = (m.viewIndex + len(statsViews) - 1) % len(statsViews)
+			m.periodIndex = defaultPeriodForStatsView(m.viewIndex)
+		case "o":
+			m.viewIndex = 0
+			m.periodIndex = 0
+		case "a":
+			m.viewIndex = 1
+			m.periodIndex = 2
+		case "c":
+			m.viewIndex = 2
+			m.periodIndex = 0
+		case "g":
+			m.viewIndex = 3
+			m.periodIndex = 0
 		case "1", "2", "3", "4":
 			m.periodIndex = int(message.Runes[0] - '1')
 			m.selected = 0
@@ -87,8 +126,14 @@ func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m statsModel) View() string {
-	period := statsPeriods[m.periodIndex]
-	rows, _ := rankedStatsRows(m.data, period, m.now)
+	periods := statsPeriodsForView(m.viewIndex)
+	periodIndex := min(m.periodIndex, len(periods)-1)
+	period := periods[periodIndex]
+	rankingPeriod := period
+	if m.viewIndex == 2 {
+		rankingPeriod = "all"
+	}
+	rows, _ := rankedStatsRows(m.data, rankingPeriod, m.now)
 	width := m.width
 	if width < 48 {
 		width = 48
@@ -110,84 +155,42 @@ func (m statsModel) View() string {
 	}
 	header := accent.Render("◒ Alias rhythm") + muted.Render(fmt.Sprintf("  %d uses · %d aliases", total, len(rows)))
 	var tabs []string
-	for index, name := range statsPeriods {
+	for index, name := range periods {
 		label := fmt.Sprintf("%d %s", index+1, name)
-		if index == m.periodIndex {
+		if index == periodIndex {
 			tabs = append(tabs, lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Background)).Background(lipgloss.Color(m.theme.Accent)).Bold(true).Padding(0, 1).Render(label))
 		} else {
 			tabs = append(tabs, muted.Padding(0, 1).Render(label))
 		}
 	}
-
-	var body strings.Builder
-	bodyWidth := inner
-	showCoverage := m.errorText == "" && len(m.data.Aliases) > 0
-	wideCoverage := showCoverage && inner >= 76
-	if wideCoverage {
-		bodyWidth -= 30
+	var viewTabs []string
+	for index, view := range statsViews {
+		label := view.key + " " + view.label
+		if index == m.viewIndex {
+			viewTabs = append(viewTabs, accent.Render("["+label+"]"))
+		} else {
+			viewTabs = append(viewTabs, muted.Render(label))
+		}
 	}
+
+	bodyContent := ""
 	if m.errorText != "" {
+		var body strings.Builder
 		body.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Git)).Bold(true).Render("Stats could not load."))
 		body.WriteString("\n")
-		body.WriteString(muted.Render(truncate(m.errorText, bodyWidth-4)))
-	} else if len(rows) == 0 {
-		if period != "all" && hasUntimestampedUsage(m.data.Events) {
-			body.WriteString(accent.Render("Your alias history has no dates yet."))
-			body.WriteString("\n")
-			body.WriteString(muted.Render("Start a new shell. Alias Lens will date future commands without changing how history looks."))
-		} else {
-			body.WriteString(accent.Render("No uses in this window yet."))
-			body.WriteString("\n")
-			body.WriteString(muted.Render("No matching aliases were found in terminal history."))
-		}
+		body.WriteString(muted.Render(truncate(m.errorText, inner-4)))
+		bodyContent = body.String()
 	} else {
-		visible := len(rows)
-		if limit := m.height - 14; limit > 0 && visible > limit {
-			visible = limit
-		}
-		if m.selected >= visible {
-			m.selected = visible - 1
-		}
-		maxCount := rows[0].Count
-		nameWidth := 16
-		barWidth := bodyWidth - nameWidth - 17
-		if barWidth < 8 {
-			barWidth = 8
-		}
-		for index, row := range rows[:visible] {
-			filled := row.Count * barWidth / maxCount
-			if filled < 1 {
-				filled = 1
-			}
-			marker := "  "
-			nameStyle := text
-			barColor := m.theme.Secondary
-			if index == m.selected {
-				marker = accent.Render("› ")
-				nameStyle = accent
-				barColor = m.theme.Accent
-			}
-			bar := lipgloss.NewStyle().Foreground(lipgloss.Color(barColor)).Render(strings.Repeat("━", filled)) + muted.Render(strings.Repeat("─", barWidth-filled))
-			body.WriteString(fmt.Sprintf("%s%2d  %s %s %4d", marker, index+1, nameStyle.Render(fmt.Sprintf("%-*s", nameWidth, truncate(row.Alias.Name, nameWidth))), bar, row.Count))
-			body.WriteString("\n")
-		}
-		selected := rows[m.selected].Alias
-		body.WriteString("\n")
-		body.WriteString(muted.Render("expands to  "))
-		body.WriteString(text.Render(truncate(selected.Command, bodyWidth-12)))
-		if len(selected.Tags) > 0 {
-			body.WriteString("\n")
-			body.WriteString(muted.Render("tags        "))
-			body.WriteString(accent.Render(strings.Join(selected.Tags, "  ")))
-		}
-	}
-	bodyContent := strings.TrimRight(body.String(), "\n")
-	if showCoverage {
-		coverage := renderCoverageMap(len(rows), len(m.data.Aliases), m.theme)
-		if wideCoverage {
-			bodyContent = lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Width(bodyWidth).Render(bodyContent), strings.Repeat(" ", 3), coverage)
-		} else {
-			bodyContent = coverage + "\n\n" + bodyContent
+		styles := statsChartStyles{accent: accent, text: text, muted: muted, theme: m.theme}
+		switch m.viewIndex {
+		case 1:
+			bodyContent = renderActivityHistogram(m.data.Events, period, m.now, inner, styles)
+		case 2:
+			bodyContent = renderStaleAliases(m.data, period, m.now, inner, m.height, styles)
+		case 3:
+			bodyContent = renderGroupShare(m.data, period, m.now, inner, styles)
+		default:
+			bodyContent = renderStatsOverview(m, rows, inner, styles)
 		}
 	}
 
@@ -195,13 +198,43 @@ func (m statsModel) View() string {
 	if closeHint == "" {
 		closeHint = "q close"
 	}
-	foot := muted.Render("←/→ period   ↑/↓ inspect   r refresh   " + closeHint)
-	note := muted.Render("Counts come only from the active terminal history")
-	content := header + "\n\n" + strings.Join(tabs, " ") + "\n\n" + panel.Render(bodyContent) + "\n\n" + note + "\n" + foot
-	if m.appHeader != "" {
-		content = m.appHeader + "\n\n" + content
+	filterLabel := "period"
+	if m.viewIndex == 1 {
+		filterLabel = "timeframe"
+	} else if m.viewIndex == 2 {
+		filterLabel = "age filter"
 	}
+	footerText := "tab view   ←/→ " + filterLabel + "   r refresh   " + closeHint
+	if m.viewIndex == 0 && width >= 76 {
+		footerText = "tab view   ←/→ period   ↑/↓ inspect   r refresh   " + closeHint
+	}
+	foot := muted.Render(footerText)
+	note := muted.Render("Counts come only from the active terminal history")
+	top := header + "\n\n" + strings.Join(viewTabs, "   ") + "\n" + strings.Join(tabs, " ") + "\n\n" + panel.Render(bodyContent)
+	if m.appHeader != "" {
+		top = m.appHeader + "\n\n" + top
+	}
+	bottom := note + "\n" + foot
+	spacerHeight := max(1, height-lipgloss.Height(top)-lipgloss.Height(bottom)-2)
+	content := top + strings.Repeat("\n", spacerHeight) + bottom
 	return preserveStatsBackground(page.Render(content), m.theme.Background)
+}
+
+func statsPeriodsForView(viewIndex int) []string {
+	if viewIndex == 2 {
+		return cleanupPeriods
+	}
+	if viewIndex == 1 {
+		return activityPeriods
+	}
+	return statsPeriods
+}
+
+func defaultPeriodForStatsView(viewIndex int) int {
+	if viewIndex == 1 {
+		return 2
+	}
+	return 0
 }
 
 func preserveStatsBackground(rendered, color string) string {
@@ -215,59 +248,15 @@ func preserveStatsBackground(rendered, color string) string {
 	return strings.ReplaceAll(rendered, reset, reset+backgroundSequence) + reset
 }
 
-func renderCoverageMap(used, total int, theme Theme) string {
-	const (
-		columns  = 10
-		maxDots  = 100
-		cellSize = 2
-		width    = columns * cellSize
-	)
-	coverage := 0
-	if total > 0 {
-		coverage = (used*100 + total/2) / total
-	}
-	dots := total
-	usedDots := used
-	scaleNote := "1 dot = 1 alias"
-	if dots > maxDots {
-		dots = maxDots
-		usedDots = (used*maxDots + total/2) / total
-		scaleNote = "scaled to 100 dots"
-	}
-	rows := (dots + columns - 1) / columns
-	usedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Accent))
-	unusedStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Text)).Bold(true).Width(width).Align(lipgloss.Center)
-	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(theme.Muted))
-
-	lines := []string{labelStyle.Render(fmt.Sprintf("Alias coverage  %d%%", coverage))}
-	for row := 0; row < rows; row++ {
-		var line strings.Builder
-		for column := 0; column < columns; column++ {
-			index := row*columns + column
-			if index >= dots {
-				line.WriteString("  ")
-				continue
-			}
-			if index < usedDots {
-				line.WriteString(usedStyle.Render("● "))
-			} else {
-				line.WriteString(unusedStyle.Render("○ "))
-			}
-		}
-		lines = append(lines, strings.TrimRight(line.String(), " "))
-	}
-	lines = append(lines,
-		usedStyle.Render(fmt.Sprintf("● %d used", used))+muted.Render("  ")+unusedStyle.Render(fmt.Sprintf("○ %d unused", total-used)),
-		muted.Width(width).Align(lipgloss.Center).Render(scaleNote),
-	)
-	return strings.Join(lines, "\n")
-}
-
 func (m *model) openStatsView() {
 	m.statsOpen = true
 	m.statsPeriod = 0
+	m.statsViewIndex = 0
 	m.statsSelected = 0
+	m.refreshStatsData()
+}
+
+func (m *model) refreshStatsData() {
 	m.statsNow = time.Now()
 	m.statsErr = ""
 	data, err := loadStatsData()
@@ -290,14 +279,19 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.statsOpen = false
 		return m, nil
 	case tea.KeyCtrlR:
-		m.openStatsView()
+		m.refreshStatsData()
 		return m, nil
 	case tea.KeyLeft:
 		m.statsPeriod = (m.statsPeriod + len(statsPeriods) - 1) % len(statsPeriods)
 		m.statsSelected = 0
 	case tea.KeyRight, tea.KeyTab:
-		m.statsPeriod = (m.statsPeriod + 1) % len(statsPeriods)
-		m.statsSelected = 0
+		if message.Type == tea.KeyTab {
+			m.statsViewIndex = (m.statsViewIndex + 1) % len(statsViews)
+			m.statsPeriod = defaultPeriodForStatsView(m.statsViewIndex)
+		} else {
+			m.statsPeriod = (m.statsPeriod + 1) % len(statsPeriods)
+			m.statsSelected = 0
+		}
 	case tea.KeyUp:
 		m.statsSelected = max(0, m.statsSelected-1)
 	case tea.KeyDown:
@@ -325,7 +319,19 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statsPeriod = int(message.Runes[0] - '1')
 			m.statsSelected = 0
 		case 'r':
-			m.openStatsView()
+			m.refreshStatsData()
+		case 'o':
+			m.statsViewIndex = 0
+			m.statsPeriod = 0
+		case 'a':
+			m.statsViewIndex = 1
+			m.statsPeriod = 2
+		case 'c':
+			m.statsViewIndex = 2
+			m.statsPeriod = 0
+		case 'g':
+			m.statsViewIndex = 3
+			m.statsPeriod = 0
 		}
 	}
 	return m, nil
@@ -335,6 +341,7 @@ func (m model) statsView(header string) string {
 	return (statsModel{
 		data:        m.statsData,
 		periodIndex: m.statsPeriod,
+		viewIndex:   m.statsViewIndex,
 		selected:    m.statsSelected,
 		width:       m.width,
 		height:      m.height,

@@ -111,10 +111,12 @@ func statsPeriodSince(period string, now time.Time) (time.Time, error) {
 		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), nil
 	case "week":
 		return now.AddDate(0, 0, -7), nil
+	case "month":
+		return now.AddDate(0, -1, 0), nil
 	case "year":
 		return now.AddDate(-1, 0, 0), nil
 	default:
-		return time.Time{}, fmt.Errorf("period must be all, today, week, or year")
+		return time.Time{}, fmt.Errorf("period must be all, today, week, month, or year")
 	}
 }
 
@@ -161,7 +163,7 @@ func runStatsCommand(arguments []string) error {
 			continue
 		}
 		if periodSet {
-			return fmt.Errorf("usage: al stats [--plain] [all|today|week|year]")
+			return fmt.Errorf("usage: al stats [--plain] [all|today|week|month|year]")
 		}
 		period = strings.ToLower(argument)
 		periodSet = true

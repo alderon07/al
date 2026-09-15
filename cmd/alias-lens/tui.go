@@ -51,6 +51,7 @@ type model struct {
 	statsOpen       bool
 	statsData       statsData
 	statsPeriod     int
+	statsViewIndex  int
 	statsSelected   int
 	statsNow        time.Time
 	statsErr        string

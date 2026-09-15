@@ -87,7 +87,7 @@ Examples:
   al search git
   al search --json daily
 `,
-	"stats": `Usage: al stats [--plain] [all|today|week|year]
+	"stats": `Usage: al stats [--plain] [all|today|week|month|year]
 
 Rank aliases found in the active terminal history. The default period is all.
 Today starts at local midnight. Week and year mean the previous 7 days and 12
