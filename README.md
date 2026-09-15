@@ -107,7 +107,7 @@ The help text marks commands that execute aliases, edit shell files, create Git 
 - `Ctrl+E`: edit the selected alias, starting with its description
 - `Ctrl+D`: delete the selected alias after confirmation
 - `Ctrl+Z`: browse private revisions and restore one after confirmation
-- `Ctrl+S`: open alias usage stats inside the TUI
+- `F2`: open alias usage stats inside the TUI; `Ctrl+S` also works when the terminal does not reserve it for flow control
 - `Ctrl+H`: show aliases with health warnings
 - `Ctrl+F`: show tracked config files and their sync status
 - `Ctrl+G`: commit aliases to the configured repository while the TUI is open
@@ -129,7 +129,7 @@ al setup
 
 The first launch after setup shows a short keyboard tour. Press `Enter` to dismiss it or `?` to open the complete searchable guide. Alias Lens records the dismissal locally and does not show the tour again.
 
-Press `Ctrl+G` on an empty prompt, select an alias, and press `Enter`. Alias Lens closes, loads that alias definition into the current shell, and executes it by name. After the command finishes, the terminal shows the expanded command and its exit status when it failed. Newly added or edited aliases work immediately without restarting the shell. `al` opens the same picker, and `al use QUERY` opens it with an initial search.
+Press `Ctrl+G` on an empty prompt, select an alias, and press `Enter`. Alias Lens closes and prints the selected alias as a prompt-style line such as `$ ll`. It then loads that alias definition into the current shell and executes it by name. After the command finishes, the terminal shows the expanded command and its exit status when it failed. Newly added or edited aliases work immediately without restarting the shell. `al` opens the same picker, and `al use QUERY` opens it with an initial search.
 
 On a non-empty prompt, `Ctrl+G` keeps its normal cancel behavior. To install no Alias Lens key binding, set `ALIAS_LENS_NOBIND=1` before the integration loads. The shell integration exposes `_alias_lens_launch` for users who want to bind another key.
 
@@ -149,7 +149,7 @@ al search git
 al search --json daily
 ```
 
-Press `Ctrl+S` in the main TUI to open the usage dashboard without leaving Alias Lens. `al stats` opens the same dashboard directly. Counts come only from the active terminal history. Picker launches add the selected alias through the shell's native history support. Time-based periods require history timestamps. Use `--plain` for scripts.
+Press `F2` in the main TUI to open the usage dashboard without leaving Alias Lens. `Ctrl+S` is a secondary binding because some terminals reserve it for flow control. `al stats` opens the same dashboard directly. Counts come only from the active terminal history. Picker launches add the selected alias through the shell's native history support. Time-based periods require history timestamps. Use `--plain` for scripts.
 
 ```bash
 al stats

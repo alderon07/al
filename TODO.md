@@ -83,7 +83,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Add `al stats` views for all time, today, the last 7 days, and the last 12 months.
 - [x] Count aliases typed directly when the active shell history contains them.
 - [x] Add a themed interactive stats dashboard with plain output for scripts.
-- [x] Make the stats dashboard accessible inside the main alias browser.
+- [x] Make the stats dashboard accessible inside the main alias browser with F2.
 - [x] Use terminal history as the only source for alias usage counts.
 - [x] Export aliases and stats as JSON, YAML, or CSV.
 - [x] Show the expanded command in the terminal after a picker launch.

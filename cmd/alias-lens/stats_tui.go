@@ -206,7 +206,7 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEsc:
 		m.statsOpen = false
 		return m, nil
-	case tea.KeyCtrlS:
+	case tea.KeyF2, tea.KeyCtrlS:
 		m.statsOpen = false
 		return m, nil
 	case tea.KeyCtrlR:
@@ -261,7 +261,7 @@ func (m model) statsView(header string) string {
 		theme:       m.theme,
 		now:         m.statsNow,
 		appHeader:   header,
-		closeHint:   "esc return",
+		closeHint:   "F2/esc return",
 		errorText:   m.statsErr,
 	}).View()
 }

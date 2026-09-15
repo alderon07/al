@@ -103,8 +103,14 @@ func runTUI() {
 
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	var terminal *os.File
+	var terminalOutput io.Writer = os.Stderr
+	stdoutIsTerminal := fileIsTerminal(os.Stdout)
+	if !stdoutIsTerminal {
+		options = append(options, tea.WithOutput(os.Stderr))
+	}
 	if openedTerminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
 		terminal = openedTerminal
+		terminalOutput = terminal
 		defer terminal.Close()
 		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
@@ -117,11 +123,14 @@ func runTUI() {
 	}
 	selected, ok := finished.(model)
 	if ok && selected.selected != nil {
-		writeAliasSelection(os.Stdout, selected.selected.Name)
+		writeAliasSelection(os.Stdout, terminalOutput, selected.selected.Name, stdoutIsTerminal)
 	}
 }
 
-func writeAliasSelection(stdout io.Writer, name string) {
+func writeAliasSelection(stdout, terminal io.Writer, name string, stdoutIsTerminal bool) {
+	if terminal != nil && !stdoutIsTerminal {
+		fmt.Fprintf(terminal, "$ %s\n", name)
+	}
 	fmt.Fprintln(stdout, name)
 }
 
@@ -132,7 +141,15 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 	}
 	theme, _ := loadTheme()
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
-	if terminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
+	var terminal *os.File
+	var terminalOutput io.Writer = os.Stderr
+	stdoutIsTerminal := fileIsTerminal(os.Stdout)
+	if !stdoutIsTerminal {
+		options = append(options, tea.WithOutput(os.Stderr))
+	}
+	if openedTerminal, openErr := os.OpenFile("/dev/tty", os.O_RDWR, 0); openErr == nil {
+		terminal = openedTerminal
+		terminalOutput = terminal
 		defer terminal.Close()
 		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
@@ -149,6 +166,8 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 	}
 	if commandOnly {
 		fmt.Println(selected.selected.Command)
+	} else if executeSelection {
+		writeAliasSelection(os.Stdout, terminalOutput, selected.selected.Name, stdoutIsTerminal)
 	} else {
 		fmt.Println(selected.selected.Name)
 	}
@@ -245,7 +264,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyCtrlT:
 			m.openThemePicker()
-		case tea.KeyCtrlS:
+		case tea.KeyF2, tea.KeyCtrlS:
 			if !m.selectMode {
 				m.openStatsView()
 			}
@@ -412,9 +431,9 @@ func (m model) View() string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  ^s stats  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
+	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  F2 stats  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
 	if contentWidth < 96 {
-		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  ^s stats  ·  ? help  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  F2 stats  ·  ? help  ·  esc quit")
 	}
 	if m.selectMode {
 		footer = dimStyle.Render("type · ↑↓ move · enter select · ? help · esc cancel")
@@ -422,9 +441,9 @@ func (m model) View() string {
 			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
 		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ^s stats  ·  ? help  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("execute") + dimStyle.Render("  ·  F2 stats  ·  ? help  ·  esc quit")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  ^s stats  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
+			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  F2 stats  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
 		}
 	}
 	if m.status != "" {
@@ -547,7 +566,7 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 		{"Ctrl+E", "Edit description, command, or name"},
 		{"Ctrl+D", "Delete an alias after confirmation"},
 		{"Ctrl+Z", "Browse and restore private revisions"},
-		{"Ctrl+S", "Open alias usage stats"},
+		{"F2 / Ctrl+S", "Open alias usage stats"},
 		{"Ctrl+H", "Show aliases with health issues"},
 		{"Ctrl+F", "Show files enrolled in sync"},
 		{"Ctrl+G", "Commit alias changes locally"},

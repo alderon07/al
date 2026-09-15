@@ -72,13 +72,13 @@ func TestMainTUIOpensStatsAndReturnsToAliases(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, _ := (model{aliases: []Alias{{Name: "ll", Command: "ls -al"}}, width: 90, height: 24, theme: builtInTheme("phosphor")}).Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ := (model{aliases: []Alias{{Name: "ll", Command: "ls -al"}}, width: 90, height: 24, theme: builtInTheme("phosphor")}).Update(tea.KeyMsg{Type: tea.KeyF2})
 	stats := updated.(model)
 	if !stats.statsOpen {
-		t.Fatal("Ctrl+S did not open stats inside the main TUI")
+		t.Fatal("F2 did not open stats inside the main TUI")
 	}
 	view := stats.View()
-	for _, expected := range []string{"ALIAS LENS", "Alias rhythm", "ll", "esc return"} {
+	for _, expected := range []string{"ALIAS LENS", "Alias rhythm", "ll", "F2/esc return"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("embedded stats view is missing %q:\n%s", expected, view)
 		}
