@@ -138,6 +138,17 @@ func TestStatsChartsShowConcentrationStalenessAndGroups(t *testing.T) {
 			t.Fatalf("group chart is missing %q:\n%s", expected, groups)
 		}
 	}
+	if !strings.Contains(groups, "●") || strings.Contains(groups, "━") {
+		t.Fatalf("groups view did not use a dotted pie chart:\n%s", groups)
+	}
+}
+
+func TestGroupPieCollapsesSmallSlices(t *testing.T) {
+	groups := []groupUsage{{name: "one", count: 6}, {name: "two", count: 5}, {name: "three", count: 4}, {name: "four", count: 3}, {name: "five", count: 2}, {name: "six", count: 1}}
+	collapsed := collapseGroupSlices(groups)
+	if len(collapsed) != 5 || collapsed[4].name != "other" || collapsed[4].count != 3 {
+		t.Fatalf("unexpected collapsed slices: %#v", collapsed)
+	}
 }
 
 func TestStatsViewKeysOpenEachChart(t *testing.T) {

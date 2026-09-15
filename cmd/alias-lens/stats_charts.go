@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -465,19 +466,77 @@ func renderGroupShare(data statsData, period string, now time.Time, width int, s
 		body.WriteString(styles.muted.Render("Add categories or tags to see where your aliases do the most work."))
 		return body.String()
 	}
-	visible := min(10, len(groups))
-	barWidth := max(8, min(50, width-31))
-	maximum := groups[0].count
-	for _, group := range groups[:visible] {
-		filled := group.count * barWidth / maximum
+	groups = collapseGroupSlices(groups)
+	palette := []string{styles.theme.Accent, styles.theme.Secondary, styles.theme.Git, styles.theme.Docker, styles.theme.Files}
+	pie := renderGroupPie(groups, total, palette)
+	var legend strings.Builder
+	for index, group := range groups {
 		percent := (group.count*100 + total/2) / total
-		body.WriteString(styles.text.Render(fmt.Sprintf("%-14s", truncate(group.name, 14))))
-		body.WriteString(styles.accent.Render(strings.Repeat("━", filled)))
-		body.WriteString(styles.muted.Render(strings.Repeat("─", barWidth-filled)))
-		body.WriteString(styles.text.Render(fmt.Sprintf(" %4d %3d%%", group.count, percent)))
-		body.WriteString("\n")
+		marker := lipgloss.NewStyle().Foreground(lipgloss.Color(palette[index])).Render("▪")
+		legend.WriteString(marker)
+		legend.WriteString(styles.text.Render(fmt.Sprintf(" %-13s %4d  %3d%%", truncate(group.name, 13), group.count, percent)))
+		legend.WriteString("\n")
 	}
+	chart := ""
+	if width >= 64 {
+		chart = lipgloss.JoinHorizontal(lipgloss.Top, pie, "    ", strings.TrimRight(legend.String(), "\n"))
+	} else {
+		chart = pie + "\n\n" + strings.TrimRight(legend.String(), "\n")
+	}
+	body.WriteString(chart)
+	body.WriteString("\n")
 	body.WriteString("\n")
 	body.WriteString(styles.muted.Render("Uses category first, then the first tag, then untagged."))
 	return strings.TrimRight(body.String(), "\n")
+}
+
+func collapseGroupSlices(groups []groupUsage) []groupUsage {
+	const maxSlices = 5
+	if len(groups) <= maxSlices {
+		return groups
+	}
+	collapsed := append([]groupUsage(nil), groups[:maxSlices-1]...)
+	other := groupUsage{name: "other"}
+	for _, group := range groups[maxSlices-1:] {
+		other.count += group.count
+	}
+	return append(collapsed, other)
+}
+
+func renderGroupPie(groups []groupUsage, total int, palette []string) string {
+	const columns, rows = 20, 10
+	styles := make([]lipgloss.Style, len(groups))
+	for index := range groups {
+		styles[index] = lipgloss.NewStyle().Foreground(lipgloss.Color(palette[index%len(palette)]))
+	}
+	var pie strings.Builder
+	for row := 0; row < rows; row++ {
+		for column := 0; column < columns; column++ {
+			x := (float64(column) + 0.5 - float64(columns)/2) / (float64(columns) / 2)
+			y := (float64(row) + 0.5 - float64(rows)/2) / (float64(rows) / 2)
+			if x*x+y*y > 1 {
+				pie.WriteString(" ")
+				continue
+			}
+			angle := math.Atan2(x, -y)
+			if angle < 0 {
+				angle += 2 * math.Pi
+			}
+			position := angle / (2 * math.Pi)
+			cumulative := 0
+			segment := len(groups) - 1
+			for index, group := range groups {
+				cumulative += group.count
+				if position < float64(cumulative)/float64(total) {
+					segment = index
+					break
+				}
+			}
+			pie.WriteString(styles[segment].Render("●"))
+		}
+		if row < rows-1 {
+			pie.WriteString("\n")
+		}
+	}
+	return pie.String()
 }
