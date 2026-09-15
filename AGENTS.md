@@ -3,6 +3,7 @@
 ## General
 
 Code for reliability, maintainability, and operability.
+Go Best Practices https://go.dev/doc/effective_go
 
 ## Product rules
 
