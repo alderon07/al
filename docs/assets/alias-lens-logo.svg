@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="380 210 700 700" role="img" aria-labelledby="title desc">
+  <title id="title">Alias Lens logo</title>
+  <desc id="desc">A terminal prompt inside a magnifying glass.</desc>
+
+  <defs>
+    <linearGradient id="ringGrad" x1="350" y1="360" x2="1040" y2="790" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#155EFF"/>
+      <stop offset="45%" stop-color="#18AEEF"/>
+      <stop offset="100%" stop-color="#27E0C5"/>
+    </linearGradient>
+
+    <linearGradient id="handleGrad" x1="830" y1="650" x2="1030" y2="850" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#168BF5"/>
+      <stop offset="100%" stop-color="#25CFC5"/>
+    </linearGradient>
+
+  </defs>
+
+  <g>
+    <path d="M842 680
+             C857 665 879 665 895 680
+             L1010 795
+             C1029 814 1029 844 1010 863
+             C991 882 961 882 942 863
+             L827 748
+             C811 732 811 710 827 694
+             Z"
+          fill="url(#handleGrad)"/>
+
+    <circle cx="705" cy="542" r="203" fill="none" stroke="url(#ringGrad)" stroke-width="64"/>
+
+    <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M618 493 L675 542 L618 591"
+            stroke="#0B1B31"
+            stroke-width="42"/>
+      <path d="M618 493 L675 542 L618 591"
+            stroke="#F5FBFF"
+            stroke-width="24"/>
+      <path d="M708 589h78" stroke="#0B1B31" stroke-width="42"/>
+      <path d="M708 589h78" stroke="#F5FBFF" stroke-width="24"/>
+    </g>
+  </g>
+</svg>

@@ -1,32 +1,48 @@
-# Alias Lens
+<p align="center">
+  <img src="docs/assets/alias-lens-logo.svg" alt="Alias Lens logo: a terminal prompt inside a magnifying lens" width="180">
+</p>
 
-**Remember less. Move faster.**
+<h1 align="center">Alias Lens</h1>
 
-Alias Lens is a terminal-first Bash and Zsh alias manager for searching, explaining, editing, and syncing shell shortcuts. It combines fuzzy search, command history suggestions, alias health checks, private revisions, and conflict-aware Git sync in a Bubble Tea TUI.
+<p align="center"><strong>Your shortcuts should save keystrokes, not become trivia.</strong></p>
 
-After setup, launch it from an empty prompt with:
+<p align="center">
+  Find, run, explain, edit, and sync Bash and Zsh aliases without leaving the terminal.
+</p>
+
+Aliases are supposed to save time. Then you forget whether checkout is `gco`, `gc`, or the command you made at 2 AM. Alias Lens gives them a searchable home.
 
 ```text
-Ctrl+G
+$ al search git
+ALIAS  COMMAND                          DESCRIPTION
+gs     git status                       Show repository status
+gl     git log --oneline --graph        Show the compact commit graph
+gcb    git checkout -b                  Create and switch to a branch
 ```
 
-It opens an interactive Bubble Tea interface directly in the terminal. `al` remains the command-line fallback and the entry point for subcommands. A browser is never required.
+Press `Ctrl+G` at an empty prompt to open the terminal interface. Pick an alias, press `Enter`, and Alias Lens prints the alias before it runs. No mystery commands.
 
-## Install locally
+## Install it
 
-Alias Lens requires Bash or Zsh, Make, and Go 1.24 or newer. Clone the repository and install the binary in `~/.local/bin`:
+Alias Lens supports Bash and Zsh on Linux, WSL, and macOS. You need Make and Go 1.24 or newer.
 
 ```bash
-git clone https://github.com/alderon07/al.git && make -C al install && "$HOME/.local/bin/alias-lens" setup
+git clone https://github.com/alderon07/al.git
+make -C al install
+"$HOME/.local/bin/alias-lens" setup
 ```
 
-Make sure `~/.local/bin` is on `PATH`, then start a new shell. Setup detects Bash or Zsh, installs the matching integration, and tells you which shell it configured. After restarting, run `al --version` to verify the installation.
+Make sure `~/.local/bin` is on `PATH`, then start a new shell. Check the installation:
 
-`alias-lens setup` uses `$SHELL` to select Bash or Zsh. Pass `bash` or `zsh` explicitly when you need an override. Bash uses `~/.bash_aliases` and `~/.bashrc`; Zsh uses `~/.zsh_aliases` and `.zshrc` in `$ZDOTDIR` or your home directory. Before editing an existing alias or startup file, Alias Lens creates a private backup and a timestamped alias revision. It replaces an existing alias named `al` because Alias Lens uses that command. WSL follows the normal Bash path. On macOS, Bash setup respects `.bash_profile`, `.bash_login`, and `.profile` precedence. Fish, PowerShell, and Command Prompt are not supported yet.
+```bash
+al --version
+```
 
-During interactive setup, Alias Lens offers a small set of optional Git and file-listing aliases. It prints every alias and explains what it does before asking. The default answer is no. If you accept, setup skips existing alias names and commands rather than replacing them.
+`al setup` detects your shell. Use `al setup bash` or `al setup zsh` to choose one yourself. Fish, PowerShell, and Command Prompt are not supported yet.
 
-To update a local installation, pull the repository and rebuild the binary:
+Setup can offer a few optional Git and file-listing aliases. It shows each command before asking and never replaces an existing alias.
+
+To update Alias Lens:
 
 ```bash
 cd /path/to/al
@@ -34,151 +50,61 @@ git pull --ff-only
 make install
 ```
 
-## Build and development commands
+## Find the shortcut before you forget it
 
-Run `make` or `make help` to print the command guide. The main targets are:
+Open Alias Lens with `Ctrl+G` or run `al`. Search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.
 
-| Command | What it does |
-| --- | --- |
-| `make fmt` | Rewrites every top-level Go source file with `gofmt`. |
-| `make fmt-check` | Reports files that need formatting without changing them. |
-| `make test` | Runs the Go test suite. |
-| `make vet` | Runs Go's static analyzer to find suspicious code. |
-| `make build` | Builds `alias-lens` at `/tmp/alias-lens-release`. |
-| `make diff-check` | Checks the current Git diff for whitespace errors. |
-| `make check` | Runs the non-modifying format check, tests, static analysis, build, and diff check used by CI. |
-| `make install` | Runs the tests, builds the binary, and copies it to `~/.local/bin/alias-lens`. It does not run `alias-lens setup` or edit shell files. |
+The idle screen brings useful aliases back into view. Select one and press `Enter` to run it in the current shell. New and edited aliases work without restarting the shell.
 
-Override the output or install location on the command line:
-
-```bash
-make build OUTPUT=./alias-lens
-make install PREFIX=/usr/local
-```
-
-Homebrew packaging is in progress. Release maintainers can follow [the release and Homebrew checklist](docs/RELEASING.md).
-
-## What it does
-
-- **Surfaces useful aliases automatically.** The idle screen suggests safe shortcuts you may have forgotten.
-- **Searches as quickly as you type.** Enter one letter to see every matching prefix—`g` shows all aliases beginning with `g`—or keep typing to search commands, descriptions, categories, and tags.
-- **Catches mistakes.** Fuzzy matching recognizes a misspelled alias and ranks likely corrections.
-- **Explains every shortcut.** Alias Lens shows the command, an editable description, an editable category, and tags derived from nearby comments and known command patterns.
-- **Edits aliases safely.** Add, update, and delete entries without leaving the terminal. Related commands are kept close together in the active alias file.
-- **Checks alias health.** Find missing executables, risky destructive commands, duplicate definitions, and stale paths.
-- **Fits your terminal.** Use every dark theme shipped with Codex, plus the original Phosphor and JetBrains Darcula presets.
-- **Tracks aliases with Git.** Choose a writable GitHub, Bitbucket, or GitLab repository from the terminal, or connect an existing local dotfiles repository. Syncing commits only the configured alias file.
-- **Offers an optional web view.** Run a local browser interface when useful; the terminal experience remains the default.
-
-Alias Lens operates locally. It does not upload or execute the commands in your alias file.
-
-If the active alias file does not exist, Alias Lens restores it from the configured repository. If the repository does not contain a copy, Alias Lens creates an empty file with mode `0600`.
-
-## Command help
-
-Run `al help` to see every command grouped by purpose. Use `al help COMMAND` or `al COMMAND --help` to see a command's syntax, file changes, sync behavior, and examples.
-
-```bash
-al help
-al help sync
-al repo --help
-```
-
-Validate the alias file without sourcing or executing it:
-
-```bash
-al check
-al check --strict
-```
-
-The checker reports malformed definitions, duplicate names, invalid metadata,
-multiline aliases, likely secrets, and missing executables. It also runs the
-configured shell in syntax-only mode. `--strict` makes warnings fail the check.
-Diagnostics contain line numbers but never print the source line or secret value.
-
-The help text marks commands that execute aliases, edit shell files, create Git commits, push to a remote, or enable automatic sync.
-
-## Terminal controls
-
-- `?`: open or close the keyboard guide
-- `↑` / `↓`: select an alias
-- `Enter`: close the TUI and execute the selected alias
-- `Ctrl+A`: add an alias
-- `Ctrl+E`: edit the selected alias, starting with its description
-- `Ctrl+D`: delete the selected alias after confirmation
-- `Ctrl+Z`: browse private revisions and restore one after confirmation
-- `F2`: open alias usage stats inside the TUI; `Ctrl+S` also works when the terminal does not reserve it for flow control
-- `Ctrl+H`: show aliases with health warnings
-- `Ctrl+F`: show tracked config files and their sync status
-- `Ctrl+G`: commit aliases to the configured repository while the TUI is open
-- `Ctrl+T`: open the theme picker; moving through it previews each theme
-- `Ctrl+R`: reload aliases and theme configuration
-- `Esc`: exit
-
-When the active alias file is empty, Alias Lens shows the file and detected shell instead of an empty search result. Press `Enter` or `Ctrl+A` to create the first alias.
-
-Press `?` and type a word such as `theme`, `edit`, or `restore` to filter the keyboard guide. `Ctrl+E` opens the selected alias with its description focused. The same form edits its command, name, tags, and category.
-
-## Use an alias from the picker
-
-Install the detected shell integration once, then start a new shell:
-
-```bash
-al setup
-```
-
-The first launch after setup shows a short keyboard tour. Press `Enter` to dismiss it or `?` to open the complete searchable guide. Alias Lens records the dismissal locally and does not show the tour again.
-
-Press `Ctrl+G` on an empty prompt, select an alias, and press `Enter`. Alias Lens closes and prints the selected alias as a prompt-style line such as `$ ll`. It then loads that alias definition into the current shell and executes it by name. After the command finishes, the terminal shows the expanded command and its exit status when it failed. Newly added or edited aliases work immediately without restarting the shell. `al` opens the same picker, and `al use QUERY` opens it with an initial search.
-
-On a non-empty prompt, `Ctrl+G` keeps its normal cancel behavior. To install no Alias Lens key binding, set `ALIAS_LENS_NOBIND=1` before the integration loads. The shell integration exposes `_alias_lens_launch` for users who want to bind another key.
-
-Aliases containing `sudo`, Docker system pruning, force options, destructive Git operations, recursive deletion, or recursive permission changes open a review screen first. The screen shows the alias command and why Alias Lens flagged it. Press `y` to run the alias or `n`/`Esc` to cancel. Normal aliases still run with one press of `Enter`.
-
-Scripts can use `al pick` to return an alias name. Add `--command` to return its command instead:
-
-```bash
-al pick
-al pick --command git
-```
-
-Search without opening the TUI, or print JSON for another program:
+Use the CLI when you already know what you want:
 
 ```bash
 al search git
 al search --json daily
+al use docker
 ```
 
-Press `F2` in the main TUI to open the full-terminal usage dashboard. Some terminals reserve `Ctrl+S` for flow control, so it is only a secondary binding. `al stats` opens the same dashboard directly. Counts come only from the active terminal history. The shell integration flushes current-session history before Alias Lens reads it. Picker launches add the selected alias through native history support. Time-based periods require history timestamps. Use `--plain` for scripts.
+## Use the keys that matter
+
+Press `?` inside the TUI for the full searchable keyboard guide.
+
+| Key | Action |
+| --- | --- |
+| `↑` and `↓` | Select an alias |
+| `Enter` | Run the selected alias |
+| `Ctrl+A` | Add an alias |
+| `Ctrl+E` | Edit the selected alias |
+| `Ctrl+D` | Delete the selected alias after confirmation |
+| `F2` | Open usage stats |
+| `Ctrl+H` | Show alias health warnings |
+| `Ctrl+F` | Show tracked files and sync status |
+| `Ctrl+G` | Sync while the TUI is open |
+| `Ctrl+T` | Preview and select a theme |
+| `Ctrl+Z` | Browse and restore revisions |
+| `Esc` | Exit |
+
+Some terminals reserve `Ctrl+S` for flow control, so `F2` is the reliable shortcut for stats.
+
+On a non-empty prompt, `Ctrl+G` keeps its normal cancel behavior. Set `ALIAS_LENS_NOBIND=1` before the shell integration loads if you do not want the key binding.
+
+## Add context to cryptic names
+
+Alias Lens edits the command, name, description, category, and tags from one form. Tags become search terms, and favorites appear first in suggestions.
 
 ```bash
-al stats
-al stats today
-al stats --plain week
+al meta gs tags=git,daily favorite=true
+al meta docker-clean platforms=linux
 ```
 
-Export aliases or ranked stats as JSON, YAML, or CSV. JSON is the default. An output file is written atomically with mode `0600` because alias commands are private user data.
+Add descriptions to aliases that do not have one:
 
 ```bash
-al export aliases --format yaml
-al export stats --format csv --period week --output weekly-aliases.csv
+al describe
 ```
 
-## Turn repeated commands into aliases
+Alias Lens preserves comments that you wrote yourself.
 
-`al suggest` reads only the active shell's local history: `~/.bash_history` for Bash or `~/.zsh_history` for Zsh. It understands Zsh's extended-history prefix and lists long commands that appear at least three times and do not already have aliases.
-
-```bash
-al suggest
-al suggest add 1
-al suggest add 1 myname
-```
-
-Alias Lens does not suggest commands that commonly contain credentials, such as `ssh`, `curl`, or `export` commands.
-
-## Add metadata and shell functions
-
-Alias Lens discovers common Bash and Zsh function syntax as well as aliases. It labels functions in search results. Add structured metadata immediately above an alias or function:
+It also finds common Bash and Zsh functions. Add metadata above an alias or function when you prefer to edit the file:
 
 ```bash
 # al: tags=git,work platforms=linux,wsl favorite=true
@@ -188,125 +114,93 @@ gopen() {
 }
 ```
 
-Tags act as collections and become search terms. Favorites rank first on the suggestion screen. An unsupported `platforms` value appears in alias health. Update metadata without editing the file directly:
+## Let history do the remembering
+
+`al suggest` finds long commands that you have run at least three times:
 
 ```bash
-al meta gs tags=git,daily favorite=true
-al meta docker-clean platforms=linux
+al suggest
+al suggest add 1
+al suggest add 1 myname
 ```
 
-Supported metadata fields are `tags`, `collections`, `category`, `platforms`, and `favorite`.
+Suggestions come only from the active shell's local history. Commands that commonly contain credentials, including `ssh`, `curl`, and `export`, are excluded.
 
-Add generated comments to aliases that do not already have descriptions:
+Press `F2` in the TUI or run `al stats` to see alias usage:
 
 ```bash
-al describe
+al stats
+al stats today
+al stats --plain week
 ```
 
-This adds action-oriented descriptions and improves older generated comments that merely repeat the command. It preserves custom comments and writes the alias file once after creating a backup and private revision.
+Counts come from your active terminal history. Time periods need shell-history timestamps.
 
-New aliases are inserted beside commands with the same tool and subcommand. Before every write, Alias Lens saves the previous file beside it with the `.alias-lens.bak` suffix.
+Export aliases or stats as JSON, YAML, or CSV:
 
-## Themes
+```bash
+al export aliases --format yaml
+al export stats --format csv --period week --output weekly-aliases.csv
+```
 
-Alias Lens includes the 27 dark theme families shipped with Codex: Absolutely, Ayu, Catppuccin, Codex, Dracula, Everforest, GitHub, Gruvbox, Linear, Lobster, Material, Matrix, Monokai, Night Owl, Nord, Notion, One, Oscurange, Raycast, Rose Pine, Sentry, Solarized, Temple, Tokyo Night, Vercel, VS Code Plus, and Xcode. Phosphor and JetBrains Darcula remain available as Alias Lens originals.
+## Catch broken aliases before they catch you
 
-List preset names or select one directly:
+Run the checker without sourcing or executing the alias file:
+
+```bash
+al check
+al check --strict
+```
+
+It reports malformed aliases, duplicate names, invalid metadata, likely secrets, missing executables, and syntax errors. Diagnostics show line numbers without printing secret values.
+
+Aliases that contain risky commands open a review screen before execution. The screen explains why Alias Lens stopped and shows the full command.
+
+## Make it look like your terminal
+
+Open the theme picker with `Ctrl+T`, or choose a theme by name:
 
 ```bash
 al theme
 al theme tokyo-night
 ```
 
-`Ctrl+T` opens the theme picker. Move through the list to preview themes immediately, press `Enter` to save, or press `Esc` to restore the previous theme. You can still override individual color fields in `~/.config/alias-lens/theme.json`.
+Moving through the picker previews each theme. Press `Enter` to save it or `Esc` to keep the previous theme.
 
-## Git repository tracking
+## Sync aliases without babysitting Git
 
-GitHub is enabled by default. Open the interactive picker:
+Connect a repository from GitHub, GitLab, or Bitbucket:
 
 ```bash
 al repo github
-```
-
-If GitHub CLI is not signed in, Alias Lens starts its browser-based login and then continues to the picker. GitHub CLI is an optional runtime dependency for GitHub repository discovery and cloning; it is not a Go module dependency. Running `al repo` without a provider still shows every provider that is already connected.
-
-Connect GitLab through GitLab CLI's browser login and credential storage:
-
-```bash
 al repo gitlab
-```
-
-If `glab` is already authenticated, Alias Lens goes straight to the picker. `GITLAB_TOKEN` remains available for scripts and headless environments. Configure a self-managed host before connecting:
-
-```bash
-al config provider gitlab gitlab.example.com
-al repo gitlab
-```
-
-Bitbucket Cloud has no equivalent authentication CLI. Alias Lens opens a one-command guided flow instead:
-
-```bash
 al repo bitbucket
 ```
 
-Create a scoped Bitbucket API token with workspace read and repository read/write access, then paste it into the hidden prompt. Alias Lens keeps the token only in memory for repository discovery and cloning. It discovers accessible workspaces automatically. `BITBUCKET_API_TOKEN` remains available for non-interactive use. You can restrict discovery to one workspace when needed:
+Alias Lens guides you through sign-in and shows repositories where you can push. GitHub uses GitHub CLI, GitLab uses GitLab CLI, and Bitbucket asks for a scoped API token in a hidden prompt. Provider tokens are not written to the Alias Lens configuration.
 
-```bash
-al config provider bitbucket YOUR_WORKSPACE
-al repo bitbucket
-```
-
-Provider tokens are never written to Alias Lens configuration:
-
-```bash
-
-# See the effective configuration. Tokens are never included.
-al config
-```
-
-Git push permissions remain controlled by the credentials used by Git itself.
-
-The picker requests repositories visible to your enabled providers and keeps only non-archived repositories where you can push. It clones selections beneath `~/.local/share/alias-lens/repos/<provider>/`.
-
-Clone transport defaults to `auto`: Alias Lens checks for an authenticated, non-interactive SSH connection and prefers the SSH URL when available. Otherwise it uses the provider's HTTPS or CLI flow. Override this per provider when needed:
-
-```bash
-al config protocol github ssh
-al config protocol bitbucket https
-al config protocol gitlab auto
-```
-
-You can limit the picker to one provider with `al repo github`, `al repo bitbucket`, or `al repo gitlab`. Disable a connection with `al config disable PROVIDER`.
-
-You can instead connect an existing local Git repository:
+To use a repository that already exists on your computer:
 
 ```bash
 al repo /path/to/dotfiles
 ```
 
-Sync changes locally or explicitly push them:
+Sync locally or push the change:
 
 ```bash
 al sync
 al sync --push
 ```
 
-`al sync` copies and commits only the `alias_file` configured in `~/.config/alias-lens/config.json`. Manual sync requires the explicit `--push` flag. Automatic sync pushes after a safe reconciliation when you enable it. Before any push, Alias Lens scans for likely credentials and blocks the push when it finds one. Run `al scan` to see finding types and line numbers without printing secret values.
-
-## Keep aliases synchronized automatically
-
-Choosing a repository enables automatic sync. `al setup` starts one background worker from the shell integration. The worker checks every 15 seconds by default. A lock prevents multiple shells from starting competing workers.
+Choosing a repository enables automatic sync. Check or change it with:
 
 ```bash
 al autosync status
 al autosync disable
 al autosync enable
-al watch
 ```
 
-`al watch` runs one reconciliation cycle in the foreground. Each cycle pulls with Git's fast-forward-only mode before it considers a push. Local-only changes are scanned, committed, and pushed. Remote-only changes create a revision and then update the active alias file atomically.
-
-Track other configuration files explicitly. Alias Lens rejects environment files, keys, and credential-shaped filenames:
+Alias Lens syncs only the active alias file unless you explicitly track another file:
 
 ```bash
 al track ~/.gitconfig
@@ -314,24 +208,13 @@ al track ~/.config/starship.toml shell/starship.toml
 al untrack ~/.gitconfig
 ```
 
-Each tracked file has independent hashes, backups, and private conflict copies. Alias Lens stages and commits only the file that changed.
+Environment files, keys, and credential-shaped filenames cannot be tracked. Alias Lens scans the alias file for likely secrets before every push.
 
-If both files changed since the last successful cycle, Alias Lens does not overwrite either version. It stores private conflict copies in `~/.local/state/alias-lens/conflicts/`, reports `conflict` in `al autosync status`, and waits until you make the local and tracked files match. Network failures report `offline` and retry on the next cycle.
+If the local and remote copies both changed, Alias Lens keeps the live file untouched and saves private conflict copies. Run `al diff` to compare them.
 
-Pull and compare aliases across machines:
+## Undo the oops
 
-```bash
-al diff
-al sync --pull
-```
-
-Pull uses Git's fast-forward-only mode. Alias Lens imports remote-only aliases and preserves local-only aliases. If the same name has different commands, it stops and asks you to inspect both values with `al diff`.
-
-Your repository may contain other configuration files. Alias Lens does not stage or commit them.
-
-## Recover an earlier version
-
-Every edit stores the previous file in the private revision directory at `~/.local/share/alias-lens/revisions/`. The alias file's `.alias-lens.bak` companion still holds the most recent backup.
+Alias Lens saves a private revision before each edit and before it restores another version.
 
 ```bash
 al history
@@ -339,29 +222,32 @@ al undo
 al undo 20260909T120000.000000000Z
 ```
 
-Restoring a revision saves the current file as another revision first.
+The `.alias-lens.bak` file beside your alias file contains the latest backup.
 
-## Diagnose the installation
+## Keep private commands private
 
-Run `al doctor` to check the executable, active alias-file loading, shell integration, Git, the sync repository, provider credentials, and SSH fallback behavior.
+- Searching, explaining, checking, and syncing never execute an alias.
+- Running an alias always requires an explicit selection or command.
+- History, revisions, conflict copies, and exports stay on your computer.
+- Git sync pushes only the active alias file and files that you chose with `al track`.
+- Secret scans run before every remote push.
 
-Check the installed build with `al --version`.
+## Fix a strange installation
 
-## Optional browser view
+Run the diagnostic command:
 
-Run `al --web` and open `http://127.0.0.1:8787`.
+```bash
+al doctor
+```
 
-## Local files
+It checks the installed binary, shell integration, active alias file, Git connection, provider sign-in, and sync repository.
 
-| File | Purpose |
-| --- | --- |
-| `~/.bash_aliases` or `~/.zsh_aliases` | Alias source selected for Bash or Zsh |
-| `<alias-file>.alias-lens.bak` | Most recent pre-edit backup |
-| `~/.config/alias-lens/config.json` | Repository and sync settings |
-| `~/.config/alias-lens/theme.json` | Selected theme and color overrides |
-| `~/.local/share/alias-lens/revisions/` | Timestamped private alias revisions |
-| `~/.local/share/alias-lens/usage.tsv` | Private picker-launch log; alias count stats use terminal history instead |
-| `~/.local/state/alias-lens/sync-state.json` | Automatic sync hashes and status |
-| `~/.local/state/alias-lens/conflicts/` | Private local and remote conflict copies |
+Use the built-in help for command syntax and examples:
 
-These files are intentionally excluded from this project's version control.
+```bash
+al help
+al help sync
+al repo --help
+```
+
+If you prefer a browser view, run `al --web` and open `http://127.0.0.1:8787`. The terminal interface remains the default.
