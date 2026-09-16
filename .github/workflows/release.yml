@@ -21,8 +21,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Test
-        run: go test ./...
+      - name: Check
+        run: make check
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:

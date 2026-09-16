@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -53,7 +54,7 @@ func main() {
 	}
 	switch os.Args[1] {
 	case "version", "--version", "-v":
-		fmt.Printf("alias-lens %s\n", version)
+		fmt.Printf("alias-lens %s\n", displayVersion())
 	case "--web":
 		runWeb()
 	case "repo":
@@ -283,6 +284,24 @@ func main() {
 	default:
 		printUsage()
 	}
+}
+
+func displayVersion() string {
+	moduleVersion := ""
+	if buildInfo, ok := debug.ReadBuildInfo(); ok {
+		moduleVersion = buildInfo.Main.Version
+	}
+	return resolveVersion(version, moduleVersion)
+}
+
+func resolveVersion(injected, moduleVersion string) string {
+	if injected != "" && injected != "dev" {
+		return strings.TrimPrefix(injected, "v")
+	}
+	if moduleVersion != "" && moduleVersion != "(devel)" {
+		return strings.TrimPrefix(moduleVersion, "v")
+	}
+	return "dev"
 }
 
 func printShellIntegration(name string) error {

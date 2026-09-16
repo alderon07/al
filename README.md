@@ -24,7 +24,24 @@ Press `Ctrl+G` at an empty prompt to open the terminal interface. Pick an alias,
 
 ## Install it
 
-Alias Lens supports Bash and Zsh on Linux, WSL, and macOS. You need Make and Go 1.24 or newer.
+Alias Lens supports Bash and Zsh on Linux, WSL, and macOS.
+
+With Go 1.24 or newer:
+
+```bash
+go install github.com/alderon07/al/cmd/alias-lens@latest
+alias-lens setup
+```
+
+Or download the archive for your system from [GitHub Releases](https://github.com/alderon07/al/releases), extract it, and install the binary:
+
+```bash
+mkdir -p "$HOME/.local/bin"
+install -m 0755 alias-lens "$HOME/.local/bin/alias-lens"
+"$HOME/.local/bin/alias-lens" setup
+```
+
+To build from source, you need Make and Go 1.24 or newer:
 
 ```bash
 git clone https://github.com/alderon07/al.git
@@ -32,7 +49,7 @@ make -C al install
 "$HOME/.local/bin/alias-lens" setup
 ```
 
-Make sure `~/.local/bin` is on `PATH`, then start a new shell. Check the installation:
+Setup keeps a user-installed binary on `PATH`, including after a WSL restart. Start a new shell, then check the installation:
 
 ```bash
 al --version
@@ -42,12 +59,18 @@ al --version
 
 Setup can offer a few optional Git and file-listing aliases. It shows each command before asking and never replaces an existing alias.
 
-To update Alias Lens:
+To update a source installation:
 
 ```bash
 cd /path/to/al
 git pull --ff-only
 make install
+```
+
+If an older WSL installation disappears after a restart, repair it once after updating:
+
+```bash
+"$HOME/.local/bin/alias-lens" setup bash
 ```
 
 ## Find the shortcut before you forget it

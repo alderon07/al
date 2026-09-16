@@ -164,9 +164,10 @@ prompt is empty and keeps its cancel behavior when the prompt contains text.
 Set ALIAS_LENS_NOBIND=1 before the integration loads to disable the binding.
 Pass a shell name to override detection.
 Bash uses ~/.bash_aliases and ~/.bashrc; Zsh uses ~/.zsh_aliases and ~/.zshrc.
-On macOS, Bash login-shell precedence is preserved. Files are backed up before
-editing, and missing alias files are created with mode 0600. In an interactive
-terminal, optional developer aliases are explained and require confirmation.
+Setup adds a binary installed under the home directory to the shell's PATH.
+This keeps Alias Lens available after a WSL restart. On macOS, Bash login-shell
+precedence is preserved. Files are backed up before editing, and missing alias
+files are created with mode 0600. In an interactive terminal, optional developer aliases are explained and require confirmation.
 Fish, PowerShell, and Command Prompt are not supported.
 `,
 	"repo": `Usage:

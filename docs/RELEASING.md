@@ -2,6 +2,8 @@
 
 Alias Lens needs a stable GitHub release before it can be installed from a Homebrew formula. The release workflow builds `alias-lens` for macOS and Linux on Intel and ARM, publishes the archives, and adds `checksums.txt` to the GitHub release.
 
+The first supported release routes are GitHub archives and `go install github.com/alderon07/al/cmd/alias-lens@latest`. WSL uses the Linux archive. Native Windows shells are not supported, so do not publish a Windows package until their parser, writer, startup integration, execution behavior, and key bindings are implemented and tested.
+
 ## Prepare the first release
 
 1. Add an open source `LICENSE` file and replace `LICENSE` in `packaging/homebrew/alias-lens.rb.tmpl` with its Homebrew SPDX identifier.
@@ -20,6 +22,8 @@ Alias Lens needs a stable GitHub release before it can be installed from a Homeb
    ```
 
 The tag starts `.github/workflows/release.yml`. Confirm that the GitHub release contains four archives and `checksums.txt` before publishing a formula.
+
+The personal Homebrew tap is a separate repository and still requires the license decision below. Keep AUR, Debian, RPM, and other package repositories as later distribution work rather than blocking the first release.
 
 ## Publish through a personal tap
 

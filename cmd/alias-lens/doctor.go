@@ -39,6 +39,12 @@ func doctorChecks() []DoctorCheck {
 	adapter := activeShellAdapter()
 	executable, executableErr := os.Executable()
 	checks = append(checks, DoctorCheck{Name: "binary", OK: executableErr == nil, Message: defaultString(executable, "not found")})
+	pathExecutable, pathErr := exec.LookPath("alias-lens")
+	pathMessage := pathExecutable
+	if pathErr != nil {
+		pathMessage = "run " + defaultString(executable, "alias-lens") + " setup " + adapter.Name() + ", then start a new shell"
+	}
+	checks = append(checks, DoctorCheck{Name: "binary on PATH", OK: pathErr == nil, Message: pathMessage})
 	aliasPath, aliasErr := aliasesPath()
 	_, aliasStatErr := os.Stat(aliasPath)
 	checks = append(checks, DoctorCheck{Name: adapter.AliasFilename(), OK: aliasErr == nil && aliasStatErr == nil, Message: aliasPath})
@@ -185,7 +191,8 @@ func runSetup(shellName string) error {
 		}
 		fmt.Printf("Installed Alias Lens %s integration. Start a new %s shell, then press Ctrl+G on an empty prompt.\n", adapter.DisplayName(), adapter.Name())
 	}
-	if err := adapter.ConfigureStartup(filepath.Dir(aliasPath), runtime.GOOS); err != nil {
+	home := filepath.Dir(aliasPath)
+	if err := adapter.ConfigureStartup(home, runtime.GOOS, userExecutableDirectory(home)); err != nil {
 		return err
 	}
 	if err := scheduleTour(); err != nil {
@@ -196,6 +203,31 @@ func runSetup(shellName string) error {
 		return nil
 	}
 	return offerDefaultAliases(aliasPath, os.Stdin, os.Stdout)
+}
+
+func userExecutableDirectory(home string) string {
+	executable, err := os.Executable()
+	if err != nil {
+		return ""
+	}
+	return userOwnedExecutableDirectory(executable, home)
+}
+
+func userOwnedExecutableDirectory(executable, home string) string {
+	executable, err := filepath.Abs(executable)
+	if err != nil {
+		return ""
+	}
+	home, err = filepath.Abs(home)
+	if err != nil {
+		return ""
+	}
+	directory := filepath.Dir(executable)
+	relative, err := filepath.Rel(home, directory)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(os.PathSeparator)) {
+		return ""
+	}
+	return directory
 }
 
 func withShellIntegration(lines []string, adapter ShellAdapter) []string {

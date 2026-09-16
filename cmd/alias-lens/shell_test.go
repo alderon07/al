@@ -46,10 +46,10 @@ func TestZshStartupSetupIsIdempotent(t *testing.T) {
 	t.Setenv("ZDOTDIR", "")
 	home := t.TempDir()
 	adapter := zshShellAdapter{}
-	if err := adapter.ConfigureStartup(home, "darwin"); err != nil {
+	if err := adapter.ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
-	if err := adapter.ConfigureStartup(home, "linux"); err != nil {
+	if err := adapter.ConfigureStartup(home, "linux", ""); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(filepath.Join(home, ".zshrc"))
@@ -68,7 +68,7 @@ func TestZshSetupRespectsZdotdir(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("ZDOTDIR", zdotdir)
-	if err := (zshShellAdapter{}).ConfigureStartup(home, "darwin"); err != nil {
+	if err := (zshShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(filepath.Join(zdotdir, ".zshrc"))
@@ -77,6 +77,81 @@ func TestZshSetupRespectsZdotdir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, ".zshrc")); !os.IsNotExist(err) {
 		t.Fatal("setup modified the home .zshrc despite ZDOTDIR")
+	}
+}
+
+func TestBashSetupKeepsUserBinaryOnPathAfterRestart(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := os.MkdirAll(binDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	shim := filepath.Join(binDir, "alias-lens")
+	shimContents := "#!/bin/sh\nif [ \"${1-}\" = shell-init ]; then\n  printf 'al() { :; }\\n'\nfi\n"
+	if err := os.WriteFile(shim, []byte(shimContents), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	aliases := []byte("eval \"$(command alias-lens shell-init bash)\"\n")
+	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), aliases, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bashrc := filepath.Join(home, ".bashrc")
+	original := []byte("# existing Bash settings\n" + bashAliasLoader)
+	if err := os.WriteFile(bashrc, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	adapter := bashShellAdapter{}
+	if err := adapter.ConfigureStartup(home, "linux", binDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := adapter.ConfigureStartup(home, "linux", binDir); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(bashrc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(contents), "Keep the Alias Lens executable available") != 1 {
+		t.Fatalf("PATH setup was duplicated or missing:\n%s", contents)
+	}
+	backup, err := os.ReadFile(bashrc + ".alias-lens.bak")
+	if err != nil || string(backup) != string(original) {
+		t.Fatalf("startup backup does not contain the original file: %q, %v", backup, err)
+	}
+	command := exec.Command("bash", "--noprofile", "--norc", "-c", `source "$HOME/.bashrc"; command -v alias-lens; type al`)
+	command.Env = append(os.Environ(), "HOME="+home, "PATH=/usr/bin:/bin")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("new WSL-style Bash shell cannot find alias-lens: %v\n%s", err, output)
+	}
+	if !strings.Contains(string(output), shim) || !strings.Contains(string(output), "al is a function") {
+		t.Fatalf("new shell did not load the binary and al function:\n%s", output)
+	}
+}
+
+func TestZshSetupPersistsUserBinaryDirectory(t *testing.T) {
+	home := t.TempDir()
+	binDir := filepath.Join(home, ".local", "bin")
+	if err := (zshShellAdapter{}).ConfigureStartup(home, "linux", binDir); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(filepath.Join(home, ".zshrc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(contents), `_alias_lens_bin_dir="$HOME"/'.local/bin'`) {
+		t.Fatalf("Zsh startup does not persist the user binary directory:\n%s", contents)
+	}
+}
+
+func TestUserOwnedExecutableDirectory(t *testing.T) {
+	home := t.TempDir()
+	want := filepath.Join(home, ".local", "bin")
+	if got := userOwnedExecutableDirectory(filepath.Join(want, "alias-lens"), home); got != want {
+		t.Fatalf("user executable directory = %q, want %q", got, want)
+	}
+	if got := userOwnedExecutableDirectory("/usr/local/bin/alias-lens", home); got != "" {
+		t.Fatalf("system executable directory should not be persisted, got %q", got)
 	}
 }
 

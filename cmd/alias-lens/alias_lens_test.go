@@ -430,7 +430,7 @@ func TestBashLoaderSetupIsIdempotent(t *testing.T) {
 
 func TestLinuxAndWSLSetupUseBashrc(t *testing.T) {
 	home := t.TempDir()
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "linux"); err != nil {
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "linux", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".bashrc")); err != nil {
@@ -443,7 +443,7 @@ func TestLinuxAndWSLSetupUseBashrc(t *testing.T) {
 
 func TestMacBashSetupCoversLoginShells(t *testing.T) {
 	home := t.TempDir()
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin"); err != nil {
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
 	bashrc, err := os.ReadFile(filepath.Join(home, ".bashrc"))
@@ -463,7 +463,7 @@ func TestMacBashSetupPreservesProfileThatLoadsBashrc(t *testing.T) {
 	if err := os.WriteFile(profilePath, original, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin"); err != nil {
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(profilePath)
@@ -481,7 +481,7 @@ func TestMacBashSetupUsesExistingLoginFilePrecedence(t *testing.T) {
 	if err := os.WriteFile(profilePath, []byte("export EDITOR=vi\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin"); err != nil {
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".bash_profile")); !os.IsNotExist(err) {
