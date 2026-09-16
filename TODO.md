@@ -111,3 +111,6 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Document the 1.x command, metadata, JSON, and configuration compatibility rules.
 - [x] Add `al setup --repair` without changing user aliases.
 - [x] Add `al setup --remove` without deleting aliases or Alias Lens data.
+- [x] Write a safety-first shell-neutral catalog proposal before adding another shell.
+- [x] Review and approve the shell-neutral proposal before implementation.
+- [ ] Write and approve per-phase acceptance criteria and test mappings before implementation code.
