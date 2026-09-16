@@ -70,8 +70,17 @@ make install
 If an older WSL installation disappears after a restart, repair it once after updating:
 
 ```bash
-"$HOME/.local/bin/alias-lens" setup bash
+"$HOME/.local/bin/alias-lens" setup --repair bash
 ```
+
+To repair or remove the generated shell integration later:
+
+```bash
+al setup --repair
+al setup --remove
+```
+
+Removal keeps your aliases, Alias Lens configuration, revisions, and sync repositories.
 
 Alias Lens is available under the [MIT License](LICENSE).
 

@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 )
 
+const currentConfigVersion = 1
+
 type AppConfig struct {
+	Version      int                       `json:"version"`
 	Repository   string                    `json:"repository"`
 	AliasFile    string                    `json:"alias_file"`
 	Shell        string                    `json:"shell"`
@@ -209,11 +213,42 @@ func loadConfig() (AppConfig, error) {
 	if err != nil {
 		return config, err
 	}
+	var header struct {
+		Version *int `json:"version"`
+	}
+	if err := json.Unmarshal(contents, &header); err != nil {
+		return config, fmt.Errorf("parse %s: %w", path, err)
+	}
 	if err := json.Unmarshal(contents, &config); err != nil {
 		return config, fmt.Errorf("parse %s: %w", path, err)
 	}
+	if header.Version == nil {
+		config.Version = 0
+	}
+	var migrated bool
+	config, migrated, err = migrateConfig(config)
+	if err != nil {
+		return defaultConfig(), fmt.Errorf("parse %s: %w", path, err)
+	}
 	config = ensureConfigDefaults(config)
+	if migrated {
+		if err := saveConfigFile(path, config, contents); err != nil {
+			return defaultConfig(), fmt.Errorf("migrate %s: %w", path, err)
+		}
+	}
 	return config, nil
+}
+
+func migrateConfig(config AppConfig) (AppConfig, bool, error) {
+	switch config.Version {
+	case 0:
+		config.Version = currentConfigVersion
+		return config, true, nil
+	case currentConfigVersion:
+		return config, false, nil
+	default:
+		return config, false, fmt.Errorf("configuration version %d is newer than this Alias Lens supports; update Alias Lens", config.Version)
+	}
 }
 
 func ensureConfigDefaults(config AppConfig) AppConfig {
@@ -238,6 +273,7 @@ func ensureConfigDefaults(config AppConfig) AppConfig {
 
 func defaultConfig() AppConfig {
 	return AppConfig{
+		Version:   currentConfigVersion,
 		AliasFile: ".bash_aliases",
 		Shell:     "bash",
 		Providers: map[string]ProviderConfig{
@@ -252,14 +288,64 @@ func saveConfig(config AppConfig) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	config.Version = currentConfigVersion
+	return saveConfigFile(path, config, nil)
+}
+
+func saveConfigFile(path string, config AppConfig, backup []byte) error {
+	directoryPath := filepath.Dir(path)
+	if err := os.MkdirAll(directoryPath, 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(directoryPath, 0o700); err != nil {
 		return err
 	}
 	contents, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(contents, '\n'), 0o644)
+	if len(backup) > 0 {
+		if err := os.WriteFile(path+".alias-lens.bak", backup, 0o600); err != nil {
+			return err
+		}
+	}
+	temporary, err := os.CreateTemp(directoryPath, ".config-*.tmp")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0o600); err != nil {
+		temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(append(contents, '\n')); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	return syncDirectory(directoryPath)
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer directory.Close()
+	if err := directory.Sync(); err != nil && !errors.Is(err, fs.ErrInvalid) {
+		return err
+	}
+	return nil
 }
 
 func configPath() (string, error) {

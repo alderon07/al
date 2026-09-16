@@ -4,6 +4,8 @@ Alias Lens needs a stable GitHub release before it can be installed from a Homeb
 
 The first supported release routes are GitHub archives and `go install github.com/alderon07/al/cmd/alias-lens@latest`. WSL uses the Linux archive. Native Windows shells are not supported, so do not publish a Windows package until their parser, writer, startup integration, execution behavior, and key bindings are implemented and tested.
 
+Read [the compatibility policy](COMPATIBILITY.md) before changing commands, flags, metadata, JSON output, or configuration fields.
+
 ## Prepare the first release
 
 1. Run the repository checks:

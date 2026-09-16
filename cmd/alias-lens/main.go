@@ -214,15 +214,7 @@ func main() {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "setup":
-		if len(os.Args) > 3 {
-			fmt.Fprintln(os.Stderr, "Usage: al setup [bash|zsh]")
-			return
-		}
-		shellName := ""
-		if len(os.Args) == 3 {
-			shellName = os.Args[2]
-		}
-		if err := runSetup(shellName); err != nil {
+		if err := runSetupCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "autosync":

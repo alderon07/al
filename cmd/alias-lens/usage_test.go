@@ -10,7 +10,7 @@ func TestUsageDescribesImportantCommandEffects(t *testing.T) {
 		"pick       Select an alias and print its name or command; never executes it",
 		"repo       Choose or clone a Git repository and enable automatic sync",
 		"sync       Copy and commit aliases locally, or explicitly push or pull",
-		"setup      Detect Bash or Zsh, back up shell files, and install integration",
+		"setup      Install, repair, or remove the Bash or Zsh integration",
 		`Run "al help COMMAND" or "al COMMAND --help"`,
 	}
 	for _, check := range checks {

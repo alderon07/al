@@ -129,6 +129,125 @@ func TestBashSetupKeepsUserBinaryOnPathAfterRestart(t *testing.T) {
 	}
 }
 
+func TestSetupRemoveKeepsAliasesAndUnrelatedBashSettings(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	aliasPath := filepath.Join(home, ".bash_aliases")
+	aliases := "alias al='echo personal'\nalias ll='ls -al'\n\n# Alias Lens Bash integration\neval \"$(command alias-lens shell-init bash)\"\n"
+	if err := os.WriteFile(aliasPath, []byte(aliases), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bashrcPath := filepath.Join(home, ".bashrc")
+	userBashrc := "export EDITOR=vim\n. \"$HOME/.bash_aliases\"\n"
+	bashrc := userBashrc + startupPathBlock(home, filepath.Join(home, ".local", "bin")) + bashAliasLoader
+	if err := os.WriteFile(bashrcPath, []byte(bashrc), 0o640); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runSetupCommand([]string{"--remove", "bash"}); err != nil {
+		t.Fatal(err)
+	}
+	updatedAliases, err := os.ReadFile(aliasPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(updatedAliases), "alias al='echo personal'") || !strings.Contains(string(updatedAliases), "alias ll='ls -al'") {
+		t.Fatalf("setup removal changed user aliases:\n%s", updatedAliases)
+	}
+	if strings.Contains(string(updatedAliases), "shell-init") || strings.Contains(string(updatedAliases), "Alias Lens Bash integration") {
+		t.Fatalf("setup removal left generated alias integration:\n%s", updatedAliases)
+	}
+	updatedBashrc, err := os.ReadFile(bashrcPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(updatedBashrc) != userBashrc {
+		t.Fatalf("setup removal changed unrelated Bash settings:\n%s", updatedBashrc)
+	}
+	info, err := os.Stat(bashrcPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o640 {
+		t.Fatalf("setup removal changed Bash file mode: %v", info.Mode().Perm())
+	}
+}
+
+func TestSetupRemoveRespectsZdotdir(t *testing.T) {
+	home := t.TempDir()
+	zdotdir := filepath.Join(home, "zsh")
+	t.Setenv("HOME", home)
+	t.Setenv("ZDOTDIR", zdotdir)
+	t.Setenv(activeShellEnvironment, "zsh")
+	if err := os.MkdirAll(zdotdir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".zsh_aliases"), []byte("# Alias Lens Zsh integration\neval \"$(command alias-lens shell-init zsh)\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	zshrcPath := filepath.Join(zdotdir, ".zshrc")
+	if err := os.WriteFile(zshrcPath, []byte("setopt autocd\n"+zshAliasLoader), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runSetupCommand([]string{"zsh", "--remove"}); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(zshrcPath)
+	if err != nil || string(contents) != "setopt autocd\n" {
+		t.Fatalf("ZDOTDIR removal result = %q, %v", contents, err)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".zshrc")); !os.IsNotExist(err) {
+		t.Fatalf("setup removal changed the wrong Zsh file: %v", err)
+	}
+}
+
+func TestSetupRepairNormalizesDuplicateGeneratedBlocks(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	aliasPath := filepath.Join(home, ".bash_aliases")
+	integration := "# Alias Lens Bash integration\neval \"$(command alias-lens shell-init bash)\"\n"
+	if err := os.WriteFile(aliasPath, []byte("alias ll='ls -al'\n"+integration+integration), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	bashrcPath := filepath.Join(home, ".bashrc")
+	if err := os.WriteFile(bashrcPath, []byte(bashAliasLoader+bashAliasLoader), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runSetupCommand([]string{"--repair", "bash"}); err != nil {
+		t.Fatal(err)
+	}
+	updatedAliases, err := os.ReadFile(aliasPath)
+	if err != nil || strings.Count(string(updatedAliases), "shell-init bash") != 1 {
+		t.Fatalf("repair did not normalize alias integration: %s, %v", updatedAliases, err)
+	}
+	updatedBashrc, err := os.ReadFile(bashrcPath)
+	if err != nil || strings.Count(string(updatedBashrc), ".bash_aliases") != 2 {
+		t.Fatalf("repair did not normalize startup loader: %s, %v", updatedBashrc, err)
+	}
+}
+
+func TestMacBashSetupNormalizesDuplicateLoginLoaders(t *testing.T) {
+	home := t.TempDir()
+	profilePath := filepath.Join(home, ".bash_profile")
+	if err := os.WriteFile(profilePath, []byte(bashLoginLoader+bashLoginLoader), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
+		t.Fatal(err)
+	}
+	contents, err := os.ReadFile(profilePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(contents), "Alias Lens Bash login loader >>>") != 1 {
+		t.Fatalf("Bash login loader was not normalized:\n%s", contents)
+	}
+}
+
 func TestZshSetupPersistsUserBinaryDirectory(t *testing.T) {
 	home := t.TempDir()
 	binDir := filepath.Join(home, ".local", "bin")

@@ -138,7 +138,45 @@ func providerCredentialStatus(provider RepoProvider) (bool, string) {
 	}
 }
 
-func runSetup(shellName string) error {
+type setupAction int
+
+const (
+	setupInstall setupAction = iota
+	setupRepair
+	setupRemove
+)
+
+func runSetupCommand(arguments []string) error {
+	action := setupInstall
+	shellName := ""
+	for _, argument := range arguments {
+		switch argument {
+		case "--repair":
+			if action != setupInstall {
+				return fmt.Errorf("usage: al setup [--repair|--remove] [bash|zsh]")
+			}
+			action = setupRepair
+		case "--remove":
+			if action != setupInstall {
+				return fmt.Errorf("usage: al setup [--repair|--remove] [bash|zsh]")
+			}
+			action = setupRemove
+		case "bash", "zsh":
+			if shellName != "" {
+				return fmt.Errorf("usage: al setup [--repair|--remove] [bash|zsh]")
+			}
+			shellName = argument
+		default:
+			return fmt.Errorf("usage: al setup [--repair|--remove] [bash|zsh]")
+		}
+	}
+	if action == setupRemove {
+		return removeSetup(shellName)
+	}
+	return runSetup(shellName, action == setupRepair)
+}
+
+func runSetup(shellName string, repair bool) error {
 	adapter, err := requestedShellAdapter(shellName)
 	if err != nil {
 		return err
@@ -184,16 +222,28 @@ func runSetup(shellName string) error {
 		if err := os.Chmod(aliasPath, 0o600); err != nil {
 			return err
 		}
-		fmt.Printf("Alias Lens %s integration is already installed.\n", adapter.DisplayName())
+		if repair {
+			fmt.Printf("Verified Alias Lens %s alias integration.\n", adapter.DisplayName())
+		} else {
+			fmt.Printf("Alias Lens %s integration is already installed.\n", adapter.DisplayName())
+		}
 	} else {
 		if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
 			return err
 		}
-		fmt.Printf("Installed Alias Lens %s integration. Start a new %s shell, then press Ctrl+G on an empty prompt.\n", adapter.DisplayName(), adapter.Name())
+		verb := "Installed"
+		if repair {
+			verb = "Repaired"
+		}
+		fmt.Printf("%s Alias Lens %s integration. Start a new %s shell, then press Ctrl+G on an empty prompt.\n", verb, adapter.DisplayName(), adapter.Name())
 	}
 	home := filepath.Dir(aliasPath)
 	if err := adapter.ConfigureStartup(home, runtime.GOOS, userExecutableDirectory(home)); err != nil {
 		return err
+	}
+	if repair {
+		fmt.Println("Alias Lens kept your aliases and checked only its generated integration.")
+		return nil
 	}
 	if err := scheduleTour(); err != nil {
 		return fmt.Errorf("save first-run tour state: %w", err)
@@ -203,6 +253,40 @@ func runSetup(shellName string) error {
 		return nil
 	}
 	return offerDefaultAliases(aliasPath, os.Stdin, os.Stdout)
+}
+
+func removeSetup(shellName string) error {
+	adapter, err := requestedShellAdapter(shellName)
+	if err != nil {
+		return err
+	}
+	aliasPath, err := aliasPathFor(adapter)
+	if err != nil {
+		return err
+	}
+	if contents, readErr := os.ReadFile(aliasPath); readErr == nil {
+		lines := strings.Split(strings.TrimSuffix(string(contents), "\n"), "\n")
+		updated := []byte(strings.Join(withoutShellIntegration(lines), "\n"))
+		if len(updated) > 0 {
+			updated = append(updated, '\n')
+		}
+		if string(updated) != string(contents) {
+			if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
+				return err
+			}
+		}
+	} else if !os.IsNotExist(readErr) {
+		return readErr
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	if err := adapter.RemoveStartup(home, runtime.GOOS); err != nil {
+		return err
+	}
+	fmt.Printf("Removed Alias Lens %s shell integration. Start a new %s shell to finish. Your aliases, configuration, revisions, and repositories were kept.\n", adapter.DisplayName(), adapter.Name())
+	return nil
 }
 
 func userExecutableDirectory(home string) string {
@@ -231,11 +315,22 @@ func userOwnedExecutableDirectory(executable, home string) string {
 }
 
 func withShellIntegration(lines []string, adapter ShellAdapter) []string {
+	kept := withoutShellIntegration(lines)
+	for len(kept) > 0 && strings.TrimSpace(kept[len(kept)-1]) == "" {
+		kept = kept[:len(kept)-1]
+	}
+	kept = append(kept, "", "# Alias Lens "+adapter.DisplayName()+" integration", `eval "$(command alias-lens shell-init `+adapter.Name()+`)"`)
+	return kept
+}
+
+func withoutShellIntegration(lines []string) []string {
 	var kept []string
 	for _, line := range lines {
-		name, _, ok := parseAliasDefinition(line)
+		name, command, ok := parseAliasDefinition(line)
 		trimmed := strings.TrimSpace(line)
-		if (ok && name == "al") || strings.Contains(line, "shell-init ") || (strings.HasPrefix(trimmed, "# Alias Lens ") && strings.HasSuffix(trimmed, " integration")) {
+		legacyAlias := ok && name == "al" && strings.Contains(command, "alias-lens")
+		integration := trimmed == `eval "$(command alias-lens shell-init bash)"` || trimmed == `eval "$(command alias-lens shell-init zsh)"`
+		if legacyAlias || integration || (strings.HasPrefix(trimmed, "# Alias Lens ") && strings.HasSuffix(trimmed, " integration")) {
 			continue
 		}
 		kept = append(kept, line)
@@ -243,7 +338,6 @@ func withShellIntegration(lines []string, adapter ShellAdapter) []string {
 	for len(kept) > 0 && strings.TrimSpace(kept[len(kept)-1]) == "" {
 		kept = kept[:len(kept)-1]
 	}
-	kept = append(kept, "", "# Alias Lens "+adapter.DisplayName()+" integration", `eval "$(command alias-lens shell-init `+adapter.Name()+`)"`)
 	return kept
 }
 

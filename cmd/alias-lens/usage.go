@@ -29,7 +29,7 @@ Protect and recover aliases:
   history    List private revisions created before Alias Lens changes the file
   undo       Restore a revision after saving the current alias file first
   doctor     Diagnose the binary, shell integration, Git, providers, and sync
-  setup      Detect Bash or Zsh, back up shell files, and install integration
+  setup      Install, repair, or remove the Bash or Zsh integration
 
 Configure Git sync:
   repo       Choose or clone a Git repository and enable automatic sync
@@ -156,18 +156,25 @@ Check the installed binary, alias file syntax, shell startup loading, integratio
 sync repository, automatic sync state, provider credentials, and SSH access.
 Failed checks print the command or action that should fix them.
 `,
-	"setup": `Usage: al setup [bash|zsh]
+	"setup": `Usage:
+  al setup [bash|zsh]
+  al setup --repair [bash|zsh]
+  al setup --remove [bash|zsh]
 
 Detect the current Bash or Zsh shell and install the function used by "al" and
 "al use", plus a prompt-aware Ctrl+G launcher. Ctrl+G opens Alias Lens when the
 prompt is empty and keeps its cancel behavior when the prompt contains text.
+--repair restores missing generated integration and removes duplicate generated
+blocks. --remove removes only the Alias Lens integration. It keeps aliases,
+configuration, revisions, and repositories.
 Set ALIAS_LENS_NOBIND=1 before the integration loads to disable the binding.
 Pass a shell name to override detection.
 Bash uses ~/.bash_aliases and ~/.bashrc; Zsh uses ~/.zsh_aliases and ~/.zshrc.
 Setup adds a binary installed under the home directory to the shell's PATH.
 This keeps Alias Lens available after a WSL restart. On macOS, Bash login-shell
 precedence is preserved. Files are backed up before editing, and missing alias
-files are created with mode 0600. In an interactive terminal, optional developer aliases are explained and require confirmation.
+files are created with mode 0600. In an interactive terminal, Alias Lens
+explains optional developer aliases and asks before adding them.
 Fish, PowerShell, and Command Prompt are not supported.
 `,
 	"repo": `Usage:

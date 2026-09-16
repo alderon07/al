@@ -104,3 +104,10 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [ ] Add an import preview that finds duplicate names and commands before changing the alias file.
 - [ ] Benchmark startup, large alias files, and search before considering a language rewrite.
 - [ ] Design end-to-end encryption before adding any hosted sync service.
+
+## Prepare the 1.0 contract
+
+- [x] Version `config.json`, migrate legacy files atomically, and keep a private backup.
+- [x] Document the 1.x command, metadata, JSON, and configuration compatibility rules.
+- [x] Add `al setup --repair` without changing user aliases.
+- [x] Add `al setup --remove` without deleting aliases or Alias Lens data.

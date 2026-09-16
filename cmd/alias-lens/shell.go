@@ -19,6 +19,7 @@ type ShellAdapter interface {
 	HistoryFilename() string
 	Integration() string
 	ConfigureStartup(home, platform, executableDir string) error
+	RemoveStartup(home, platform string) error
 	StartupStatus(home, platform string) (bool, string)
 }
 
@@ -147,10 +148,28 @@ func (bashShellAdapter) ConfigureStartup(home, platform, executableDir string) e
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	if hasActiveShellReference(contents, ".bashrc") || hasActiveShellReference(contents, ".bash_aliases") {
+	updated := []byte(strings.ReplaceAll(string(contents), bashLoginLoader, ""))
+	if !hasActiveShellReference(updated, ".bashrc") && !hasActiveShellReference(updated, ".bash_aliases") {
+		updated = append(updated, []byte(bashLoginLoader)...)
+	}
+	if string(updated) == string(contents) {
 		return nil
 	}
-	return appendStartupBlock(loginPath, contents, bashLoginLoader)
+	return writeStartupFile(loginPath, contents, updated)
+}
+
+func (bashShellAdapter) RemoveStartup(home, platform string) error {
+	if err := removeStartupFileBlocks(filepath.Join(home, ".bashrc"), bashAliasLoader); err != nil {
+		return err
+	}
+	if platform != "darwin" {
+		return nil
+	}
+	loginPath, err := bashLoginPath(home)
+	if err != nil {
+		return err
+	}
+	return removeStartupFileBlocks(loginPath, bashLoginLoader)
 }
 
 func (bashShellAdapter) StartupStatus(home, platform string) (bool, string) {
@@ -184,6 +203,14 @@ func (zshShellAdapter) ConfigureStartup(home, _, executableDir string) error {
 		return err
 	}
 	return configureStartupFile(path, ".zsh_aliases", zshAliasLoader, home, executableDir)
+}
+
+func (zshShellAdapter) RemoveStartup(home, _ string) error {
+	path, err := zshStartupPath(home)
+	if err != nil {
+		return err
+	}
+	return removeStartupFileBlocks(path, zshAliasLoader)
 }
 
 func (zshShellAdapter) StartupStatus(home, _ string) (bool, string) {
@@ -235,17 +262,59 @@ func configureStartupFile(path, aliasFilename, aliasBlock, home, executableDir s
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
-	updated := append([]byte(nil), contents...)
-	if executableDir != "" && !startupPathReady(contents, aliasFilename, home, executableDir) {
+	updated := removeStartupPathBlocks(contents)
+	updated = []byte(strings.ReplaceAll(string(updated), aliasBlock, ""))
+	if executableDir != "" && !startupPathReady(updated, aliasFilename, home, executableDir) {
 		updated = append([]byte(startupPathBlock(home, executableDir)), updated...)
 	}
-	if !hasActiveShellReference(contents, aliasFilename) {
+	if !hasActiveShellReference(updated, aliasFilename) {
 		updated = append(updated, []byte(aliasBlock)...)
 	}
 	if string(updated) == string(contents) {
 		return nil
 	}
 	return writeStartupFile(path, contents, updated)
+}
+
+func removeStartupFileBlocks(path string, blocks ...string) error {
+	contents, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	updated := removeStartupPathBlocks(contents)
+	for _, block := range blocks {
+		updated = []byte(strings.ReplaceAll(string(updated), block, ""))
+	}
+	updated = []byte(strings.TrimLeft(string(updated), "\n"))
+	if string(updated) == string(contents) {
+		return nil
+	}
+	return writeStartupFile(path, contents, updated)
+}
+
+func removeStartupPathBlocks(contents []byte) []byte {
+	text := string(contents)
+	const startMarker = "# Keep the Alias Lens executable available in new shells.\n"
+	const endMarker = "unset _alias_lens_bin_dir\n"
+	for {
+		start := strings.Index(text, startMarker)
+		if start < 0 {
+			break
+		}
+		if start > 0 && text[start-1] == '\n' {
+			start--
+		}
+		endOffset := strings.Index(text[start:], endMarker)
+		if endOffset < 0 {
+			break
+		}
+		end := start + endOffset + len(endMarker)
+		text = text[:start] + text[end:]
+	}
+	return []byte(text)
 }
 
 func startupPathReady(contents []byte, aliasFilename, home, directory string) bool {
@@ -289,10 +358,6 @@ unset _alias_lens_bin_dir
 `
 }
 
-func appendStartupBlock(path string, contents []byte, block string) error {
-	return writeStartupFile(path, contents, append(contents, []byte(block)...))
-}
-
 func writeStartupFile(path string, contents, updated []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -322,24 +387,27 @@ func hasActiveShellReference(contents []byte, filename string) bool {
 }
 
 const bashAliasLoader = `
-# Load personal Bash aliases.
+# >>> Alias Lens Bash alias loader >>>
 if [ -f "$HOME/.bash_aliases" ]; then
   . "$HOME/.bash_aliases"
 fi
+# <<< Alias Lens Bash alias loader <<<
 `
 
 const bashLoginLoader = `
-# Load Bash configuration for login shells.
+# >>> Alias Lens Bash login loader >>>
 if [ -n "${BASH_VERSION:-}" ] && [ -f "$HOME/.bashrc" ]; then
   . "$HOME/.bashrc"
 fi
+# <<< Alias Lens Bash login loader <<<
 `
 
 const zshAliasLoader = `
-# Load personal Zsh aliases.
+# >>> Alias Lens Zsh alias loader >>>
 if [[ -f "$HOME/.zsh_aliases" ]]; then
   source "$HOME/.zsh_aliases"
 fi
+# <<< Alias Lens Zsh alias loader <<<
 `
 
 const bashIntegration = `# Alias Lens Bash integration
