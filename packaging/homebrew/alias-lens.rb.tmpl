@@ -1,9 +1,9 @@
 class AliasLens < Formula
-  desc "Terminal-first Bash alias manager"
+  desc "Terminal-first Bash and Zsh alias manager"
   homepage "https://github.com/alderon07/al"
   url "https://github.com/alderon07/al/archive/refs/tags/vVERSION.tar.gz"
   sha256 "SHA256"
-  license "LICENSE"
+  license "MIT"
 
   depends_on "go" => :build
 
@@ -16,9 +16,8 @@ class AliasLens < Formula
 
   def caveats
     <<~EOS
-      Install the Bash integration, then start a new shell:
+      Install the shell integration, then start a new shell:
         alias-lens setup
-        exec bash
     EOS
   end
 

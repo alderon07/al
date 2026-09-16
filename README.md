@@ -73,6 +73,8 @@ If an older WSL installation disappears after a restart, repair it once after up
 "$HOME/.local/bin/alias-lens" setup bash
 ```
 
+Alias Lens is available under the [MIT License](LICENSE).
+
 ## Find the shortcut before you forget it
 
 Open Alias Lens with `Ctrl+G` or run `al`. Search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.

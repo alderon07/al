@@ -6,15 +6,14 @@ The first supported release routes are GitHub archives and `go install github.co
 
 ## Prepare the first release
 
-1. Add an open source `LICENSE` file and replace `LICENSE` in `packaging/homebrew/alias-lens.rb.tmpl` with its Homebrew SPDX identifier.
-2. Run the repository checks:
+1. Run the repository checks:
 
    ```bash
    make fmt check
    ```
 
-3. Commit and push the release setup.
-4. Tag a stable semantic version and push it:
+2. Commit and push the release setup.
+3. Tag a stable semantic version and push it:
 
    ```bash
    git tag -a v0.1.0 -m "Alias Lens v0.1.0"
@@ -23,7 +22,7 @@ The first supported release routes are GitHub archives and `go install github.co
 
 The tag starts `.github/workflows/release.yml`. Confirm that the GitHub release contains four archives and `checksums.txt` before publishing a formula.
 
-The personal Homebrew tap is a separate repository and still requires the license decision below. Keep AUR, Debian, RPM, and other package repositories as later distribution work rather than blocking the first release.
+The personal Homebrew tap is a separate repository. Keep AUR, Debian, RPM, and other package repositories as later distribution work rather than blocking the first release.
 
 ## Publish through a personal tap
 
@@ -37,7 +36,7 @@ A personal tap works before the project qualifies for `homebrew/core`.
    shasum -a 256 v0.1.0.tar.gz
    ```
 
-3. Copy `packaging/homebrew/alias-lens.rb.tmpl` to `Formula/alias-lens.rb` in the tap. Replace `VERSION`, `SHA256`, and `LICENSE` with the release version, checksum, and SPDX license identifier.
+3. Copy `packaging/homebrew/alias-lens.rb.tmpl` to `Formula/alias-lens.rb` in the tap. Replace `VERSION` and `SHA256` with the release version and checksum.
 4. Test the formula on macOS and Linux:
 
    ```bash
