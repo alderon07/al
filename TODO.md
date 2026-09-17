@@ -121,7 +121,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [ ] Complete the phase 3 Bash and Zsh adapter refactor without behavior changes.
   - [x] Route rendering, parsing, history, syntax checks, startup discovery, and integration contracts through `ShellAdapter`.
   - [x] Pin integration output and CI shell environments.
-  - [ ] Add PTY execution and key-binding coverage for Bash and Zsh.
-  - [ ] Run the baseline-versus-candidate setup and command-output matrix.
-  - [ ] Record the required WSL 2 terminal evidence.
+  - [ ] Add PTY execution and key-binding coverage for Bash and Zsh. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
+  - [ ] Run the baseline-versus-candidate setup and command-output matrix. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
+  - [ ] Record the required WSL 2 terminal evidence. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
 - [ ] Add phase 4 read-only shadow generation after phases 2 and 3 pass.
