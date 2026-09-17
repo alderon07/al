@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 )
@@ -55,6 +54,10 @@ func loadHistoryUsageEvents(aliases []Alias) ([]usageEvent, error) {
 }
 
 func historyUsageEventsFromShell(path, shell string, aliases []Alias) ([]usageEvent, error) {
+	adapter, err := shellAdapter(shell)
+	if err != nil {
+		return nil, err
+	}
 	file, err := os.Open(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
@@ -69,30 +72,14 @@ func historyUsageEventsFromShell(path, shell string, aliases []Alias) ([]usageEv
 		known[alias.Name] = true
 	}
 	var events []usageEvent
-	var bashTime time.Time
+	state := shellHistoryState{}
 	scanner := bufio.NewScanner(file)
 	buffer := make([]byte, 64*1024)
 	scanner.Buffer(buffer, 1024*1024)
 	for scanner.Scan() {
-		line := scanner.Text()
-		eventTime := time.Time{}
-		if shell == "zsh" && strings.HasPrefix(line, ": ") {
-			if separator := strings.IndexByte(line, ';'); separator >= 0 {
-				metadata := strings.TrimPrefix(line[:separator], ": ")
-				stamp, _, _ := strings.Cut(metadata, ":")
-				if unix, parseErr := strconv.ParseInt(stamp, 10, 64); parseErr == nil {
-					eventTime = time.Unix(unix, 0)
-				}
-				line = line[separator+1:]
-			}
-		} else if shell == "bash" && strings.HasPrefix(line, "#") {
-			if unix, parseErr := strconv.ParseInt(strings.TrimPrefix(line, "#"), 10, 64); parseErr == nil {
-				bashTime = time.Unix(unix, 0)
-				continue
-			}
-		} else if shell == "bash" {
-			eventTime = bashTime
-			bashTime = time.Time{}
+		line, eventTime, skip := adapter.HistoryUsageLine(scanner.Text(), &state)
+		if skip {
+			continue
 		}
 
 		fields := strings.Fields(strings.TrimSpace(line))

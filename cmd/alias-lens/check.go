@@ -232,14 +232,24 @@ func findingCount(count int, noun string) string {
 }
 
 func checkNativeShellSyntax(path, shell string) *aliasCheckFinding {
+	adapter, err := shellAdapter(shell)
+	if err != nil {
+		return &aliasCheckFinding{Severity: checkWarning, Message: err.Error()}
+	}
+	return adapter.CheckSyntax(path)
+}
+
+func (bashShellAdapter) CheckSyntax(path string) *aliasCheckFinding {
+	return checkNativeShellSyntaxCommand("bash", []string{"--noprofile", "--norc", "-n", path})
+}
+
+func (zshShellAdapter) CheckSyntax(path string) *aliasCheckFinding {
+	return checkNativeShellSyntaxCommand("zsh", []string{"-f", "-n", path})
+}
+
+func checkNativeShellSyntaxCommand(shell string, arguments []string) *aliasCheckFinding {
 	if _, err := exec.LookPath(shell); err != nil {
 		return &aliasCheckFinding{Severity: checkWarning, Message: shell + " is not installed; native syntax was not checked"}
-	}
-	arguments := []string{"-n", path}
-	if shell == "bash" {
-		arguments = []string{"--noprofile", "--norc", "-n", path}
-	} else if shell == "zsh" {
-		arguments = []string{"-f", "-n", path}
 	}
 	command := exec.Command(shell, arguments...)
 	command.Env = shellCheckEnvironment()

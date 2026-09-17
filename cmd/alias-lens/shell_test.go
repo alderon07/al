@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,6 +32,103 @@ func TestExplicitSetupShellOverridesEnvironment(t *testing.T) {
 	}
 	if adapter.Name() != "bash" {
 		t.Fatalf("selected %q, want bash", adapter.Name())
+	}
+}
+
+func TestActiveShellAdapterSelectionTable(t *testing.T) {
+	cases := []struct {
+		name        string
+		integration string
+		configured  string
+		shell       string
+		want        string
+	}{
+		{name: "integration wins", integration: "bash", configured: "zsh", shell: "/bin/zsh", want: "bash"},
+		{name: "invalid integration uses config", integration: "fish", configured: "zsh", shell: "/bin/bash", want: "zsh"},
+		{name: "config used", configured: "zsh", shell: "/bin/bash", want: "zsh"},
+		{name: "SHELL ignored at runtime", configured: "bash", shell: "/bin/zsh", want: "bash"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv(activeShellEnvironment, test.integration)
+			t.Setenv("SHELL", test.shell)
+			if err := saveConfig(AppConfig{Shell: test.configured, AliasFile: "." + test.configured + "_aliases"}); err != nil {
+				t.Fatal(err)
+			}
+			if got := activeShellAdapter().Name(); got != test.want {
+				t.Fatalf("active adapter = %q, want %q", got, test.want)
+			}
+		})
+	}
+}
+
+func TestRequestedShellAdapterSelectionTable(t *testing.T) {
+	cases := []struct {
+		name        string
+		explicit    string
+		integration string
+		shell       string
+		configured  string
+		want        string
+		wantError   string
+	}{
+		{name: "explicit", explicit: "bash", integration: "zsh", shell: "/bin/zsh", configured: "zsh", want: "bash"},
+		{name: "integration", integration: "zsh", shell: "/bin/bash", configured: "bash", want: "zsh"},
+		{name: "detected", shell: "/usr/local/bin/zsh", configured: "bash", want: "zsh"},
+		{name: "configured", configured: "zsh", want: "zsh"},
+		{name: "unsupported integration", integration: "fish", shell: "/bin/bash", configured: "bash", wantError: "unsupported shell"},
+		{name: "unsupported detected", shell: "/usr/bin/fish", configured: "bash", wantError: "unsupported shell"},
+		{name: "whitespace integration", integration: " ", configured: "zsh", wantError: "unsupported shell"},
+	}
+	for _, test := range cases {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv(activeShellEnvironment, test.integration)
+			t.Setenv("SHELL", test.shell)
+			if err := saveConfig(AppConfig{Shell: test.configured, AliasFile: "." + test.configured + "_aliases"}); err != nil {
+				t.Fatal(err)
+			}
+			adapter, err := requestedShellAdapter(test.explicit)
+			if test.wantError != "" {
+				if err == nil || !strings.Contains(err.Error(), test.wantError) {
+					t.Fatalf("error = %v, want %q", err, test.wantError)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if adapter.Name() != test.want {
+				t.Fatalf("requested adapter = %q, want %q", adapter.Name(), test.want)
+			}
+		})
+	}
+}
+
+func TestActiveShellSelectionMalformedConfigDoesNotRewriteIt(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "")
+	path := filepath.Join(home, ".config", "alias-lens", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("{not-json}\n")
+	if err := os.WriteFile(path, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := activeShellAdapter().Name(); got != "bash" {
+		t.Fatalf("malformed config fallback = %q", got)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Fatalf("shell selection rewrote malformed config: %q", got)
 	}
 }
 
@@ -77,6 +175,44 @@ func TestZshSetupRespectsZdotdir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, ".zshrc")); !os.IsNotExist(err) {
 		t.Fatal("setup modified the home .zshrc despite ZDOTDIR")
+	}
+}
+
+func TestAdapterPathMatrix(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(historyFileEnvironment, "")
+	bash := bashShellAdapter{}
+	if path, err := aliasPathFor(bash); err == nil {
+		if want := filepath.Join(home, ".bash_aliases"); path != want {
+			t.Fatalf("Bash alias path = %q, want %q", path, want)
+		}
+	} else {
+		t.Fatal(err)
+	}
+	if got := historyPathFor(bash, home); got != filepath.Join(home, ".bash_history") {
+		t.Fatalf("Bash history path = %q", got)
+	}
+	paths, err := bash.StartupPaths(home, "linux")
+	if err != nil || len(paths) != 1 || paths[0] != filepath.Join(home, ".bashrc") {
+		t.Fatalf("Bash startup paths = %#v, %v", paths, err)
+	}
+
+	zdotdir := filepath.Join(home, "zsh")
+	t.Setenv("ZDOTDIR", zdotdir)
+	zsh := zshShellAdapter{}
+	if got := historyPathFor(zsh, home); got != filepath.Join(home, ".zsh_history") {
+		t.Fatalf("Zsh history path = %q", got)
+	}
+	paths, err = zsh.StartupPaths(home, "linux")
+	if err != nil || len(paths) != 1 || paths[0] != filepath.Join(zdotdir, ".zshrc") {
+		t.Fatalf("Zsh startup paths = %#v, %v", paths, err)
+	}
+
+	override := filepath.Join(home, "custom.history")
+	t.Setenv(historyFileEnvironment, override)
+	if got := historyPathFor(bash, home); got != override {
+		t.Fatalf("history override = %q, want %q", got, override)
 	}
 }
 
@@ -378,6 +514,284 @@ fi
 	if strings.Contains(string(output), "Alias Lens ran") {
 		t.Fatalf("integration printed an unwanted execution receipt:\n%s", output)
 	}
+}
+
+func TestBashShellIntegrationGolden(t *testing.T) {
+	assertShellIntegrationGolden(t, bashShellAdapter{}, "bash-integration.golden")
+}
+
+func TestZshShellIntegrationGolden(t *testing.T) {
+	assertShellIntegrationGolden(t, zshShellAdapter{}, "zsh-integration.golden")
+}
+
+func assertShellIntegrationGolden(t *testing.T, adapter ShellAdapter, filename string) {
+	t.Helper()
+	want, err := os.ReadFile(filepath.Join("testdata", "phase3", filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := adapter.Integration(); got != string(want) {
+		t.Fatalf("%s integration changed from the approved phase 3 baseline", adapter.DisplayName())
+	}
+}
+
+func TestShellAdapterContractBash(t *testing.T) {
+	assertShellAdapterContract(t, bashShellAdapter{}, "builtin history -s", "clear-readline-buffer")
+}
+
+func TestShellAdapterContractZsh(t *testing.T) {
+	assertShellAdapterContract(t, zshShellAdapter{}, "print -s", "zle-send-break")
+}
+
+func assertShellAdapterContract(t *testing.T, adapter ShellAdapter, historyCommand, promptAction string) {
+	t.Helper()
+	if adapter.ExecutionSpec().HistoryCommand == "" || !strings.Contains(adapter.ExecutionSpec().HistoryCommand, historyCommand) {
+		t.Fatalf("%s execution history contract = %#v", adapter.Name(), adapter.ExecutionSpec())
+	}
+	if adapter.PromptSpec().SelectionPrefix != "$ " || adapter.PromptSpec().NonEmptyPromptAction != promptAction {
+		t.Fatalf("%s prompt contract = %#v", adapter.Name(), adapter.PromptSpec())
+	}
+	if binding := adapter.BindingSpec(); binding.Key != "Ctrl+G" || binding.DisableEnvironment != "ALIAS_LENS_NOBIND" {
+		t.Fatalf("%s binding contract = %#v", adapter.Name(), binding)
+	}
+}
+
+func TestAdapterNameMatrix(t *testing.T) {
+	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+		for _, name := range []string{"ll", "g.s", "1x", "-x", "_x"} {
+			if err := adapter.ValidateEntryName(name, "alias"); err != nil {
+				t.Errorf("%s rejected baseline alias name %q: %v", adapter.Name(), name, err)
+			}
+		}
+		for _, name := range []string{"é", "", "has space", "line\nbreak"} {
+			if err := adapter.ValidateEntryName(name, "alias"); err == nil {
+				t.Errorf("%s accepted invalid alias name %q", adapter.Name(), name)
+			}
+		}
+		for _, name := range []string{"1x", "-x", "g.s"} {
+			if err := adapter.ValidateEntryName(name, "function"); err == nil || !strings.Contains(err.Error(), "invalid function name") {
+				t.Errorf("%s function validation for %q = %v", adapter.Name(), name, err)
+			}
+		}
+	}
+}
+
+func TestUnknownEntryTypeBaseline(t *testing.T) {
+	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+		definition, err := adapter.RenderEntryDefinition(Alias{Name: "ll", Command: "ls -al", Type: "unknown"})
+		if err != nil || definition != "alias ll='ls -al'" {
+			t.Fatalf("%s unknown entry type baseline = %q, %v", adapter.Name(), definition, err)
+		}
+	}
+}
+
+func TestAdapterParsingDoesNotExecuteContent(t *testing.T) {
+	sentinel := filepath.Join(t.TempDir(), "executed")
+	command := "touch " + sentinel
+	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+		definition, err := adapter.RenderEntryDefinition(Alias{Name: "unsafe", Command: command, Type: "alias"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		name, parsed, ok := adapter.ParseAliasDefinition(definition)
+		if !ok || name != "unsafe" || parsed != command {
+			t.Fatalf("%s parse round trip = %q, %q, %v", adapter.Name(), name, parsed, ok)
+		}
+	}
+	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
+		t.Fatalf("adapter parsing executed alias content: %v", err)
+	}
+}
+
+func TestZshHistoryAdapterPreservesMalformedPrefixBaseline(t *testing.T) {
+	adapter := zshShellAdapter{}
+	if got := adapter.HistoryCommand(": not-a-time;git status"); got != "git status" {
+		t.Fatalf("malformed Zsh prefix baseline = %q", got)
+	}
+	line, eventTime, skip := adapter.HistoryUsageLine(": not-a-time;ll", &shellHistoryState{})
+	if line != "ll" || !eventTime.IsZero() || skip {
+		t.Fatalf("malformed Zsh usage baseline = %q, %v, %v", line, eventTime, skip)
+	}
+}
+
+func TestBashHistoryAdapterPreservesInvalidCommentBaseline(t *testing.T) {
+	adapter := bashShellAdapter{}
+	state := shellHistoryState{}
+	if _, _, skip := adapter.HistoryUsageLine("#1700000000", &state); !skip {
+		t.Fatal("valid Bash timestamp was not consumed")
+	}
+	if line, eventTime, skip := adapter.HistoryUsageLine("#not-a-time", &state); line != "#not-a-time" || !eventTime.IsZero() || skip {
+		t.Fatalf("invalid Bash comment baseline = %q, %v, %v", line, eventTime, skip)
+	}
+	line, eventTime, skip := adapter.HistoryUsageLine("ll", &state)
+	if line != "ll" || eventTime.Unix() != 1700000000 || skip {
+		t.Fatalf("Bash timestamp after invalid comment = %q, %v, %v", line, eventTime, skip)
+	}
+}
+
+func TestBashHistoryAdapterFixture(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".bash_history")
+	contents := "#1700000000\nll\n#invalid\ngs\nplain command"
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	counts, err := historyCountsFromShell(path, "bash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts["#1700000000"] != 0 || counts["ll"] != 1 || counts["#invalid"] != 1 || counts["gs"] != 1 || counts["plain command"] != 1 {
+		t.Fatalf("Bash history counts = %#v", counts)
+	}
+	events, err := historyUsageEventsFromShell(path, "bash", []Alias{{Name: "ll"}, {Name: "gs"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[0].Name != "ll" || events[0].Time.Unix() != 1700000000 || events[1].Name != "gs" || !events[1].Time.IsZero() {
+		t.Fatalf("Bash history events = %#v", events)
+	}
+}
+
+func TestZshHistoryAdapterFixture(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".zsh_history")
+	contents := ": 1700000000:4;ll\n: not-a-time;gs\n: metadata-without-semicolon\nprintf 'a;b'"
+	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	counts, err := historyCountsFromShell(path, "zsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if counts["ll"] != 1 || counts["gs"] != 1 || counts[": metadata-without-semicolon"] != 1 || counts["printf 'a;b'"] != 1 {
+		t.Fatalf("Zsh history counts = %#v", counts)
+	}
+	events, err := historyUsageEventsFromShell(path, "zsh", []Alias{{Name: "ll"}, {Name: "gs"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[0].Name != "ll" || events[0].Time.Unix() != 1700000000 || events[1].Name != "gs" || !events[1].Time.IsZero() {
+		t.Fatalf("Zsh history events = %#v", events)
+	}
+}
+
+func TestHistoryAdapterMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing")
+	counts, err := historyCountsFromShell(path, "bash")
+	if err != nil || len(counts) != 0 {
+		t.Fatalf("missing history counts = %#v, %v", counts, err)
+	}
+	events, err := historyUsageEventsFromShell(path, "zsh", nil)
+	if err != nil || len(events) != 0 {
+		t.Fatalf("missing history events = %#v, %v", events, err)
+	}
+}
+
+func TestHistoryAdapterReadError(t *testing.T) {
+	path := t.TempDir()
+	if _, err := historyCountsFromShell(path, "bash"); err == nil {
+		t.Fatal("history count read error was ignored")
+	}
+	if _, err := historyUsageEventsFromShell(path, "zsh", nil); err == nil {
+		t.Fatal("history event read error was ignored")
+	}
+}
+
+func TestHistoryAdapterScannerLimit(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history")
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", 1024*1024+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := historyCountsFromShell(path, "bash"); err == nil {
+		t.Fatal("history count scanner limit was ignored")
+	}
+	if _, err := historyUsageEventsFromShell(path, "zsh", nil); err == nil {
+		t.Fatal("history event scanner limit was ignored")
+	}
+}
+
+func TestPureAdapterOperationsAggregateManifest(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("ZDOTDIR", filepath.Join(home, "zsh"))
+	if err := os.MkdirAll(filepath.Join(home, "zsh"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	sentinel := filepath.Join(home, "sentinel")
+	command := "touch " + sentinel
+	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias unsafe='"+command+"'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".bashrc"), []byte("# user bash settings\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "zsh", ".zshrc"), []byte("# user zsh settings\n"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	before := testTreeManifest(t, home)
+	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+		adapter.ValidateEntryName("unsafe", "alias")
+		adapter.ParseAliasDefinition("alias unsafe='" + command + "'")
+		adapter.ParseFunctions("unsafe() {\n" + command + "\n}")
+		if _, err := adapter.RenderEntryDefinition(Alias{Name: "unsafe", Command: command, Type: "alias"}); err != nil {
+			t.Fatal(err)
+		}
+		adapter.HistoryCommand(": 1700000000:0;unsafe")
+		adapter.HistoryUsageLine("#1700000000", &shellHistoryState{})
+		adapter.Integration()
+		adapter.ExecutionSpec()
+		adapter.PromptSpec()
+		adapter.BindingSpec()
+		paths, err := adapter.StartupPaths(home, "linux")
+		if err != nil {
+			t.Fatal(err)
+		}
+		adapter.CheckSyntax(filepath.Join(home, adapter.AliasFilename()))
+		adapter.StartupStatus(home, "linux")
+		if len(paths) == 0 {
+			t.Fatalf("%s returned no startup path", adapter.Name())
+		}
+	}
+	after := testTreeManifest(t, home)
+	if before != after {
+		t.Fatalf("pure adapter operations changed the temporary home\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
+		t.Fatalf("pure adapter operation executed content: %v", err)
+	}
+}
+
+func testTreeManifest(t *testing.T, root string) string {
+	t.Helper()
+	var entries []string
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			return err
+		}
+		value := ""
+		if info.Mode()&os.ModeSymlink != 0 {
+			value, err = os.Readlink(path)
+		} else if info.Mode().IsRegular() {
+			contents, readErr := os.ReadFile(path)
+			err = readErr
+			value = string(contents)
+		}
+		if err != nil {
+			return err
+		}
+		entries = append(entries, fmt.Sprintf("%s|%s|%04o|%s", relative, info.Mode().Type(), info.Mode().Perm(), value))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Join(entries, "\n")
 }
 
 func TestAliasFormAcceptsSpacesInCommandsAndDescriptions(t *testing.T) {

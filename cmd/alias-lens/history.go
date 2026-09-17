@@ -30,6 +30,10 @@ func historyCountsFrom(path string) (map[string]int, error) {
 }
 
 func historyCountsFromShell(path, shell string) (map[string]int, error) {
+	adapter, err := shellAdapter(shell)
+	if err != nil {
+		return nil, err
+	}
 	file, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -43,12 +47,7 @@ func historyCountsFromShell(path, shell string) (map[string]int, error) {
 	buffer := make([]byte, 64*1024)
 	scanner.Buffer(buffer, 1024*1024)
 	for scanner.Scan() {
-		line := scanner.Text()
-		if shell == "zsh" && strings.HasPrefix(line, ": ") {
-			if separator := strings.IndexByte(line, ';'); separator >= 0 {
-				line = line[separator+1:]
-			}
-		}
+		line := adapter.HistoryCommand(scanner.Text())
 		command := normalizeHistoryCommand(line)
 		if command != "" {
 			counts[command]++

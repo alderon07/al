@@ -14,8 +14,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - macos-latest
-          - ubuntu-latest
+          - macos-14
+          - ubuntu-24.04
     runs-on: ${{ matrix.os }}
     steps:
       - name: Check out repository
@@ -25,5 +25,15 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Install Zsh on Ubuntu
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes zsh
+      - name: Record environment versions
+        run: |
+          go version
+          bash --version | head -1
+          zsh --version
+          uname -a
+          sw_vers || true
       - name: Check
         run: make check

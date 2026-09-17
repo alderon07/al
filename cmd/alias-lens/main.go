@@ -339,6 +339,7 @@ func aliasesHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func loadAliases() ([]Alias, error) {
+	adapter := activeShellAdapter()
 	path, err := aliasesPath()
 	if err != nil {
 		return nil, fmt.Errorf("find alias file: %w", err)
@@ -378,7 +379,7 @@ func loadAliases() ([]Alias, error) {
 			continue
 		}
 
-		name, command, ok := parseAliasDefinition(line)
+		name, command, ok := adapter.ParseAliasDefinition(line)
 		if !ok {
 			notes = nil
 			metadata = EntryMetadata{}
@@ -400,7 +401,7 @@ func loadAliases() ([]Alias, error) {
 		notes = nil
 		metadata = EntryMetadata{}
 	}
-	aliases = append(aliases, parseFunctions(string(contents))...)
+	aliases = append(aliases, adapter.ParseFunctions(string(contents))...)
 
 	sort.Slice(aliases, func(i, j int) bool { return strings.ToLower(aliases[i].Name) < strings.ToLower(aliases[j].Name) })
 	annotateUsage(aliases, loadHistoryCounts())
@@ -477,6 +478,10 @@ func shouldCheckExecutable(command string) bool {
 }
 
 func parseAliasDefinition(line string) (string, string, bool) {
+	return parseLegacyAliasDefinition(line)
+}
+
+func parseLegacyAliasDefinition(line string) (string, string, bool) {
 	trimmed := strings.TrimSpace(line)
 	if !strings.HasPrefix(trimmed, "alias ") {
 		return "", "", false

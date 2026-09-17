@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -17,10 +19,45 @@ type ShellAdapter interface {
 	DisplayName() string
 	AliasFilename() string
 	HistoryFilename() string
+	ValidateEntryName(name, kind string) error
+	ParseAliasDefinition(line string) (string, string, bool)
+	ParseFunctions(contents string) []Alias
+	RenderEntryDefinition(alias Alias) (string, error)
+	HistoryCommand(line string) string
+	HistoryUsageLine(line string, state *shellHistoryState) (string, time.Time, bool)
 	Integration() string
+	ExecutionSpec() shellExecutionSpec
+	PromptSpec() shellPromptSpec
+	BindingSpec() shellBindingSpec
+	CheckSyntax(path string) *aliasCheckFinding
+	StartupPaths(home, platform string) ([]string, error)
 	ConfigureStartup(home, platform, executableDir string) error
 	RemoveStartup(home, platform string) error
 	StartupStatus(home, platform string) (bool, string)
+}
+
+type shellHistoryState struct {
+	BashTime time.Time
+}
+
+type shellExecutionSpec struct {
+	DefinitionCommand string
+	ExecuteExpression string
+	HistoryCommand    string
+}
+
+type shellPromptSpec struct {
+	SelectionPrefix      string
+	NonEmptyPromptAction string
+}
+
+type shellBindingSpec struct {
+	Key                string
+	DisableEnvironment string
+}
+
+func parseHistoryUnix(value string) (int64, error) {
+	return strconv.ParseInt(value, 10, 64)
 }
 
 type bashShellAdapter struct{}
@@ -76,7 +113,7 @@ func loadShellEntry(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return shellEntryDefinition(alias)
+	return activeShellAdapter().RenderEntryDefinition(alias)
 }
 
 func loadAliasEntry(name string) (Alias, error) {
@@ -96,16 +133,7 @@ func loadAliasEntry(name string) (Alias, error) {
 }
 
 func shellEntryDefinition(alias Alias) (string, error) {
-	if !aliasName.MatchString(alias.Name) {
-		return "", fmt.Errorf("invalid alias name %q", alias.Name)
-	}
-	if alias.Type == "function" {
-		if !functionName.MatchString(alias.Name) {
-			return "", fmt.Errorf("invalid function name %q", alias.Name)
-		}
-		return fmt.Sprintf("%s() {\n%s\n}", alias.Name, alias.Command), nil
-	}
-	return "alias " + alias.Name + "=" + shellQuote(alias.Command), nil
+	return activeShellAdapter().RenderEntryDefinition(alias)
 }
 
 func aliasPathFor(adapter ShellAdapter) (string, error) {
@@ -133,17 +161,73 @@ func (bashShellAdapter) AliasFilename() string   { return ".bash_aliases" }
 func (bashShellAdapter) HistoryFilename() string { return ".bash_history" }
 func (bashShellAdapter) Integration() string     { return bashIntegration }
 
-func (bashShellAdapter) ConfigureStartup(home, platform, executableDir string) error {
+func (bashShellAdapter) ValidateEntryName(name, kind string) error {
+	return validateLegacyEntryName(name, kind)
+}
+
+func (bashShellAdapter) ParseAliasDefinition(line string) (string, string, bool) {
+	return parseLegacyAliasDefinition(line)
+}
+
+func (bashShellAdapter) ParseFunctions(contents string) []Alias {
+	return parseLegacyFunctions(contents)
+}
+
+func (adapter bashShellAdapter) RenderEntryDefinition(alias Alias) (string, error) {
+	return renderLegacyEntryDefinition(adapter, alias)
+}
+
+func (bashShellAdapter) HistoryCommand(line string) string { return line }
+
+func (bashShellAdapter) HistoryUsageLine(line string, state *shellHistoryState) (string, time.Time, bool) {
+	if strings.HasPrefix(line, "#") {
+		if unix, err := parseHistoryUnix(strings.TrimPrefix(line, "#")); err == nil {
+			state.BashTime = time.Unix(unix, 0)
+			return "", time.Time{}, true
+		}
+		return line, time.Time{}, false
+	}
+	eventTime := state.BashTime
+	state.BashTime = time.Time{}
+	return line, eventTime, false
+}
+
+func (bashShellAdapter) ExecutionSpec() shellExecutionSpec {
+	return shellExecutionSpec{DefinitionCommand: `alias-lens shell-entry "$name"`, ExecuteExpression: `builtin eval "$name"`, HistoryCommand: `builtin history -s "$name"`}
+}
+
+func (bashShellAdapter) PromptSpec() shellPromptSpec {
+	return shellPromptSpec{SelectionPrefix: "$ ", NonEmptyPromptAction: "clear-readline-buffer"}
+}
+
+func (bashShellAdapter) BindingSpec() shellBindingSpec {
+	return shellBindingSpec{Key: "Ctrl+G", DisableEnvironment: "ALIAS_LENS_NOBIND"}
+}
+
+func (bashShellAdapter) StartupPaths(home, platform string) ([]string, error) {
+	paths := []string{filepath.Join(home, ".bashrc")}
+	if platform != "darwin" {
+		return paths, nil
+	}
+	loginPath, err := bashLoginPath(home)
+	if err != nil {
+		return nil, err
+	}
+	return append(paths, loginPath), nil
+}
+
+func (adapter bashShellAdapter) ConfigureStartup(home, platform, executableDir string) error {
 	if err := configureStartupFile(filepath.Join(home, ".bashrc"), ".bash_aliases", bashAliasLoader, home, executableDir); err != nil {
 		return err
 	}
 	if platform != "darwin" {
 		return nil
 	}
-	loginPath, err := bashLoginPath(home)
+	paths, err := adapter.StartupPaths(home, platform)
 	if err != nil {
 		return err
 	}
+	loginPath := paths[1]
 	contents, err := os.ReadFile(loginPath)
 	if err != nil && !os.IsNotExist(err) {
 		return err
@@ -158,21 +242,21 @@ func (bashShellAdapter) ConfigureStartup(home, platform, executableDir string) e
 	return writeStartupFile(loginPath, contents, updated)
 }
 
-func (bashShellAdapter) RemoveStartup(home, platform string) error {
+func (adapter bashShellAdapter) RemoveStartup(home, platform string) error {
 	if err := removeStartupFileBlocks(filepath.Join(home, ".bashrc"), bashAliasLoader); err != nil {
 		return err
 	}
 	if platform != "darwin" {
 		return nil
 	}
-	loginPath, err := bashLoginPath(home)
+	paths, err := adapter.StartupPaths(home, platform)
 	if err != nil {
 		return err
 	}
-	return removeStartupFileBlocks(loginPath, bashLoginLoader)
+	return removeStartupFileBlocks(paths[1], bashLoginLoader)
 }
 
-func (bashShellAdapter) StartupStatus(home, platform string) (bool, string) {
+func (adapter bashShellAdapter) StartupStatus(home, platform string) (bool, string) {
 	bashrc, _ := os.ReadFile(filepath.Join(home, ".bashrc"))
 	if !hasActiveShellReference(bashrc, ".bash_aliases") {
 		return false, ".bashrc does not load .bash_aliases; run al setup bash"
@@ -180,10 +264,11 @@ func (bashShellAdapter) StartupStatus(home, platform string) (bool, string) {
 	if platform != "darwin" {
 		return true, ".bashrc loads .bash_aliases"
 	}
-	loginPath, err := bashLoginPath(home)
+	paths, err := adapter.StartupPaths(home, platform)
 	if err != nil {
 		return false, err.Error()
 	}
+	loginPath := paths[1]
 	login, _ := os.ReadFile(loginPath)
 	if !hasActiveShellReference(login, ".bashrc") && !hasActiveShellReference(login, ".bash_aliases") {
 		return false, filepath.Base(loginPath) + " does not load Bash aliases; run al setup bash"
@@ -197,27 +282,111 @@ func (zshShellAdapter) AliasFilename() string   { return ".zsh_aliases" }
 func (zshShellAdapter) HistoryFilename() string { return ".zsh_history" }
 func (zshShellAdapter) Integration() string     { return zshIntegration }
 
-func (zshShellAdapter) ConfigureStartup(home, _, executableDir string) error {
+func (zshShellAdapter) ValidateEntryName(name, kind string) error {
+	return validateLegacyEntryName(name, kind)
+}
+
+func (zshShellAdapter) ParseAliasDefinition(line string) (string, string, bool) {
+	return parseLegacyAliasDefinition(line)
+}
+
+func (zshShellAdapter) ParseFunctions(contents string) []Alias {
+	return parseLegacyFunctions(contents)
+}
+
+func (adapter zshShellAdapter) RenderEntryDefinition(alias Alias) (string, error) {
+	return renderLegacyEntryDefinition(adapter, alias)
+}
+
+func (zshShellAdapter) HistoryCommand(line string) string {
+	if strings.HasPrefix(line, ": ") {
+		if separator := strings.IndexByte(line, ';'); separator >= 0 {
+			return line[separator+1:]
+		}
+	}
+	return line
+}
+
+func (zshShellAdapter) HistoryUsageLine(line string, _ *shellHistoryState) (string, time.Time, bool) {
+	eventTime := time.Time{}
+	if strings.HasPrefix(line, ": ") {
+		if separator := strings.IndexByte(line, ';'); separator >= 0 {
+			metadata := strings.TrimPrefix(line[:separator], ": ")
+			stamp, _, _ := strings.Cut(metadata, ":")
+			if unix, err := parseHistoryUnix(stamp); err == nil {
+				eventTime = time.Unix(unix, 0)
+			}
+			line = line[separator+1:]
+		}
+	}
+	return line, eventTime, false
+}
+
+func (zshShellAdapter) ExecutionSpec() shellExecutionSpec {
+	return shellExecutionSpec{DefinitionCommand: `alias-lens shell-entry "$name"`, ExecuteExpression: `builtin eval "$name"`, HistoryCommand: `print -s -- "$name"`}
+}
+
+func (zshShellAdapter) PromptSpec() shellPromptSpec {
+	return shellPromptSpec{SelectionPrefix: "$ ", NonEmptyPromptAction: "zle-send-break"}
+}
+
+func (zshShellAdapter) BindingSpec() shellBindingSpec {
+	return shellBindingSpec{Key: "Ctrl+G", DisableEnvironment: "ALIAS_LENS_NOBIND"}
+}
+
+func (zshShellAdapter) StartupPaths(home, _ string) ([]string, error) {
 	path, err := zshStartupPath(home)
+	if err != nil {
+		return nil, err
+	}
+	return []string{path}, nil
+}
+
+func validateLegacyEntryName(name, kind string) error {
+	if !aliasName.MatchString(name) {
+		return fmt.Errorf("invalid alias name %q", name)
+	}
+	if kind == "function" && !functionName.MatchString(name) {
+		return fmt.Errorf("invalid function name %q", name)
+	}
+	return nil
+}
+
+func renderLegacyEntryDefinition(adapter ShellAdapter, alias Alias) (string, error) {
+	if err := adapter.ValidateEntryName(alias.Name, alias.Type); err != nil {
+		return "", err
+	}
+	if alias.Type == "function" {
+		return fmt.Sprintf("%s() {\n%s\n}", alias.Name, alias.Command), nil
+	}
+	return "alias " + alias.Name + "=" + shellQuote(alias.Command), nil
+}
+
+var _ ShellAdapter = bashShellAdapter{}
+var _ ShellAdapter = zshShellAdapter{}
+
+func (adapter zshShellAdapter) ConfigureStartup(home, platform, executableDir string) error {
+	paths, err := adapter.StartupPaths(home, platform)
 	if err != nil {
 		return err
 	}
-	return configureStartupFile(path, ".zsh_aliases", zshAliasLoader, home, executableDir)
+	return configureStartupFile(paths[0], ".zsh_aliases", zshAliasLoader, home, executableDir)
 }
 
-func (zshShellAdapter) RemoveStartup(home, _ string) error {
-	path, err := zshStartupPath(home)
+func (adapter zshShellAdapter) RemoveStartup(home, platform string) error {
+	paths, err := adapter.StartupPaths(home, platform)
 	if err != nil {
 		return err
 	}
-	return removeStartupFileBlocks(path, zshAliasLoader)
+	return removeStartupFileBlocks(paths[0], zshAliasLoader)
 }
 
-func (zshShellAdapter) StartupStatus(home, _ string) (bool, string) {
-	path, err := zshStartupPath(home)
+func (adapter zshShellAdapter) StartupStatus(home, platform string) (bool, string) {
+	paths, err := adapter.StartupPaths(home, platform)
 	if err != nil {
 		return false, err.Error()
 	}
+	path := paths[0]
 	zshrc, _ := os.ReadFile(path)
 	if !hasActiveShellReference(zshrc, ".zsh_aliases") {
 		return false, path + " does not load .zsh_aliases; run al setup zsh"

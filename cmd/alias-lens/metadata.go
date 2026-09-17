@@ -73,6 +73,10 @@ func normalizeCategory(value string) string {
 }
 
 func parseFunctions(contents string) []Alias {
+	return parseLegacyFunctions(contents)
+}
+
+func parseLegacyFunctions(contents string) []Alias {
 	lines := strings.Split(contents, "\n")
 	var functions []Alias
 	var notes []string
