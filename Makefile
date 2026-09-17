@@ -33,10 +33,10 @@ help:
 all: build
 
 fmt:
-	$(GOFMT) -w cmd/alias-lens/*.go
+	$(GOFMT) -w $$(find cmd internal -name '*.go' -type f)
 
 fmt-check:
-	@files="$$($(GOFMT) -l cmd/alias-lens/*.go)"; \
+	@files="$$($(GOFMT) -l $$(find cmd internal -name '*.go' -type f))"; \
 	if [ -n "$$files" ]; then \
 		printf 'Run make fmt on these files:\n%s\n' "$$files"; \
 		exit 1; \

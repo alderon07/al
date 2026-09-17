@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "entries": [
+    {
+      "id": "87f4d803c44a4d8792c4824f8e0bc3f1",
+      "name": "gs",
+      "kind": "command",
+      "tags": [
+        "daily",
+        "git"
+      ],
+      "platforms": [
+        "linux",
+        "wsl"
+      ],
+      "favorite": true,
+      "portable": {
+        "program": "git",
+        "args": [
+          "status",
+          "--short"
+        ],
+        "pass_arguments": true
+      }
+    }
+  ]
+}

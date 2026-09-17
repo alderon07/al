@@ -115,6 +115,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Review and approve the shell-neutral proposal before implementation.
 - [ ] Write and approve per-phase acceptance criteria and test mappings before implementation code.
   - [x] Approve phase 2 catalog model criteria before catalog code.
+  - [x] Implement the phase 2 pure catalog model, canonical codec, validation, comparison, and golden tests.
   - [x] Approve phase 3 shell adapter criteria in `docs/acceptance/SHELL_ADAPTER_PHASE_3.md`.
   - [x] Approve phase 4 shadow-mode criteria in `docs/acceptance/SHADOW_MODE_PHASE_4.md`.
 - [ ] Complete the phase 3 Bash and Zsh adapter refactor without behavior changes.
