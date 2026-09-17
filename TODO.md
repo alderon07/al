@@ -114,10 +114,13 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Write a safety-first shell-neutral catalog proposal before adding another shell.
 - [x] Review and approve the shell-neutral proposal before implementation.
 - [ ] Write and approve per-phase acceptance criteria and test mappings before implementation code.
+  - [x] Approve phase 2 catalog model criteria before catalog code.
   - [x] Approve phase 3 shell adapter criteria in `docs/acceptance/SHELL_ADAPTER_PHASE_3.md`.
+  - [x] Approve phase 4 shadow-mode criteria in `docs/acceptance/SHADOW_MODE_PHASE_4.md`.
 - [ ] Complete the phase 3 Bash and Zsh adapter refactor without behavior changes.
   - [x] Route rendering, parsing, history, syntax checks, startup discovery, and integration contracts through `ShellAdapter`.
   - [x] Pin integration output and CI shell environments.
   - [ ] Add PTY execution and key-binding coverage for Bash and Zsh.
   - [ ] Run the baseline-versus-candidate setup and command-output matrix.
   - [ ] Record the required WSL 2 terminal evidence.
+- [ ] Add phase 4 read-only shadow generation after phases 2 and 3 pass.

@@ -88,7 +88,7 @@ Every entry has a stable ID. A rename changes the name but keeps usage data and 
   "schema_version": 1,
   "entries": [
     {
-      "id": "87f4d803c44a4d87",
+      "id": "87f4d803c44a4d8792c4824f8e0bc3f1",
       "name": "gs",
       "kind": "command",
       "description": "Show repository status",
@@ -117,29 +117,29 @@ This restriction is intentional. An argument array can represent `git status --s
 
 The catalog validator rejects NUL bytes, newlines in names or executable paths, empty executable names, names invalid for any selected target shell, and entries over documented size limits. Empty arguments, Unicode, whitespace, quotes, leading dashes, and wildcard characters in arguments remain literal data. `pass_arguments: true` appends the caller's arguments exactly once, including an empty argument; `false` appends none. A matching native implementation takes precedence over a portable implementation for that shell. Platform exclusions prevent rendering and execution on excluded platforms.
 
-Each adapter renders portable commands with shell-native literal quoting and without evaluating catalog text. Invocation preserves the child process exit status and signal result. Executable resolution follows the target shell's documented command lookup, but a portable executable cannot resolve to an alias, function, or state-changing builtin. Acceptance tests must define the exact behavior for each supported shell rather than assume Bash and Zsh are equivalent.
+Each adapter renders portable commands with shell-native literal quoting and without evaluating catalog text. Invocation preserves the child process exit status and signal result. The model applies a versioned token denylist as a usability filter, but the adapter owns the safety boundary: it resolves the program to an external executable without shell lookup and rejects aliases, functions, builtins, reserved words, hashed commands, and paths supplied by catalog data. Acceptance tests must define the exact behavior for each supported shell rather than assume Bash and Zsh are equivalent.
 
 ### Native implementations
 
-An entry can define native source when portable execution cannot preserve its behavior:
+An entry can define a structured native implementation when portable execution cannot preserve its behavior:
 
 ```json
 {
-  "id": "f98010ca0aa84af6",
+  "id": "f98010ca0aa84af69fd4df32ec91726b",
   "name": "cproj",
   "kind": "function",
   "native": {
     "bash": {
-      "source": "cproj() { cd \"$HOME/code/projects/$1\"; }"
+      "function_body": "cd \"$HOME/code/projects/$1\""
     },
-    "fish": {
-      "source": "function cproj; cd \"$HOME/code/projects/$argv[1]\"; end"
+    "zsh": {
+      "function_body": "cd \"$HOME/code/projects/$1\""
     }
   }
 }
 ```
 
-Native source is not an unrestricted startup-file fragment. An adapter must parse it as exactly one inert alias or function declaration. The declared kind and name must match the entry, and no leading command, trailing command, declaration redirection, definition-time command substitution, or other top-level side effect is allowed. Alias definitions are rendered from a parsed literal value rather than copied as opaque source. Function storage should contain a validated body or structured representation, not an arbitrary file fragment.
+A native implementation is not an unrestricted startup-file fragment. A command entry stores exactly one `alias_value`. A function entry stores exactly one `function_body`. The adapter supplies the declared name, delimiters, and complete native declaration. The model rejects a generic source field and a field that does not match the entry kind. Only an adapter has enough shell grammar knowledge to reject an imported whole declaration, leading or trailing top-level commands, declaration redirection, and unsafe definition-time expansion. The adapter parses an accepted declaration into this structure without executing it, then renders the structure with the entry's validated name and kind.
 
 Alias Lens must not infer a missing native implementation from another shell's source. The TUI will label the missing implementation and block execution on that shell. A newly synced or changed native implementation remains inactive until the user reviews and accepts it locally. Import, validation, rendering, preview, sync, and startup tests use sentinels to prove that native content cannot cause a top-level side effect.
 
@@ -175,7 +175,7 @@ The current global Bash-shaped parser, writer, syntax checker, history reader, e
 
 ## Generated files and startup integration
 
-Each successful render creates an immutable generated file named by a generation hash. The generation hash covers the rendered bytes, shell identifier, and renderer format version. A generated file begins with a warning and records the generation hash, source catalog hash, shell, renderer version, platform, and native-approval input used to build it:
+Each successful render creates an immutable generated file named by a generation hash. The generation hash is SHA-256 over an unsigned 64-bit big-endian length-framed sequence containing renderer ID (`bash/v1` or `zsh/v1`), platform, the native-approval input hash as 32 raw digest bytes, and rendered definition-body bytes, in that order. The body excludes the generated-file header, which prevents a circular hash. For renderer `bash/v1`, platform `linux`, the raw SHA-256 digest of empty bytes as the approval hash, and body bytes `# body\n`, the generation hash is `06fc5ce2f0aaa98290cf5ceecb582c406e0b4249606891779927bcf8f86bc205`. A generated file begins with a warning and records the generation hash, source catalog hash, shell, renderer version, platform, and native-approval input used to build it:
 
 ```text
 # Generated by Alias Lens. Do not edit.
