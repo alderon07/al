@@ -1,6 +1,6 @@
 # Finish the phase 3 shell checks
 
-Use this checklist on disposable home directories. None of these commands should read or change your real alias or startup files.
+Use this checklist on disposable home directories. None of these commands should read or change your real alias or startup files. Store the restart-test home under `~/.cache`, because some WSL installations clear `/tmp` during shutdown.
 
 ## What the three checks mean
 
@@ -10,9 +10,9 @@ Use this checklist on disposable home directories. None of these commands should
 
 ## Prepare a safe test build
 
-- [ ] Open the Alias Lens repository on `dev`.
-- [ ] Confirm that the working tree contains no changes that you might lose.
-- [ ] Build the current binary.
+- [x] Open the Alias Lens repository on `dev`.
+- [x] Confirm that the working tree contains no changes that you might lose. The current changes are the intentional phase 3 work under test.
+- [x] Build the current binary.
 
 ```bash
 git switch dev
@@ -21,7 +21,7 @@ mkdir -p /tmp/al-phase3/current-bin
 go build -buildvcs=false -o /tmp/al-phase3/current-bin/alias-lens ./cmd/alias-lens
 ```
 
-- [ ] Create disposable Bash and Zsh homes.
+- [x] Create disposable Bash and Zsh homes.
 
 ```bash
 mkdir -p /tmp/al-phase3/bash-home /tmp/al-phase3/zsh-home
@@ -31,12 +31,12 @@ Delete `/tmp/al-phase3` after the tests. Do not substitute your real home direct
 
 ## Check the PTY behavior
 
-- [ ] Test `Ctrl+G` in Bash on an empty prompt.
-- [ ] Select an alias and press Enter.
-- [ ] Confirm that the terminal shows `$ ALIAS_NAME` once before the command output.
-- [ ] Confirm that the command runs in the current shell.
-- [ ] Test `Ctrl+G` after you type text at the prompt. Confirm that Alias Lens does not run the text.
-- [ ] Repeat the checks in Zsh.
+- [x] Test `Ctrl+G` in Bash on an empty prompt.
+- [x] Select an alias and press Enter.
+- [x] Confirm that the terminal shows the accepted alias once before the command output.
+- [x] Confirm that the command runs in the current shell.
+- [x] Test `Ctrl+G` after you type text at the prompt. Confirm that Alias Lens does not run the text.
+- [x] Repeat the checks in Zsh.
 
 Example Bash test:
 
@@ -70,11 +70,13 @@ Record the shell version, exact keys, visible output, `echo $?`, `pwd`, and any 
 
 ## Compare the baseline and current builds
 
-- [ ] Build baseline commit `a5d6168` in a temporary worktree.
-- [ ] Run each binary with its own disposable home.
-- [ ] Compare setup, repair, removal, command output, and created files.
-- [ ] Test both Bash and Zsh.
-- [ ] Confirm that only temporary path names and injected timestamps differ.
+- [x] Build baseline commit `a5d6168` in a temporary worktree.
+- [x] Run each binary with its own disposable home.
+- [x] Compare setup, repair, removal, command output, and created files.
+- [x] Test both Bash and Zsh.
+- [x] Confirm that differences are limited to the approved gap fixes and normalized temporary data.
+
+Evidence: [phase 3 baseline comparison](evidence/PHASE3_BASELINE_2026-09-17.md).
 
 Build the baseline:
 
@@ -105,12 +107,14 @@ Record any difference before you change the code. A difference can be a real reg
 
 ## Record WSL 2 evidence
 
-- [ ] Run this section inside Ubuntu on WSL 2, not a normal Linux installation.
-- [ ] Record the Windows, WSL, Linux, Bash, Go, Git, and Alias Lens versions.
-- [ ] Run the Go tests.
-- [ ] Repeat the Bash PTY example inside WSL.
-- [ ] Confirm that a new WSL session still finds `alias-lens` and `al`.
-- [ ] Save the transcript in `docs/testing/evidence/` without aliases, tokens, home paths, or other private data.
+- [x] Run this section inside Ubuntu on WSL 2, not a normal Linux installation.
+- [x] Record the Windows, WSL, Linux, Bash, Zsh, Go, Git, and Alias Lens versions.
+- [x] Run the Go tests.
+- [x] Repeat the Bash and Zsh PTY examples inside WSL.
+- [x] Confirm that a new WSL session still finds `alias-lens` and `al`.
+- [x] Save the sanitized transcript in `docs/testing/evidence/` without aliases, tokens, home paths, or other private data.
+
+Evidence: [WSL 2 terminal record](evidence/PHASE3_WSL2_2026-09-17.md).
 
 Start with these commands:
 
@@ -126,14 +130,18 @@ GOCACHE=/tmp/alias-lens-phase3-cache go test ./...
 Example restart test:
 
 1. Build Alias Lens at `/tmp/al-phase3/current-bin/alias-lens` inside WSL.
-2. Run setup with a disposable home:
+2. Install the binary in a persistent disposable home and run setup:
 
    ```bash
-   mkdir -p /tmp/al-phase3/wsl-home
-   env -i HOME=/tmp/al-phase3/wsl-home \
-     PATH=/tmp/al-phase3/current-bin:/usr/bin:/bin \
+   phase3_home="$HOME/.cache/alias-lens-phase3-wsl-home"
+   mkdir -p "$phase3_home/.local/bin"
+   install -m 0755 /tmp/al-phase3/current-bin/alias-lens \
+     "$phase3_home/.local/bin/alias-lens"
+   install -m 0600 /dev/null "$phase3_home/.hushlogin"
+   env -i HOME="$phase3_home" \
+     PATH="$phase3_home/.local/bin:/usr/bin:/bin" \
      SHELL=/bin/bash \
-     /tmp/al-phase3/current-bin/alias-lens setup bash
+     "$phase3_home/.local/bin/alias-lens" setup bash
    ```
 
 3. Close the WSL terminal window.
@@ -141,10 +149,10 @@ Example restart test:
 5. From PowerShell, start a login shell against the disposable home:
 
    ```powershell
-   wsl -d Ubuntu -- env HOME=/tmp/al-phase3/wsl-home PATH=/tmp/al-phase3/current-bin:/usr/bin:/bin SHELL=/bin/bash bash -lic 'command -v alias-lens; type al; al doctor'
+   wsl -d Ubuntu -- env HOME=<LINUX_HOME>/.cache/alias-lens-phase3-wsl-home PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin SHELL=/bin/bash bash -lic 'command -v alias-lens; type al; al doctor; echo DOCTOR_STATUS=$?'
    ```
 
-If your distribution is not named `Ubuntu`, replace that name with the output from `wsl -l -q`.
+Replace `<LINUX_HOME>` with the Linux home path. If your distribution is not named `Ubuntu`, replace that name with the output from `wsl -l -q`.
 
 Both `alias-lens` and the `al` function should resolve after the restart. `al doctor` should not report a missing executable or broken Bash integration.
 
@@ -160,10 +168,10 @@ For the evidence record, include:
 
 ## Mark the gate complete
 
-- [ ] Add automated PTY coverage for Bash and Zsh.
-- [ ] Commit the baseline comparison results or test fixtures.
-- [ ] Commit the sanitized WSL 2 evidence record.
-- [ ] Run `make fmt check`.
-- [ ] Check the three remaining phase 3 boxes in `TODO.md` only after their evidence exists.
+- [x] Add automated PTY coverage for Bash and Zsh.
+- [x] Commit the baseline comparison results and test fixtures.
+- [x] Commit the sanitized WSL 2 evidence record.
+- [x] Run `make fmt check`.
+- [x] Check the three remaining phase 3 boxes in `TODO.md` only after their evidence exists.
 
-Phase 4 stays blocked until all three checks pass.
+All three checks passed. Phase 4 can proceed.

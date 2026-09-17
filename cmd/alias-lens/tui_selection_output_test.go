@@ -40,3 +40,15 @@ func TestDirectAliasSelectionIsNotPrintedTwice(t *testing.T) {
 		t.Fatalf("direct output was duplicated: stdout=%q terminal=%q", stdout.String(), terminal.String())
 	}
 }
+
+func TestPromptAcceptedSelectionIsNotPrintedTwice(t *testing.T) {
+	t.Setenv("ALIAS_LENS_PROMPT_ACCEPT", "1")
+	var stdout bytes.Buffer
+	var terminal bytes.Buffer
+
+	writeAliasSelection(&stdout, &terminal, "bad", false)
+
+	if stdout.String() != "bad\n" || terminal.Len() != 0 {
+		t.Fatalf("prompt-accepted output was duplicated: stdout=%q terminal=%q", stdout.String(), terminal.String())
+	}
+}

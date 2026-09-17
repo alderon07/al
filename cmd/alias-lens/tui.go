@@ -129,7 +129,7 @@ func runTUI() {
 }
 
 func writeAliasSelection(stdout, terminal io.Writer, name string, stdoutIsTerminal bool) {
-	if terminal != nil && !stdoutIsTerminal {
+	if terminal != nil && !stdoutIsTerminal && os.Getenv("ALIAS_LENS_PROMPT_ACCEPT") == "" {
 		fmt.Fprintf(terminal, "$ %s\n", name)
 	}
 	fmt.Fprintln(stdout, name)

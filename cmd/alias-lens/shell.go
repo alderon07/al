@@ -206,7 +206,7 @@ func (bashShellAdapter) BindingSpec() shellBindingSpec {
 
 func (bashShellAdapter) StartupPaths(home, platform string) ([]string, error) {
 	paths := []string{filepath.Join(home, ".bashrc")}
-	if platform != "darwin" {
+	if !bashLoginStartupSupported(platform) {
 		return paths, nil
 	}
 	loginPath, err := bashLoginPath(home)
@@ -220,7 +220,7 @@ func (adapter bashShellAdapter) ConfigureStartup(home, platform, executableDir s
 	if err := configureStartupFile(filepath.Join(home, ".bashrc"), ".bash_aliases", bashAliasLoader, home, executableDir); err != nil {
 		return err
 	}
-	if platform != "darwin" {
+	if !bashLoginStartupSupported(platform) {
 		return nil
 	}
 	paths, err := adapter.StartupPaths(home, platform)
@@ -246,14 +246,15 @@ func (adapter bashShellAdapter) RemoveStartup(home, platform string) error {
 	if err := removeStartupFileBlocks(filepath.Join(home, ".bashrc"), bashAliasLoader); err != nil {
 		return err
 	}
-	if platform != "darwin" {
+	if !bashLoginStartupSupported(platform) {
 		return nil
 	}
-	paths, err := adapter.StartupPaths(home, platform)
-	if err != nil {
-		return err
+	for _, name := range []string{".bash_profile", ".bash_login", ".profile"} {
+		if err := removeStartupFileBlocks(filepath.Join(home, name), bashLoginLoader); err != nil {
+			return err
+		}
 	}
-	return removeStartupFileBlocks(paths[1], bashLoginLoader)
+	return nil
 }
 
 func (adapter bashShellAdapter) StartupStatus(home, platform string) (bool, string) {
@@ -261,7 +262,7 @@ func (adapter bashShellAdapter) StartupStatus(home, platform string) (bool, stri
 	if !hasActiveShellReference(bashrc, ".bash_aliases") {
 		return false, ".bashrc does not load .bash_aliases; run al setup bash"
 	}
-	if platform != "darwin" {
+	if !bashLoginStartupSupported(platform) {
 		return true, ".bashrc loads .bash_aliases"
 	}
 	paths, err := adapter.StartupPaths(home, platform)
@@ -273,7 +274,7 @@ func (adapter bashShellAdapter) StartupStatus(home, platform string) (bool, stri
 	if !hasActiveShellReference(login, ".bashrc") && !hasActiveShellReference(login, ".bash_aliases") {
 		return false, filepath.Base(loginPath) + " does not load Bash aliases; run al setup bash"
 	}
-	return true, ".bashrc and the Bash login file load aliases"
+	return true, ".bashrc and " + filepath.Base(loginPath) + " load aliases"
 }
 
 func (zshShellAdapter) Name() string            { return "zsh" }
@@ -420,6 +421,10 @@ func bashLoginPath(home string) (string, error) {
 		}
 	}
 	return filepath.Join(home, ".bash_profile"), nil
+}
+
+func bashLoginStartupSupported(platform string) bool {
+	return platform == "darwin" || platform == "linux"
 }
 
 func ensureStartupFileLoads(path, aliasFilename, block string) error {
@@ -623,20 +628,28 @@ al() {
   fi
   command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens "$@"
 }
-_alias_lens_launch() {
+_alias_lens_prepare_readline() {
+  bind '"\C-x\C-a":abort'
   if [ -n "${READLINE_LINE-}" ]; then
     READLINE_LINE=""
     READLINE_POINT=0
     return
   fi
   _alias_lens_flush_history 2>/dev/null || true
-  local _alias_lens_name
-  _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens)" || return
+  local _alias_lens_name _alias_lens_definition
+  _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" ALIAS_LENS_PROMPT_ACCEPT=1 alias-lens)" || return
   [ -z "$_alias_lens_name" ] && return
-  _alias_lens_execute "$_alias_lens_name"
+  _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
+  builtin eval "$_alias_lens_definition" || return
+  command env ALIAS_LENS_SHELL=bash alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+  READLINE_LINE="$_alias_lens_name"
+  READLINE_POINT=${#READLINE_LINE}
+  bind '"\C-x\C-a":accept-line'
 }
 if [ -z "${ALIAS_LENS_NOBIND-}" ]; then
-  bind -x '"\C-g":_alias_lens_launch'
+  bind '"\C-x\C-a":abort'
+  bind -x '"\C-x\C-g":_alias_lens_prepare_readline'
+  bind '"\C-g":"\C-x\C-g\C-x\C-a"'
 fi
 command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens watch --ensure >/dev/null 2>&1
 `
@@ -688,13 +701,15 @@ _alias_lens_launch() {
     return
   fi
   _alias_lens_flush_history 2>/dev/null || true
-  local _alias_lens_name _alias_lens_status
-  _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens)" || return
+  local _alias_lens_name _alias_lens_definition
+  _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" ALIAS_LENS_PROMPT_ACCEPT=1 alias-lens)" || return
   [[ -z "$_alias_lens_name" ]] && return
-  _alias_lens_execute "$_alias_lens_name"
-  _alias_lens_status=$?
-  zle reset-prompt
-  return "$_alias_lens_status"
+  _alias_lens_definition="$(command env ALIAS_LENS_SHELL=zsh alias-lens shell-entry "$_alias_lens_name")" || return
+  builtin eval "$_alias_lens_definition" || return
+  command env ALIAS_LENS_SHELL=zsh alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+  BUFFER="$_alias_lens_name"
+  CURSOR=${#BUFFER}
+  zle accept-line
 }
 if [[ -z "${ALIAS_LENS_NOBIND-}" ]]; then
   zle -N _alias_lens_launch

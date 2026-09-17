@@ -169,12 +169,13 @@ blocks. --remove removes only the Alias Lens integration. It keeps aliases,
 configuration, revisions, and repositories.
 Set ALIAS_LENS_NOBIND=1 before the integration loads to disable the binding.
 Pass a shell name to override detection.
-Bash uses ~/.bash_aliases and ~/.bashrc; Zsh uses ~/.zsh_aliases and ~/.zshrc.
+Bash uses ~/.bash_aliases, ~/.bashrc, and the existing login file. Zsh uses
+~/.zsh_aliases and ~/.zshrc.
 Setup adds a binary installed under the home directory to the shell's PATH.
-This keeps Alias Lens available after a WSL restart. On macOS, Bash login-shell
-precedence is preserved. Files are backed up before editing, and missing alias
-files are created with mode 0600. In an interactive terminal, Alias Lens
-explains optional developer aliases and asks before adding them.
+This keeps Alias Lens available after a WSL restart. Bash login-file precedence
+is preserved on Linux, WSL, and macOS. Files are backed up before editing, and
+missing alias files are created with mode 0600. In an interactive terminal,
+Alias Lens explains optional developer aliases and asks before adding them.
 Fish, PowerShell, and Command Prompt are not supported.
 `,
 	"repo": `Usage:

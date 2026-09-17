@@ -194,7 +194,7 @@ func TestAdapterPathMatrix(t *testing.T) {
 		t.Fatalf("Bash history path = %q", got)
 	}
 	paths, err := bash.StartupPaths(home, "linux")
-	if err != nil || len(paths) != 1 || paths[0] != filepath.Join(home, ".bashrc") {
+	if err != nil || len(paths) != 2 || paths[0] != filepath.Join(home, ".bashrc") || paths[1] != filepath.Join(home, ".bash_profile") {
 		t.Fatalf("Bash startup paths = %#v, %v", paths, err)
 	}
 
@@ -263,6 +263,15 @@ func TestBashSetupKeepsUserBinaryOnPathAfterRestart(t *testing.T) {
 	if !strings.Contains(string(output), shim) || !strings.Contains(string(output), "al is a function") {
 		t.Fatalf("new shell did not load the binary and al function:\n%s", output)
 	}
+	loginCommand := exec.Command("bash", "--login", "-c", `command -v alias-lens; type al`)
+	loginCommand.Env = append(os.Environ(), "HOME="+home, "PATH=/usr/bin:/bin")
+	loginOutput, err := loginCommand.CombinedOutput()
+	if err != nil {
+		t.Fatalf("new Bash login shell cannot find alias-lens: %v\n%s", err, loginOutput)
+	}
+	if !strings.Contains(string(loginOutput), shim) || !strings.Contains(string(loginOutput), "al is a function") {
+		t.Fatalf("new login shell did not load the binary and al function:\n%s", loginOutput)
+	}
 }
 
 func TestSetupRemoveKeepsAliasesAndUnrelatedBashSettings(t *testing.T) {
@@ -280,7 +289,15 @@ func TestSetupRemoveKeepsAliasesAndUnrelatedBashSettings(t *testing.T) {
 	if err := os.WriteFile(bashrcPath, []byte(bashrc), 0o640); err != nil {
 		t.Fatal(err)
 	}
+	profilePath := filepath.Join(home, ".profile")
+	userProfile := "export LANG=C\n"
+	if err := os.WriteFile(profilePath, []byte(userProfile+bashLoginLoader), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
+	if err := runSetupCommand([]string{"--remove", "bash"}); err != nil {
+		t.Fatal(err)
+	}
 	if err := runSetupCommand([]string{"--remove", "bash"}); err != nil {
 		t.Fatal(err)
 	}
@@ -307,6 +324,10 @@ func TestSetupRemoveKeepsAliasesAndUnrelatedBashSettings(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o640 {
 		t.Fatalf("setup removal changed Bash file mode: %v", info.Mode().Perm())
+	}
+	updatedProfile, err := os.ReadFile(profilePath)
+	if err != nil || string(updatedProfile) != userProfile {
+		t.Fatalf("setup removal changed unrelated Bash login settings: %q, %v", updatedProfile, err)
 	}
 }
 
@@ -443,6 +464,9 @@ func TestZshIntegrationExecutesAliasName(t *testing.T) {
 	}
 	if !strings.Contains(zshIntegration, `bindkey '^G' _alias_lens_launch`) {
 		t.Fatal("Zsh integration does not install the ZLE key binding")
+	}
+	if !strings.Contains(zshIntegration, `ALIAS_LENS_PROMPT_ACCEPT=1`) || !strings.Contains(zshIntegration, `BUFFER="$_alias_lens_name"`) || !strings.Contains(zshIntegration, `zle accept-line`) {
+		t.Fatal("Zsh picker selections are not accepted as native command lines")
 	}
 	if !strings.Contains(zshIntegration, `ALIAS_LENS_NOBIND`) || !strings.Contains(zshIntegration, `[[ -n "$BUFFER" ]]`) {
 		t.Fatal("Zsh binding cannot be disabled or preserve Ctrl+G on a non-empty prompt")

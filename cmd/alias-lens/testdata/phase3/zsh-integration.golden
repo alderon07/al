@@ -45,13 +45,15 @@ _alias_lens_launch() {
     return
   fi
   _alias_lens_flush_history 2>/dev/null || true
-  local _alias_lens_name _alias_lens_status
-  _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens)" || return
+  local _alias_lens_name _alias_lens_definition
+  _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" ALIAS_LENS_PROMPT_ACCEPT=1 alias-lens)" || return
   [[ -z "$_alias_lens_name" ]] && return
-  _alias_lens_execute "$_alias_lens_name"
-  _alias_lens_status=$?
-  zle reset-prompt
-  return "$_alias_lens_status"
+  _alias_lens_definition="$(command env ALIAS_LENS_SHELL=zsh alias-lens shell-entry "$_alias_lens_name")" || return
+  builtin eval "$_alias_lens_definition" || return
+  command env ALIAS_LENS_SHELL=zsh alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+  BUFFER="$_alias_lens_name"
+  CURSOR=${#BUFFER}
+  zle accept-line
 }
 if [[ -z "${ALIAS_LENS_NOBIND-}" ]]; then
   zle -N _alias_lens_launch

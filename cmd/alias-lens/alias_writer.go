@@ -318,7 +318,7 @@ func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) err
 		if err := saveRevision(path, contents); err != nil {
 			return fmt.Errorf("save revision: %w", err)
 		}
-		if err := os.WriteFile(path+".alias-lens.bak", contents, mode); err != nil {
+		if err := writePrivateBackup(path+".alias-lens.bak", contents); err != nil {
 			return fmt.Errorf("create backup: %w", err)
 		}
 	}
@@ -353,6 +353,27 @@ func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) err
 		return err
 	}
 	return nil
+}
+
+func writePrivateBackup(path string, contents []byte) error {
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".alias-lens-backup-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0o600); err != nil {
+		temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(contents); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	return os.Rename(temporaryPath, path)
 }
 
 func relationKey(command string) string {

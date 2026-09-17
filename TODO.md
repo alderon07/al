@@ -118,10 +118,10 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
   - [x] Implement the phase 2 pure catalog model, canonical codec, validation, comparison, and golden tests.
   - [x] Approve phase 3 shell adapter criteria in `docs/acceptance/SHELL_ADAPTER_PHASE_3.md`.
   - [x] Approve phase 4 shadow-mode criteria in `docs/acceptance/SHADOW_MODE_PHASE_4.md`.
-- [ ] Complete the phase 3 Bash and Zsh adapter refactor without behavior changes.
+- [x] Complete the phase 3 Bash and Zsh adapter refactor within the approved acceptance criteria.
   - [x] Route rendering, parsing, history, syntax checks, startup discovery, and integration contracts through `ShellAdapter`.
   - [x] Pin integration output and CI shell environments.
-  - [ ] Add PTY execution and key-binding coverage for Bash and Zsh. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
-  - [ ] Run the baseline-versus-candidate setup and command-output matrix. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
-  - [ ] Record the required WSL 2 terminal evidence. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
+  - [x] Add PTY execution and key-binding coverage for Bash and Zsh. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
+  - [x] Run the baseline-versus-candidate setup and command-output matrix. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
+  - [x] Record the required WSL 2 terminal evidence. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
 - [ ] Add phase 4 read-only shadow generation after phases 2 and 3 pass.

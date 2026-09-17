@@ -25,11 +25,15 @@ func TestParseAliasDefinitionRejectsUnsafeExecutableName(t *testing.T) {
 	}
 }
 
-func TestAddAliasPlacesRelatedCommandsTogetherAndCreatesBackup(t *testing.T) {
+func TestAddAliasPlacesRelatedCommandsTogetherAndCreatesPrivateBackup(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, ".bash_aliases")
 	original := "alias gst='git stash'\n\nalias gp='git push'\n"
 	if err := os.WriteFile(path, []byte(original), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	backupPath := path + ".alias-lens.bak"
+	if err := os.WriteFile(backupPath, []byte("stale backup\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -44,12 +48,19 @@ func TestAddAliasPlacesRelatedCommandsTogetherAndCreatesBackup(t *testing.T) {
 	if strings.Index(updated, "alias gst=") > strings.Index(updated, "alias gstc=") || strings.Index(updated, "alias gstc=") > strings.Index(updated, "alias gp=") {
 		t.Fatalf("related alias was not inserted beside git stash:\n%s", updated)
 	}
-	backup, err := os.ReadFile(path + ".alias-lens.bak")
+	backup, err := os.ReadFile(backupPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if string(backup) != original {
 		t.Fatal("backup did not preserve the original file")
+	}
+	backupInfo, err := os.Stat(backupPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if backupInfo.Mode().Perm() != 0o600 {
+		t.Fatalf("backup mode = %o, want 600", backupInfo.Mode().Perm())
 	}
 }
 
@@ -428,7 +439,7 @@ func TestBashLoaderSetupIsIdempotent(t *testing.T) {
 	}
 }
 
-func TestLinuxAndWSLSetupUseBashrc(t *testing.T) {
+func TestLinuxAndWSLSetupCoverInteractiveAndLoginShells(t *testing.T) {
 	home := t.TempDir()
 	if err := (bashShellAdapter{}).ConfigureStartup(home, "linux", ""); err != nil {
 		t.Fatal(err)
@@ -436,8 +447,9 @@ func TestLinuxAndWSLSetupUseBashrc(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(home, ".bashrc")); err != nil {
 		t.Fatal("Linux setup did not create .bashrc")
 	}
-	if _, err := os.Stat(filepath.Join(home, ".bash_profile")); !os.IsNotExist(err) {
-		t.Fatal("Linux setup should not create .bash_profile")
+	profile, err := os.ReadFile(filepath.Join(home, ".bash_profile"))
+	if err != nil || !strings.Contains(string(profile), ".bashrc") || !strings.Contains(string(profile), "BASH_VERSION") {
+		t.Fatal("Linux login profile does not safely load .bashrc")
 	}
 }
 
@@ -475,24 +487,28 @@ func TestMacBashSetupPreservesProfileThatLoadsBashrc(t *testing.T) {
 	}
 }
 
-func TestMacBashSetupUsesExistingLoginFilePrecedence(t *testing.T) {
-	home := t.TempDir()
-	profilePath := filepath.Join(home, ".profile")
-	if err := os.WriteFile(profilePath, []byte("export EDITOR=vi\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(filepath.Join(home, ".bash_profile")); !os.IsNotExist(err) {
-		t.Fatal("setup created .bash_profile and shadowed an existing .profile")
-	}
-	contents, err := os.ReadFile(profilePath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(contents), "BASH_VERSION") || !strings.Contains(string(contents), ".bashrc") {
-		t.Fatal("existing .profile did not receive a Bash-only .bashrc loader")
+func TestBashSetupUsesExistingLoginFilePrecedence(t *testing.T) {
+	for _, platform := range []string{"darwin", "linux"} {
+		t.Run(platform, func(t *testing.T) {
+			home := t.TempDir()
+			profilePath := filepath.Join(home, ".profile")
+			if err := os.WriteFile(profilePath, []byte("export EDITOR=vi\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := (bashShellAdapter{}).ConfigureStartup(home, platform, ""); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := os.Stat(filepath.Join(home, ".bash_profile")); !os.IsNotExist(err) {
+				t.Fatal("setup created .bash_profile and shadowed an existing .profile")
+			}
+			contents, err := os.ReadFile(profilePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(contents), "BASH_VERSION") || !strings.Contains(string(contents), ".bashrc") {
+				t.Fatal("existing .profile did not receive a Bash-only .bashrc loader")
+			}
+		})
 	}
 }
 
@@ -655,8 +671,11 @@ func TestBashIntegrationExecutesAliasNameInsteadOfCommandText(t *testing.T) {
 	if !strings.Contains(bashIntegration, `alias-lens pick --execute "$@"`) {
 		t.Fatal("al use does not request the selected alias")
 	}
-	if !strings.Contains(bashIntegration, `ALIAS_LENS_NOBIND`) || !strings.Contains(bashIntegration, `[ -n "${READLINE_LINE-}" ]`) {
+	if !strings.Contains(bashIntegration, `ALIAS_LENS_NOBIND`) || !strings.Contains(bashIntegration, `[ -n "${READLINE_LINE-}" ]`) || !strings.Contains(bashIntegration, `bind -x '"\C-x\C-g":_alias_lens_prepare_readline'`) || !strings.Contains(bashIntegration, `bind '"\C-g":"\C-x\C-g\C-x\C-a"'`) {
 		t.Fatal("Bash binding cannot be disabled or preserve Ctrl+G on a non-empty prompt")
+	}
+	if !strings.Contains(bashIntegration, `ALIAS_LENS_PROMPT_ACCEPT=1`) || !strings.Contains(bashIntegration, `READLINE_LINE="$_alias_lens_name"`) || !strings.Contains(bashIntegration, `accept-line`) {
+		t.Fatal("Bash picker selections are not accepted as native command lines")
 	}
 }
 

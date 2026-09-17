@@ -42,19 +42,27 @@ al() {
   fi
   command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens "$@"
 }
-_alias_lens_launch() {
+_alias_lens_prepare_readline() {
+  bind '"\C-x\C-a":abort'
   if [ -n "${READLINE_LINE-}" ]; then
     READLINE_LINE=""
     READLINE_POINT=0
     return
   fi
   _alias_lens_flush_history 2>/dev/null || true
-  local _alias_lens_name
-  _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens)" || return
+  local _alias_lens_name _alias_lens_definition
+  _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" ALIAS_LENS_PROMPT_ACCEPT=1 alias-lens)" || return
   [ -z "$_alias_lens_name" ] && return
-  _alias_lens_execute "$_alias_lens_name"
+  _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
+  builtin eval "$_alias_lens_definition" || return
+  command env ALIAS_LENS_SHELL=bash alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+  READLINE_LINE="$_alias_lens_name"
+  READLINE_POINT=${#READLINE_LINE}
+  bind '"\C-x\C-a":accept-line'
 }
 if [ -z "${ALIAS_LENS_NOBIND-}" ]; then
-  bind -x '"\C-g":_alias_lens_launch'
+  bind '"\C-x\C-a":abort'
+  bind -x '"\C-x\C-g":_alias_lens_prepare_readline'
+  bind '"\C-g":"\C-x\C-g\C-x\C-a"'
 fi
 command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens watch --ensure >/dev/null 2>&1
