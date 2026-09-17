@@ -63,6 +63,7 @@ Keep shell behavior behind `ShellAdapter`. Bash owns `.bash_aliases`, `.bash_his
 - Keep error messages actionable. Name the command that fixes the problem.
 - Add tests for parsers, filesystem writes, Git path isolation, credential handling, and migrations.
 - Use temporary directories in tests. Tests must never read or modify real shell alias files or the configured dotfiles repository.
+- Always write acceptance criteria before writing any code.
 
 ## Verify a change
 
