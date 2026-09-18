@@ -164,7 +164,7 @@ func runStatsCommand(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	if !plain && fileIsTerminal(os.Stdout) {
+	if !plain && !terminalIsDumb() && fileIsTerminal(os.Stdout) {
 		return runStatsTUI(data, period, now)
 	}
 	if len(rows) == 0 {

@@ -10,6 +10,8 @@ import (
 
 var aliasName = regexp.MustCompile(`^[A-Za-z0-9_.-]+$`)
 
+var atomicWriteBeforeRename func(string) error
+
 func addAlias(name, command, description string) error {
 	return addAliasWithMetadata(name, command, description, EntryMetadata{})
 }
@@ -346,13 +348,22 @@ func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) err
 		temporary.Close()
 		return err
 	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
 	if err := temporary.Close(); err != nil {
 		return err
+	}
+	if atomicWriteBeforeRename != nil {
+		if err := atomicWriteBeforeRename(writePath); err != nil {
+			return err
+		}
 	}
 	if err := os.Rename(temporaryPath, writePath); err != nil {
 		return err
 	}
-	return nil
+	return syncDirectory(filepath.Dir(writePath))
 }
 
 func writePrivateBackup(path string, contents []byte) error {
@@ -370,10 +381,58 @@ func writePrivateBackup(path string, contents []byte) error {
 		temporary.Close()
 		return err
 	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	return os.Rename(temporaryPath, path)
+	if atomicWriteBeforeRename != nil {
+		if err := atomicWriteBeforeRename(path); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	return syncDirectory(filepath.Dir(path))
+}
+
+func writeFileAtomically(path string, contents []byte, mode os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".alias-lens-atomic-*")
+	if err != nil {
+		return err
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(mode); err != nil {
+		temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(contents); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if atomicWriteBeforeRename != nil {
+		if err := atomicWriteBeforeRename(path); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	return syncDirectory(filepath.Dir(path))
 }
 
 func relationKey(command string) string {

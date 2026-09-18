@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -327,7 +328,10 @@ func saveTheme(theme Theme) error {
 		return err
 	}
 	directory := filepath.Join(home, ".config", "alias-lens")
-	if err := os.MkdirAll(directory, 0o755); err != nil {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return err
+	}
+	if err := os.Chmod(directory, 0o700); err != nil {
 		return err
 	}
 	selection := struct {
@@ -338,7 +342,7 @@ func saveTheme(theme Theme) error {
 		return err
 	}
 	contents = append(contents, '\n')
-	return os.WriteFile(filepath.Join(directory, "theme.json"), contents, 0o644)
+	return writeFileAtomically(filepath.Join(directory, "theme.json"), contents, 0o600)
 }
 
 func nextTheme(current string) Theme {
@@ -356,9 +360,22 @@ func nextTheme(current string) Theme {
 
 func runThemeCommand(arguments []string) error {
 	if len(arguments) > 1 {
-		return fmt.Errorf("usage: al theme [PRESET]")
+		return fmt.Errorf("usage: al theme [PRESET|--check]")
 	}
 	if len(arguments) == 1 {
+		if arguments[0] == "--check" {
+			theme, err := loadTheme()
+			if err != nil {
+				return err
+			}
+			textRatio := themeContrast(theme.Text, theme.Background)
+			controlRatio := themeContrast(theme.Accent, theme.Background)
+			fmt.Printf("%s: text %.2f:1, controls %.2f:1\n", theme.Name, textRatio, controlRatio)
+			if textRatio < 4.5 || controlRatio < 3 {
+				return fmt.Errorf("theme contrast is below WCAG AA; run al theme phosphor")
+			}
+			return nil
+		}
 		name, ok := canonicalThemeName(arguments[0])
 		if !ok {
 			return fmt.Errorf("unknown theme %q; run al theme to list available presets", arguments[0])
@@ -382,4 +399,31 @@ func runThemeCommand(arguments []string) error {
 		fmt.Printf("%s %-14s %s\n", marker, theme.Preset, theme.Name)
 	}
 	return nil
+}
+
+func themeContrast(left, right string) float64 {
+	luminance := func(value string) float64 {
+		if len(value) != 7 || value[0] != '#' {
+			return 0
+		}
+		channels := make([]float64, 3)
+		for index := range channels {
+			parsed, err := strconv.ParseUint(value[1+index*2:3+index*2], 16, 8)
+			if err != nil {
+				return 0
+			}
+			channel := float64(parsed) / 255
+			if channel <= 0.04045 {
+				channels[index] = channel / 12.92
+			} else {
+				channels[index] = math.Pow((channel+0.055)/1.055, 2.4)
+			}
+		}
+		return 0.2126*channels[0] + 0.7152*channels[1] + 0.0722*channels[2]
+	}
+	first, second := luminance(left), luminance(right)
+	if first < second {
+		first, second = second, first
+	}
+	return (first + 0.05) / (second + 0.05)
 }

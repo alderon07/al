@@ -611,6 +611,9 @@ al() {
     local _alias_lens_name
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens)" || return
     [ -z "$_alias_lens_name" ] && return
+    case "$_alias_lens_name" in
+      __alias_lens_edit__:*) printf 'Selected %s. Use Ctrl+G from an empty prompt to edit it.\n' "${_alias_lens_name#__alias_lens_edit__:}" >&2; return ;;
+    esac
     _alias_lens_execute "$_alias_lens_name"
     return $?
   fi
@@ -623,6 +626,7 @@ al() {
     local _alias_lens_name
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens pick --execute "$@")" || return
     [ -z "$_alias_lens_name" ] && return
+    case "$_alias_lens_name" in __alias_lens_edit__:*) printf 'Selected %s. Use Ctrl+G from an empty prompt to edit it.\n' "${_alias_lens_name#__alias_lens_edit__:}" >&2; return ;; esac
     _alias_lens_execute "$_alias_lens_name"
     return $?
   fi
@@ -639,12 +643,18 @@ _alias_lens_prepare_readline() {
   local _alias_lens_name _alias_lens_definition
   _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" ALIAS_LENS_PROMPT_ACCEPT=1 alias-lens)" || return
   [ -z "$_alias_lens_name" ] && return
+  local _alias_lens_edit=0
+  case "$_alias_lens_name" in
+    __alias_lens_edit__:*) _alias_lens_edit=1; _alias_lens_name="${_alias_lens_name#__alias_lens_edit__:}" ;;
+  esac
   _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
   builtin eval "$_alias_lens_definition" || return
-  command env ALIAS_LENS_SHELL=bash alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
   READLINE_LINE="$_alias_lens_name"
   READLINE_POINT=${#READLINE_LINE}
-  bind '"\C-x\C-a":accept-line'
+  if [ "$_alias_lens_edit" -eq 0 ]; then
+    command env ALIAS_LENS_SHELL=bash alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+    bind '"\C-x\C-a":accept-line'
+  fi
 }
 if [ -z "${ALIAS_LENS_NOBIND-}" ]; then
   bind '"\C-x\C-a":abort'
@@ -678,6 +688,10 @@ al() {
     local _alias_lens_name
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens)" || return
     [[ -z "$_alias_lens_name" ]] && return
+    if [[ "$_alias_lens_name" == __alias_lens_edit__:* ]]; then
+      print -u2 -- "Selected ${_alias_lens_name#__alias_lens_edit__:}. Use Ctrl+G from an empty prompt to edit it."
+      return
+    fi
     _alias_lens_execute "$_alias_lens_name"
     return $?
   fi
@@ -690,6 +704,10 @@ al() {
     local _alias_lens_name
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" alias-lens pick --execute "$@")" || return
     [[ -z "$_alias_lens_name" ]] && return
+    if [[ "$_alias_lens_name" == __alias_lens_edit__:* ]]; then
+      print -u2 -- "Selected ${_alias_lens_name#__alias_lens_edit__:}. Use Ctrl+G from an empty prompt to edit it."
+      return
+    fi
     _alias_lens_execute "$_alias_lens_name"
     return $?
   fi
@@ -704,12 +722,19 @@ _alias_lens_launch() {
   local _alias_lens_name _alias_lens_definition
   _alias_lens_name="$(command env ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.zsh_history}" ALIAS_LENS_PROMPT_ACCEPT=1 alias-lens)" || return
   [[ -z "$_alias_lens_name" ]] && return
+  local _alias_lens_edit=0
+  if [[ "$_alias_lens_name" == __alias_lens_edit__:* ]]; then
+    _alias_lens_edit=1
+    _alias_lens_name="${_alias_lens_name#__alias_lens_edit__:}"
+  fi
   _alias_lens_definition="$(command env ALIAS_LENS_SHELL=zsh alias-lens shell-entry "$_alias_lens_name")" || return
   builtin eval "$_alias_lens_definition" || return
-  command env ALIAS_LENS_SHELL=zsh alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
   BUFFER="$_alias_lens_name"
   CURSOR=${#BUFFER}
-  zle accept-line
+  if (( !_alias_lens_edit )); then
+    command env ALIAS_LENS_SHELL=zsh alias-lens record-use "$_alias_lens_name" >/dev/null 2>&1
+    zle accept-line
+  fi
 }
 if [[ -z "${ALIAS_LENS_NOBIND-}" ]]; then
   zle -N _alias_lens_launch

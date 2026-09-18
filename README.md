@@ -82,13 +82,15 @@ al setup --remove
 
 Removal keeps your aliases, Alias Lens configuration, revisions, and sync repositories.
 
-Alias Lens is available under the [MIT License](LICENSE).
+See [Local data and privacy](docs/PRIVACY.md) for every file Alias Lens creates and the commands that remove usage data or revisions.
+
+Alias Lens is available under the [Apache License 2.0](LICENSE).
 
 ## Find the shortcut before you forget it
 
 Open Alias Lens with `Ctrl+G` or run `al`. Search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.
 
-The idle screen brings useful aliases back into view. Select one and press `Enter` to run it in the current shell. New and edited aliases work without restarting the shell.
+The idle screen brings useful aliases back into view. Select one and press `Enter` to run it in the current shell. Press `Tab` to return the alias to the prompt without running it, then edit it or add arguments. New and edited aliases work without restarting the shell.
 
 Use the CLI when you already know what you want:
 
@@ -106,6 +108,7 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | --- | --- |
 | `↑` and `↓` | Select an alias |
 | `Enter` | Run the selected alias |
+| `Tab` | Return the selected alias to the prompt without running it |
 | `Ctrl+A` | Add an alias |
 | `Ctrl+E` | Edit the selected alias |
 | `Ctrl+D` | Delete the selected alias after confirmation |
@@ -177,6 +180,15 @@ al export aliases --format yaml
 al export stats --format csv --period week --output weekly-aliases.csv
 ```
 
+Preview aliases before you import them:
+
+```bash
+al import ~/Downloads/aliases.sh
+al import ~/Downloads/aliases.sh --apply
+```
+
+The preview reports syntax errors, duplicate names, duplicate commands, conflicts, skipped aliases, and every planned addition. `--apply` stops on a syntax error or name conflict. It adds the accepted aliases in one backed-up write.
+
 ## Catch broken aliases before they catch you
 
 Run the checker without sourcing or executing the alias file:
@@ -197,6 +209,7 @@ Open the theme picker with `Ctrl+T`, or choose a theme by name:
 ```bash
 al theme
 al theme tokyo-night
+al theme --check
 ```
 
 Moving through the picker previews each theme. Press `Enter` to save it or `Esc` to keep the previous theme.
@@ -265,6 +278,16 @@ The `.alias-lens.bak` file beside your alias file contains the latest backup.
 - History, revisions, conflict copies, and exports stay on your computer.
 - Git sync pushes only the active alias file and files that you chose with `al track`.
 - Secret scans run before every remote push.
+
+Inspect or clear local data without removing aliases or configuration:
+
+```bash
+al data paths
+al data clear-usage
+al data clear-revisions
+```
+
+Alias Lens honors `NO_COLOR`. If `TERM=dumb`, it prints a plain alias list instead of starting the interactive interface. See [Local data and privacy](docs/PRIVACY.md) for file contents, permissions, and removal steps.
 
 ## Fix a strange installation
 

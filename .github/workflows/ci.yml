@@ -10,6 +10,15 @@ permissions:
   contents: read
 
 jobs:
+  vulnerability-scan:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-file: go.mod
+          go-package: ./...
+
   test:
     strategy:
       matrix:
@@ -37,3 +46,44 @@ jobs:
           sw_vers || true
       - name: Check
         run: make check
+
+  shadow-ubuntu:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install Zsh
+        run: sudo apt-get update && sudo apt-get install --yes zsh
+      - name: Record shadow environment
+        run: |
+          go version
+          bash --version | head -1
+          zsh --version
+          uname -a
+      - name: Run Linux shadow matrix
+        run: go test ./cmd/alias-lens -run '^TestShadow(LinuxMatrix|NeverExecutes|Validator|ReadOnly|ShellSelection|Nonblocking|RawSecret|Ambiguous|Generation)' -count=1
+
+  shadow-macos:
+    runs-on: macos-14
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Record shadow environment
+        run: |
+          go version
+          bash --version | head -1
+          zsh --version
+          uname -a
+          sw_vers
+      - name: Run macOS shadow matrix
+        run: go test ./cmd/alias-lens -run '^TestShadow(MacOSMatrix|NeverExecutes|Validator|ReadOnly|ShellSelection|Nonblocking|RawSecret|Ambiguous|Generation)' -count=1

@@ -12,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 var (
@@ -73,9 +74,13 @@ type model struct {
 	tracked         []trackedFileItem
 	trackedRepo     string
 	trackedErr      string
+	autoSyncEnabled bool
+	syncInterval    int
+	primarySync     trackedFileItem
 	selectMode      bool
 	executeMode     bool
 	selected        *Alias
+	editSelection   bool
 	cursorHidden    bool
 	terminalBlurred bool
 }
@@ -96,6 +101,10 @@ func runTUI() {
 		fmt.Fprintf(os.Stderr, "Could not read %s: %v\n", aliasDisplayPath(), err)
 		return
 	}
+	if terminalIsDumb() {
+		printPlainAliasList(os.Stderr, aliases, "")
+		return
+	}
 	theme, themeErr := loadTheme()
 	status := ""
 	if themeErr != nil {
@@ -113,7 +122,11 @@ func runTUI() {
 		terminal = openedTerminal
 		terminalOutput = terminal
 		defer terminal.Close()
-		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
+		renderer := lipgloss.NewRenderer(terminal)
+		if noColorRequested() {
+			renderer.SetColorProfile(termenv.Ascii)
+		}
+		lipgloss.SetDefaultRenderer(renderer)
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
@@ -124,9 +137,15 @@ func runTUI() {
 	}
 	selected, ok := finished.(model)
 	if ok && selected.selected != nil {
-		writeAliasSelection(os.Stdout, terminalOutput, selected.selected.Name, stdoutIsTerminal)
+		if selected.editSelection {
+			writeAliasEditSelection(os.Stdout, terminalOutput, selected.selected.Name, stdoutIsTerminal)
+		} else {
+			writeAliasSelection(os.Stdout, terminalOutput, selected.selected.Name, stdoutIsTerminal)
+		}
 	}
 }
+
+const editSelectionPrefix = "__alias_lens_edit__:"
 
 func writeAliasSelection(stdout, terminal io.Writer, name string, stdoutIsTerminal bool) {
 	if terminal != nil && !stdoutIsTerminal && os.Getenv("ALIAS_LENS_PROMPT_ACCEPT") == "" {
@@ -135,10 +154,27 @@ func writeAliasSelection(stdout, terminal io.Writer, name string, stdoutIsTermin
 	fmt.Fprintln(stdout, name)
 }
 
+func writeAliasEditSelection(stdout, terminal io.Writer, name string, stdoutIsTerminal bool) {
+	if os.Getenv("ALIAS_LENS_PROMPT_ACCEPT") != "" {
+		fmt.Fprintln(stdout, editSelectionPrefix+name)
+		return
+	}
+	if terminal != nil && !stdoutIsTerminal {
+		fmt.Fprintf(terminal, "$ %s\n", name)
+	}
+	if stdoutIsTerminal {
+		fmt.Fprintln(stdout, name)
+	}
+}
+
 func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 	aliases, err := loadAliases()
 	if err != nil {
 		return err
+	}
+	if terminalIsDumb() {
+		printPlainAliasList(os.Stderr, aliases, query)
+		return nil
 	}
 	theme, _ := loadTheme()
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
@@ -152,7 +188,11 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 		terminal = openedTerminal
 		terminalOutput = terminal
 		defer terminal.Close()
-		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
+		renderer := lipgloss.NewRenderer(terminal)
+		if noColorRequested() {
+			renderer.SetColorProfile(termenv.Ascii)
+		}
+		lipgloss.SetDefaultRenderer(renderer)
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
@@ -167,6 +207,8 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 	}
 	if commandOnly {
 		fmt.Println(selected.selected.Command)
+	} else if selected.editSelection && executeSelection {
+		fmt.Println(editSelectionPrefix + selected.selected.Name)
 	} else if executeSelection {
 		writeAliasSelection(os.Stdout, terminalOutput, selected.selected.Name, stdoutIsTerminal)
 	} else {
@@ -321,10 +363,11 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.query = m.query[:len(m.query)-size]
 				m.cursor = 0
 			}
-		case tea.KeyEnter:
+		case tea.KeyTab, tea.KeyEnter:
 			if len(matches) > 0 {
 				selected := matches[m.cursor]
-				if m.executeMode && isDangerousCommand(selected.Command) {
+				m.editSelection = message.Type == tea.KeyTab
+				if !m.editSelection && m.executeMode && isDangerousCommand(selected.Command) {
 					m.runConfirm = &selected
 					return m, nil
 				}
@@ -343,6 +386,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
+	if message := smallTerminalMessage(m.width, m.height); message != "" {
+		return message
+	}
 	width := max(48, m.width)
 	height := max(18, m.height)
 	contentWidth := max(40, min(width-8, 108))
@@ -433,7 +479,7 @@ func (m model) View() string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  F2 stats  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
+	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  tab edit at prompt  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  F2 stats  ·  ^t themes  ·  ^f sync  ·  ^h health  ·  esc quit")
 	if contentWidth < 96 {
 		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  F2 stats  ·  ? help  ·  esc quit")
 	}
@@ -443,9 +489,9 @@ func (m model) View() string {
 			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
 		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("enter ") + cyanStyle("execute") + dimStyle.Render("  ·  F2 stats  ·  ? help  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("execute") + dimStyle.Render("  ·  tab edit  ·  F2 stats  ·  ? help  ·  esc quit")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  F2 stats  ·  ^t themes  ·  ^f files  ·  ^h health  ·  esc quit")
+			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  F2 stats  ·  ^t themes  ·  ^f sync  ·  ^h health  ·  esc quit")
 		}
 	}
 	if m.status != "" {
@@ -564,13 +610,14 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 		{"Type", "Search names, commands, and descriptions"},
 		{"↑↓ / PgUp PgDn", "Move through results"},
 		{"Enter", enterAction},
+		{"Tab", "Return the alias to the prompt for editing"},
 		{"Ctrl+A", "Add an alias"},
 		{"Ctrl+E", "Edit description, command, or name"},
 		{"Ctrl+D", "Delete an alias after confirmation"},
 		{"Ctrl+Z", "Browse and restore private revisions"},
 		{"F2 / Ctrl+S", "Open alias usage stats"},
 		{"Ctrl+H", "Show aliases with health issues"},
-		{"Ctrl+F", "Show files enrolled in sync"},
+		{"Ctrl+F", "Open sync status and tracked files"},
 		{"Ctrl+G", "Commit alias changes locally"},
 		{"Ctrl+T", "Choose a theme with live preview"},
 		{"Ctrl+R", "Reload aliases and theme settings"},
@@ -727,10 +774,31 @@ func (m model) refreshTrackedFiles() model {
 		m.tracked = nil
 		m.trackedRepo = ""
 		m.trackedErr = err.Error()
+		m.autoSyncEnabled = false
+		m.syncInterval = 0
+		m.primarySync = trackedFileItem{}
 		return m
 	}
 	m.trackedRepo = config.Repository
 	m.trackedErr = ""
+	m.autoSyncEnabled = config.AutoSync.Enabled
+	m.syncInterval = config.AutoSync.IntervalSeconds
+	primarySource, pathErr := aliasesPath()
+	if pathErr != nil {
+		primarySource = aliasDisplayPath()
+	}
+	primaryRepositoryPath := config.AliasFile
+	if config.Repository == "" {
+		primaryRepositoryPath = ""
+	}
+	m.primarySync = trackedFileItem{Config: TrackedFileConfig{Source: primarySource, RepositoryPath: primaryRepositoryPath}}
+	if pathErr != nil {
+		m.primarySync.Error = pathErr.Error()
+	} else if state, stateErr := loadSyncState(); stateErr != nil {
+		m.primarySync.Error = stateErr.Error()
+	} else {
+		m.primarySync.State = state
+	}
 	m.tracked = make([]trackedFileItem, 0, len(config.TrackedFiles))
 	for _, tracked := range config.TrackedFiles {
 		item := trackedFileItem{Config: tracked}
@@ -756,7 +824,15 @@ func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 	case tea.KeyCtrlR:
 		m = m.refreshTrackedFiles()
-		m.status = fmt.Sprintf("Reloaded %d tracked files", len(m.tracked))
+		m.status = "Sync status refreshed"
+	case tea.KeyCtrlG:
+		message, err := syncRepository(false)
+		m = m.refreshTrackedFiles()
+		if err != nil {
+			m.status = err.Error()
+		} else {
+			m.status = message
+		}
 	case tea.KeyUp:
 		if m.cursor > 0 {
 			m.cursor--
@@ -779,8 +855,17 @@ func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) trackedFilesView(width, height, contentWidth int, header string) string {
 	var body strings.Builder
-	body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("TRACKED CONFIG FILES"))
-	body.WriteString(dimStyle.Render(fmt.Sprintf("  %d enrolled", len(m.tracked))))
+	body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("SYNC STATUS"))
+	autoLabel := "AUTO OFF"
+	autoColor := mutedColor
+	if m.autoSyncEnabled {
+		autoLabel = "AUTO ON"
+		autoColor = acidColor
+	}
+	body.WriteString("  " + lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(autoColor).Padding(0, 1).Render(autoLabel))
+	if m.autoSyncEnabled && m.syncInterval > 0 {
+		body.WriteString(dimStyle.Render(fmt.Sprintf("  every %ds", m.syncInterval)))
+	}
 	body.WriteByte('\n')
 	if m.trackedRepo == "" {
 		body.WriteString(dimStyle.Render("Repository: not configured"))
@@ -790,11 +875,18 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 	body.WriteString("\n\n")
 
 	if m.trackedErr != "" {
-		body.WriteString(lipgloss.NewStyle().Foreground(coralColor).Render(wrapText("Could not load tracked files: "+m.trackedErr, contentWidth)))
-	} else if len(m.tracked) == 0 {
-		body.WriteString(titleStyle.Render("No extra config files are tracked."))
-		body.WriteString("\n" + dimStyle.Render("Add one with ") + cyanStyle("al track PATH") + dimStyle.Render(". "+aliasDisplayPath()+" remains the primary file."))
+		body.WriteString(lipgloss.NewStyle().Foreground(coralColor).Render(wrapText("Could not load sync status: "+m.trackedErr, contentWidth)))
 	} else {
+		body.WriteString(titleStyle.Render("PRIMARY ALIAS FILE"))
+		body.WriteString("\n" + renderTrackedFile(m.primarySync, false, contentWidth))
+		body.WriteString("\n\n" + lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("EXTRA TRACKED FILES"))
+		body.WriteString(dimStyle.Render(fmt.Sprintf("  %d enrolled", len(m.tracked))))
+		body.WriteString("\n")
+		if len(m.tracked) == 0 {
+			body.WriteString(dimStyle.Render("None. Add one with ") + cyanStyle("al track PATH") + dimStyle.Render("."))
+		}
+	}
+	if m.trackedErr == "" && len(m.tracked) > 0 {
 		cursor := min(m.cursor, len(m.tracked)-1)
 		visible := m.trackedVisibleCount()
 		start := 0
@@ -813,7 +905,7 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  ctrl+r refresh  ·  ctrl+f or esc aliases  ·  ctrl+c quit")
+	footer := dimStyle.Render("↑↓ move  ·  ctrl+g save to repo  ·  ctrl+r refresh  ·  ctrl+f or esc aliases  ·  ctrl+c quit")
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
@@ -821,7 +913,7 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 
-func (m model) trackedVisibleCount() int { return max(1, (m.height-12)/5) }
+func (m model) trackedVisibleCount() int { return max(1, (m.height-21)/5) }
 
 func renderTrackedFile(item trackedFileItem, active bool, width int) string {
 	cardWidth := max(34, width-3)
@@ -830,6 +922,9 @@ func renderTrackedFile(item trackedFileItem, active bool, width int) string {
 		marker = "▶ "
 	}
 	status := defaultString(item.State.Status, "waiting")
+	if item.Config.RepositoryPath == "" {
+		status = "not set"
+	}
 	if item.Error != "" {
 		status = "error"
 	}
@@ -844,13 +939,20 @@ func renderTrackedFile(item trackedFileItem, active bool, width int) string {
 	}
 	statusBadge := lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(statusColor).Padding(0, 1).Render(strings.ToUpper(status))
 	lineOne := aliasStyle.Render(marker+compactHomePath(item.Config.Source)) + "  " + statusBadge
-	lineTwo := cyanStyle("↳ repo/") + lipgloss.NewStyle().Foreground(inkColor).Render(truncate(filepath.ToSlash(item.Config.RepositoryPath), cardWidth-10))
+	lineTwo := dimStyle.Render("No repository configured")
+	if item.Config.RepositoryPath != "" {
+		lineTwo = cyanStyle("↳ repo/") + lipgloss.NewStyle().Foreground(inkColor).Render(truncate(filepath.ToSlash(item.Config.RepositoryPath), cardWidth-10))
+	}
 	detail := item.State.Message
 	if item.Error != "" {
 		detail = item.Error
 	}
 	if detail == "" {
-		detail = "Waiting for the first sync cycle"
+		if item.Config.RepositoryPath == "" {
+			detail = "Configure a repository with al repo"
+		} else {
+			detail = "Waiting for the first sync cycle"
+		}
 	}
 	lineThree := dimStyle.Render(wrapText(detail, cardWidth-6))
 	if !item.State.UpdatedAt.IsZero() {
@@ -1285,6 +1387,9 @@ func acidStyle(value string) string { return lipgloss.NewStyle().Foreground(acid
 func cyanStyle(value string) string { return lipgloss.NewStyle().Foreground(cyanColor).Render(value) }
 
 func applyTheme(theme Theme) {
+	if noColorRequested() {
+		lipgloss.SetColorProfile(termenv.Ascii)
+	}
 	acidColor = lipgloss.Color(theme.Accent)
 	cyanColor = lipgloss.Color(theme.Secondary)
 	coralColor = lipgloss.Color(theme.Git)
@@ -1358,11 +1463,19 @@ func truncate(value string, width int) string {
 	if width <= 1 {
 		return ""
 	}
-	runes := []rune(value)
-	if len(runes) <= width {
+	if lipgloss.Width(value) <= width {
 		return value
 	}
-	return string(runes[:width-1]) + "…"
+	limit := width - lipgloss.Width("…")
+	var result strings.Builder
+	for _, character := range value {
+		candidate := result.String() + string(character)
+		if lipgloss.Width(candidate) > limit {
+			break
+		}
+		result.WriteRune(character)
+	}
+	return result.String() + "…"
 }
 
 func wrapText(value string, width int) string {
@@ -1374,9 +1487,10 @@ func wrapText(value string, width int) string {
 		return ""
 	}
 	var lines []string
-	line := words[0]
+	line := truncate(words[0], width)
 	for _, word := range words[1:] {
-		if utf8.RuneCountInString(line)+1+utf8.RuneCountInString(word) <= width {
+		word = truncate(word, width)
+		if lipgloss.Width(line)+1+lipgloss.Width(word) <= width {
 			line += " " + word
 			continue
 		}
@@ -1388,11 +1502,33 @@ func wrapText(value string, width int) string {
 }
 
 func padRight(value string, width int) string {
-	runeCount := utf8.RuneCountInString(value)
-	if runeCount >= width {
+	cellWidth := lipgloss.Width(value)
+	if cellWidth >= width {
 		return truncate(value, width)
 	}
-	return value + strings.Repeat(" ", width-runeCount)
+	return value + strings.Repeat(" ", width-cellWidth)
+}
+
+func noColorRequested() bool { return os.Getenv("NO_COLOR") != "" }
+
+func terminalIsDumb() bool { return strings.EqualFold(strings.TrimSpace(os.Getenv("TERM")), "dumb") }
+
+func smallTerminalMessage(width, height int) string {
+	if width > 0 && height > 0 && (width < 48 || height < 18) {
+		return fmt.Sprintf("Alias Lens needs at least 48 columns and 18 rows. Current terminal: %dx%d.\n", width, height)
+	}
+	return ""
+}
+
+func printPlainAliasList(output io.Writer, aliases []Alias, query string) {
+	needle := strings.ToLower(strings.TrimSpace(query))
+	for _, alias := range aliases {
+		if needle != "" && !strings.Contains(strings.ToLower(alias.Name+" "+alias.Command+" "+alias.Description), needle) {
+			continue
+		}
+		fmt.Fprintf(output, "%s\t%s\n", alias.Name, alias.Command)
+	}
+	fmt.Fprintln(output, "Use 'al search QUERY' for non-interactive search.")
 }
 
 func matchSummary(start, end, total int) string {

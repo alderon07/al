@@ -251,6 +251,17 @@ esac
 		t.Fatalf("%s executed a stale definition: %v", shellName, err)
 	}
 
+	if err := os.WriteFile(selectionPath, []byte(editSelectionPrefix+"ok\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	editOffset := session.mark()
+	session.pressCtrlGAndPause()
+	if output := session.output.stringFrom(editOffset); strings.Contains(output, "PTY_OK") {
+		t.Fatalf("%s executed a Tab selection before prompt acceptance:\n%s", shellName, output)
+	}
+	session.write("\x15\n")
+	session.waitFor(editOffset, ptyPrompt)
+
 	usage, err := os.ReadFile(filepath.Join(home, "usage"))
 	if err != nil {
 		t.Fatal(err)

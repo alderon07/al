@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -15,7 +14,7 @@ func configureRepository(path string) error {
 	if err != nil {
 		return err
 	}
-	if output, err := exec.Command("git", "-C", absolute, "rev-parse", "--is-inside-work-tree").CombinedOutput(); err != nil {
+	if output, err := gitOutput("-C", absolute, "rev-parse", "--is-inside-work-tree"); err != nil {
 		return fmt.Errorf("%s is not a Git repository: %s", absolute, strings.TrimSpace(string(output)))
 	}
 	config, err := loadConfig()
@@ -146,8 +145,8 @@ func pullRepository() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if output, err := exec.Command("git", "-C", config.Repository, "pull", "--ff-only").CombinedOutput(); err != nil {
-		return "", fmt.Errorf("git pull failed without changing aliases: %s", strings.TrimSpace(string(output)))
+	if output, err := gitOutput("-C", config.Repository, "pull", "--ff-only"); err != nil {
+		return "", fmt.Errorf("git pull failed without changing aliases: %s; retry with al sync --pull", strings.TrimSpace(string(output)))
 	}
 	local, err := os.ReadFile(source)
 	if err != nil {
@@ -197,7 +196,7 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 	if filepath.IsAbs(relative) || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("alias_file must stay inside the configured repository")
 	}
-	if output, err := exec.Command("git", "-C", config.Repository, "rev-parse", "--is-inside-work-tree").CombinedOutput(); err != nil {
+	if output, err := gitOutput("-C", config.Repository, "rev-parse", "--is-inside-work-tree"); err != nil {
 		return "", fmt.Errorf("configured repository is unavailable: %s", strings.TrimSpace(string(output)))
 	}
 
@@ -217,19 +216,19 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(target, contents, 0o644); err != nil {
+		if err := writeFileAtomically(target, contents, 0o644); err != nil {
 			return "", err
 		}
-		if output, err := exec.Command("git", "-C", config.Repository, "add", "--", relative).CombinedOutput(); err != nil {
+		if output, err := gitOutput("-C", config.Repository, "add", "--", relative); err != nil {
 			return "", fmt.Errorf("git add failed: %s", strings.TrimSpace(string(output)))
 		}
-		if output, err := exec.Command("git", "-C", config.Repository, "commit", "--only", "-m", "Update shell aliases", "--", relative).CombinedOutput(); err != nil {
+		if output, err := gitOutput("-C", config.Repository, "commit", "--only", "-m", "Update shell aliases", "--", relative); err != nil {
 			return "", fmt.Errorf("git commit failed: %s", strings.TrimSpace(string(output)))
 		}
 	}
 	if push {
-		if output, err := exec.Command("git", "-C", config.Repository, "push").CombinedOutput(); err != nil {
-			return "", fmt.Errorf("git push failed: %s", strings.TrimSpace(string(output)))
+		if output, err := gitOutput("-C", config.Repository, "push"); err != nil {
+			return "", fmt.Errorf("git push failed: %s; retry with al sync --push", strings.TrimSpace(string(output)))
 		}
 		return "Aliases committed and pushed", nil
 	}

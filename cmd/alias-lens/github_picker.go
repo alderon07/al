@@ -23,6 +23,7 @@ type repoPickerModel struct {
 	height   int
 	result   string
 	busy     bool
+	ctx      context.Context
 }
 
 type repoConfiguredMsg struct {
@@ -31,6 +32,8 @@ type repoConfiguredMsg struct {
 }
 
 func runRepoPicker(only string) error {
+	ctx, cancel := interruptContext()
+	defer cancel()
 	config, err := loadConfig()
 	if err != nil {
 		return err
@@ -39,16 +42,20 @@ func runRepoPicker(only string) error {
 	var repos []RemoteRepo
 	var warnings []string
 	if only != "" {
-		provider, config, err = connectRepoProvider(context.Background(), config, only)
+		provider, config, err = connectRepoProvider(ctx, config, only)
 		if err != nil {
 			return err
 		}
-		repos, err = provider.List(context.Background())
+		listContext, stopList := context.WithTimeout(ctx, repositoryCommandTimeout)
+		repos, err = provider.List(listContext)
+		stopList()
 		if err != nil {
 			return fmt.Errorf("no repositories available\n%s: %w", provider.Label(), err)
 		}
 	} else {
-		repos, warnings = listRemoteRepositories(context.Background(), config, "")
+		listContext, stopList := context.WithTimeout(ctx, repositoryCommandTimeout)
+		repos, warnings = listRemoteRepositories(listContext, config, "")
+		stopList()
 	}
 	if len(repos) == 0 {
 		if len(warnings) > 0 {
@@ -58,7 +65,7 @@ func runRepoPicker(only string) error {
 	}
 	theme, _ := loadTheme()
 	applyTheme(theme)
-	program := tea.NewProgram(repoPickerModel{repos: repos, config: config, provider: provider, warnings: warnings, width: 80, height: 24}, tea.WithAltScreen())
+	program := tea.NewProgram(repoPickerModel{repos: repos, config: config, provider: provider, warnings: warnings, width: 80, height: 24, ctx: ctx}, tea.WithAltScreen())
 	finished, err := program.Run()
 	if err != nil {
 		return err
@@ -104,7 +111,7 @@ func (m repoPickerModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyEnter:
 			if len(filtered) > 0 {
 				m.busy = true
-				return m, cloneAndConfigureCmd(m.config, m.provider, filtered[m.cursor])
+				return m, cloneAndConfigureCmd(m.ctx, m.config, m.provider, filtered[m.cursor])
 			}
 		case tea.KeyRunes:
 			m.query += string(message.Runes)
@@ -115,6 +122,9 @@ func (m repoPickerModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m repoPickerModel) View() string {
+	if message := smallTerminalMessage(m.width, m.height); message != "" {
+		return message
+	}
 	width := max(48, m.width)
 	contentWidth := max(40, min(width-8, 100))
 	filtered := filterRemoteRepos(m.repos, m.query)
@@ -179,7 +189,7 @@ func filterRemoteRepos(repos []RemoteRepo, query string) []RemoteRepo {
 	return filtered
 }
 
-func cloneAndConfigureCmd(config AppConfig, connected RepoProvider, repo RemoteRepo) tea.Cmd {
+func cloneAndConfigureCmd(ctx context.Context, config AppConfig, connected RepoProvider, repo RemoteRepo) tea.Cmd {
 	return func() tea.Msg {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -201,7 +211,9 @@ func cloneAndConfigureCmd(config AppConfig, connected RepoProvider, repo RemoteR
 			if provider == nil {
 				return repoConfiguredMsg{err: fmt.Errorf("provider %s is no longer configured", repo.Provider)}
 			}
-			if cloneErr := provider.Clone(context.Background(), repo, destination); cloneErr != nil {
+			cloneContext, cancel := context.WithTimeout(ctx, repositoryCommandTimeout)
+			defer cancel()
+			if cloneErr := provider.Clone(cloneContext, repo, destination); cloneErr != nil {
 				return repoConfiguredMsg{err: cloneErr}
 			}
 		}

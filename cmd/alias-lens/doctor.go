@@ -66,7 +66,7 @@ func doctorChecks() []DoctorCheck {
 	repoOK := configErr == nil && config.Repository != ""
 	repoMessage := "run al repo"
 	if repoOK {
-		if output, err := exec.Command("git", "-C", config.Repository, "rev-parse", "--is-inside-work-tree").CombinedOutput(); err != nil {
+		if output, err := gitOutput("-C", config.Repository, "rev-parse", "--is-inside-work-tree"); err != nil {
 			repoOK = false
 			repoMessage = cleanCommandOutput(output)
 		} else {
@@ -105,7 +105,10 @@ func providerCredentialStatus(provider RepoProvider) (bool, string) {
 		if _, err := exec.LookPath("gh"); err != nil {
 			return false, "install gh"
 		}
-		if err := exec.Command("gh", "auth", "status").Run(); err != nil {
+		ctx, cancel := interruptContext()
+		_, err := commandOutput(ctx, repositoryCommandTimeout, "gh", "auth", "status")
+		cancel()
+		if err != nil {
 			return false, "run al repo github"
 		}
 		return true, "GitHub CLI authenticated"
@@ -129,7 +132,10 @@ func providerCredentialStatus(provider RepoProvider) (bool, string) {
 		case *gitlabProvider:
 			host, _ = configured.hostname()
 		}
-		if err := exec.Command(glab, "auth", "status", "--hostname", host).Run(); err != nil {
+		ctx, cancel := interruptContext()
+		_, err = commandOutput(ctx, repositoryCommandTimeout, glab, "auth", "status", "--hostname", host)
+		cancel()
+		if err != nil {
 			return false, "run al repo gitlab"
 		}
 		return true, "GitLab CLI authenticated"

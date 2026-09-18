@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 var statsPeriods = []string{"all", "today", "month", "year"}
@@ -58,7 +59,11 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	if terminal, err := os.OpenFile("/dev/tty", os.O_RDWR, 0); err == nil {
 		defer terminal.Close()
-		lipgloss.SetDefaultRenderer(lipgloss.NewRenderer(terminal))
+		renderer := lipgloss.NewRenderer(terminal)
+		if noColorRequested() {
+			renderer.SetColorProfile(termenv.Ascii)
+		}
+		lipgloss.SetDefaultRenderer(renderer)
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	_, err := tea.NewProgram(statsModel{data: data, periodIndex: index, viewIndex: viewIndex, width: 80, height: 24, theme: theme, now: now}, options...).Run()
@@ -126,6 +131,9 @@ func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m statsModel) View() string {
+	if message := smallTerminalMessage(m.width, m.height); message != "" {
+		return message
+	}
 	periods := statsPeriodsForView(m.viewIndex)
 	periodIndex := min(m.periodIndex, len(periods)-1)
 	period := periods[periodIndex]

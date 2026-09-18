@@ -52,3 +52,15 @@ func TestPromptAcceptedSelectionIsNotPrintedTwice(t *testing.T) {
 		t.Fatalf("prompt-accepted output was duplicated: stdout=%q terminal=%q", stdout.String(), terminal.String())
 	}
 }
+
+func TestTabSelectionUsesPromptEditProtocol(t *testing.T) {
+	t.Setenv("ALIAS_LENS_PROMPT_ACCEPT", "1")
+	var stdout bytes.Buffer
+	var terminal bytes.Buffer
+
+	writeAliasEditSelection(&stdout, &terminal, "gs", false)
+
+	if stdout.String() != editSelectionPrefix+"gs\n" || terminal.Len() != 0 {
+		t.Fatalf("edit selection output: stdout=%q terminal=%q", stdout.String(), terminal.String())
+	}
+}

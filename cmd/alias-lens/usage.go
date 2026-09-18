@@ -19,6 +19,7 @@ Find and use aliases:
   search     Print aliases that match a name, command, description, or tag
   stats      Rank aliases used directly or launched through Alias Lens
   export     Export aliases or usage stats as JSON, YAML, or CSV
+  import     Preview aliases from a file, then apply them in one safe write
   suggest    Find repeated commands in local shell history and optionally add one
   meta       Set tags, supported platforms, or favorite status on an alias
   describe   Add generated comments to aliases that do not have descriptions
@@ -30,6 +31,8 @@ Protect and recover aliases:
   undo       Restore a revision after saving the current alias file first
   doctor     Diagnose the binary, shell integration, Git, providers, and sync
   setup      Install, repair, or remove the Bash or Zsh integration
+  data       List local data paths or clear usage data and private revisions
+  catalog    Inspect catalog migration safety without changing shell files
 
 Configure Git sync:
   repo       Choose or clone a Git repository and enable automatic sync
@@ -51,11 +54,21 @@ Run "al help COMMAND" or "al COMMAND --help" for syntax, effects, and examples.
 `
 
 var commandUsage = map[string]string{
+	"catalog": `Usage: al catalog shadow [--shell bash|zsh] [--json]
+
+Inspect the selected shell alias file through the shell-neutral catalog pipeline.
+Shadow mode parses, renders, validates, reparses, and compares supported entries.
+It never writes a catalog, alias file, startup file, configuration, or sync state.
+Exit status 0 means every inspected entry is equivalent. Status 1 means at least
+one entry needs attention. Status 2 means Alias Lens could not inspect the file.
+`,
 	"pick": `Usage: al pick [--command] [QUERY]
 
 Open a terminal picker, optionally filtered by QUERY. By default, the selected
 alias name is printed to standard output. --command prints the underlying shell
 command instead. This command only prints a selection and never executes it.
+Inside an integration-launched picker, Tab returns the alias to the prompt for
+editing instead of accepting it.
 
 Examples:
   al pick
@@ -67,7 +80,8 @@ Examples:
 Open the picker and immediately execute the selected alias command. This action
 is provided by the shell integration, so run "al setup" and start a new shell
 first. This is the same Enter behavior as plain "al", with an optional
-starting query. Use "al pick" when you want a result without executing it.
+starting query. Press Tab to return the alias to the prompt without executing
+it. Use "al pick" when you want a result without executing it.
 `,
 	"suggest": `Usage:
   al suggest
@@ -105,6 +119,13 @@ standard output.
 Examples:
   al export aliases --format yaml
   al export stats --format csv --period week --output weekly-aliases.csv
+`,
+	"import": `Usage: al import FILE [--apply]
+
+Preview aliases from a Bash or Zsh file. The preview reports syntax problems,
+duplicate names, duplicate commands, conflicts, skipped aliases, and planned
+additions without writing. --apply refuses blocking problems and adds all
+accepted aliases in one backed-up atomic replacement.
 `,
 	"meta": `Usage: al meta ALIAS key=value [key=value ...]
 
@@ -209,6 +230,15 @@ or disable it.
 GitHub uses the gh CLI. Bitbucket and GitLab read tokens from environment
 variables and never store them in config.json.
 `,
+	"data": `Usage:
+  al data paths
+  al data clear-usage
+  al data clear-revisions
+
+List every local path Alias Lens uses, delete the private usage log, or delete
+private alias revisions. Clear commands do not remove aliases, configuration,
+shell startup settings, repositories, conflict copies, or latest backups.
+`,
 	"track": `Usage: al track SOURCE [REPOSITORY_PATH]
 
 Enroll one extra local config file in automatic sync. REPOSITORY_PATH chooses
@@ -255,10 +285,11 @@ with fast-forward-only Git behavior, compares saved hashes, and then safely
 pulls or pushes when only one side changed. If both sides changed, it saves
 private conflict copies and leaves the live alias file unchanged.
 `,
-	"theme": `Usage: al theme [PRESET]
+	"theme": `Usage: al theme [PRESET|--check]
 
 List every built-in dark theme and mark the active one. Pass a preset name to
-save it immediately. Ctrl+T opens a live-preview theme picker inside the TUI.
+save it immediately. --check prints the selected theme's text and control
+contrast ratios. Ctrl+T opens a live-preview theme picker inside the TUI.
 
 Examples:
   al theme

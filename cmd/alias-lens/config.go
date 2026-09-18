@@ -305,7 +305,7 @@ func saveConfigFile(path string, config AppConfig, backup []byte) error {
 		return err
 	}
 	if len(backup) > 0 {
-		if err := os.WriteFile(path+".alias-lens.bak", backup, 0o600); err != nil {
+		if err := writePrivateBackup(path+".alias-lens.bak", backup); err != nil {
 			return err
 		}
 	}

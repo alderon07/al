@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -23,6 +25,8 @@ jobs:
           cache: true
       - name: Check
         run: make check
+      - name: Install Syft for archive SBOMs
+        uses: anchore/sbom-action/download-syft@v0
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v7
         with:
@@ -31,3 +35,10 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Attest release archives and SBOMs
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.sbom.json
+            dist/checksums.txt

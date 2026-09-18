@@ -598,17 +598,23 @@ func TestTrackedFilesViewShowsSourceDestinationAndState(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	applyTheme(builtInTheme("phosphor"))
 	m := model{
-		width:       100,
-		height:      30,
-		trackedOnly: true,
-		trackedRepo: "/tmp/dotfiles",
+		width:           100,
+		height:          36,
+		trackedOnly:     true,
+		trackedRepo:     "/tmp/dotfiles",
+		autoSyncEnabled: true,
+		syncInterval:    15,
+		primarySync: trackedFileItem{
+			Config: TrackedFileConfig{Source: "/tmp/.bash_aliases", RepositoryPath: ".bash_aliases"},
+			State:  SyncState{Status: "pushed", Message: "aliases match"},
+		},
 		tracked: []trackedFileItem{{
 			Config: TrackedFileConfig{Source: "/tmp/starship.toml", RepositoryPath: "shell/starship.toml"},
 			State:  SyncState{Status: "synced", Message: "files match"},
 		}},
 	}
 	view := m.View()
-	for _, expected := range []string{"TRACKED CONFIG FILES", "/tmp/starship.toml", "repo/shell/starship.toml", "SYNCED", "files match"} {
+	for _, expected := range []string{"SYNC STATUS", "AUTO ON", "every 15s", "PRIMARY ALIAS FILE", "/tmp/.bash_aliases", "PUSHED", "aliases match", "EXTRA TRACKED FILES", "/tmp/starship.toml", "repo/shell/starship.toml", "SYNCED", "files match"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("tracked-files view does not contain %q:\n%s", expected, view)
 		}
@@ -619,8 +625,35 @@ func TestTrackedFilesViewExplainsEmptyRegistry(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	applyTheme(builtInTheme("phosphor"))
 	view := (model{width: 90, height: 24, trackedOnly: true}).View()
-	if !strings.Contains(view, "No extra config files are tracked.") || !strings.Contains(view, "al track PATH") {
+	if !strings.Contains(view, "SYNC STATUS") || !strings.Contains(view, "AUTO OFF") || !strings.Contains(view, "PRIMARY ALIAS FILE") || !strings.Contains(view, "None. Add one with") || !strings.Contains(view, "al track PATH") {
 		t.Fatalf("empty tracked-files view is not actionable:\n%s", view)
+	}
+}
+
+func TestCtrlFLoadsPrimarySyncStatus(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	config := defaultConfig()
+	config.Repository = filepath.Join(home, "dotfiles")
+	config.AutoSync = AutoSyncConfig{Enabled: true, IntervalSeconds: 30}
+	if err := saveConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeSyncStatus("synced", "files match", "local", "remote"); err != nil {
+		t.Fatal(err)
+	}
+
+	updated, _ := (model{width: 100, height: 30}).Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	result := updated.(model)
+	if !result.trackedOnly || !result.autoSyncEnabled || result.syncInterval != 30 || result.primarySync.State.Status != "synced" {
+		t.Fatalf("sync status was not loaded: %#v", result)
+	}
+	view := result.View()
+	for _, expected := range []string{"AUTO ON", "every 30s", "SYNCED", "files match", ".bash_aliases"} {
+		if !strings.Contains(view, expected) {
+			t.Fatalf("sync view is missing %q:\n%s", expected, view)
+		}
 	}
 }
 

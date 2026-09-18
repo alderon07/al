@@ -56,7 +56,9 @@ func main() {
 	case "version", "--version", "-v":
 		fmt.Printf("alias-lens %s\n", displayVersion())
 	case "--web":
-		runWeb()
+		if err := runWeb(); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
 	case "repo":
 		if len(os.Args) == 2 {
 			if err := runRepoPicker(""); err != nil {
@@ -83,6 +85,18 @@ func main() {
 	case "config":
 		if err := runConfigCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "data":
+		if err := runDataCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "catalog":
+		exitCode, err := runCatalogCommand(os.Args[2:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+		if exitCode != 0 {
+			os.Exit(exitCode)
 		}
 	case "theme":
 		if err := runThemeCommand(os.Args[2:]); err != nil {
@@ -155,6 +169,10 @@ func main() {
 		}
 	case "export":
 		if err := runExportCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+	case "import":
+		if err := runImportCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 		}
 	case "scan":
@@ -305,10 +323,10 @@ func printShellIntegration(name string) error {
 	return err
 }
 
-func runWeb() {
+func runWeb() error {
 	if len(os.Args) > 2 {
 		printUsage()
-		return
+		return nil
 	}
 
 	mux := http.NewServeMux()
@@ -316,7 +334,7 @@ func runWeb() {
 
 	static, err := fs.Sub(web, "web")
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("load web assets: %w", err)
 	}
 	mux.Handle("/", http.FileServer(http.FS(static)))
 
@@ -324,8 +342,9 @@ func runWeb() {
 	fmt.Printf("Alias Lens web mode is running at http://%s\n", address)
 	fmt.Println("Reading aliases from", aliasDisplayPath())
 	if err := http.ListenAndServe(address, mux); err != nil {
-		panic(err)
+		return fmt.Errorf("start web server: %w; check whether port 8787 is already in use", err)
 	}
+	return nil
 }
 
 func aliasesHandler(w http.ResponseWriter, r *http.Request) {

@@ -1,11 +1,36 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestLoadConfigRejectsCorruptionWithoutChangingFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, ".config", "alias-lens", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	corrupt := []byte(`{"version":1,"repository":`)
+	if err := os.WriteFile(path, corrupt, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "parse") {
+		t.Fatalf("corrupt config error = %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(after, corrupt) {
+		t.Fatalf("corrupt config changed: %q, %v", after, err)
+	}
+	if _, err := os.Stat(path + ".alias-lens.bak"); !os.IsNotExist(err) {
+		t.Fatalf("corrupt config created backup: %v", err)
+	}
+}
 
 func TestLoadConfigMigratesLegacyFileWithPrivateBackup(t *testing.T) {
 	home := t.TempDir()

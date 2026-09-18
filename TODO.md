@@ -97,11 +97,11 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ## Reduce the next alias pain points
 
-- [ ] Let `Tab` return the selected alias to the prompt for editing instead of running it.
+- [x] Let `Tab` return the selected alias to the prompt for editing instead of running it.
 - [ ] Add directory and Git-workspace scopes for suggestions and search ranking.
 - [ ] Add optional completion hooks for success rate, duration, and last-used stats.
 - [ ] Add configurable history exclusions before collecting more execution context.
-- [ ] Add an import preview that finds duplicate names and commands before changing the alias file.
+- [x] Add an import preview that finds duplicate names and commands before changing the alias file.
 - [ ] Benchmark startup, large alias files, and search before considering a language rewrite.
 - [ ] Design end-to-end encryption before adding any hosted sync service.
 
@@ -125,3 +125,6 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
   - [x] Run the baseline-versus-candidate setup and command-output matrix. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
   - [x] Record the required WSL 2 terminal evidence. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
 - [ ] Add phase 4 read-only shadow generation after phases 2 and 3 pass.
+  - [x] Add the read-only `al catalog shadow` pipeline, bounded native validation, redacted reports, and resource limits.
+  - [x] Add Linux and macOS CI matrices, deterministic report hashes, and a disposable WSL verification script.
+  - [ ] Record the WSL 2 release-candidate run from `docs/testing/PHASE4_MANUAL_CHECKLIST.md`.

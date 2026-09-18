@@ -94,6 +94,8 @@ func runAutoSyncCommand(arguments []string) error {
 }
 
 func runWatch(daemon bool) error {
+	ctx, cancel := interruptContext()
+	defer cancel()
 	lock, err := acquireSyncLock()
 	if errors.Is(err, os.ErrExist) {
 		if !daemon {
@@ -109,6 +111,10 @@ func runWatch(daemon bool) error {
 		os.Remove(lock.Name())
 	}()
 	for {
+		if ctx.Err() != nil {
+			_ = writeSyncStatus("stopped", "automatic sync stopped cleanly", "", "")
+			return nil
+		}
 		config, err := loadConfig()
 		if err != nil {
 			writeSyncStatus("error", err.Error(), "", "")
@@ -136,8 +142,19 @@ func runWatch(daemon bool) error {
 		if !daemon {
 			return cycleErr
 		}
-		os.Chtimes(lock.Name(), time.Now(), time.Now())
-		time.Sleep(time.Duration(config.AutoSync.IntervalSeconds) * time.Second)
+		if err := os.Chtimes(lock.Name(), time.Now(), time.Now()); err != nil {
+			return fmt.Errorf("refresh sync lock: %w", err)
+		}
+		timer := time.NewTimer(time.Duration(config.AutoSync.IntervalSeconds) * time.Second)
+		select {
+		case <-ctx.Done():
+			if !timer.Stop() {
+				<-timer.C
+			}
+			_ = writeSyncStatus("stopped", "automatic sync stopped cleanly", "", "")
+			return nil
+		case <-timer.C:
+		}
 	}
 }
 
@@ -198,18 +215,18 @@ func pushTrackedFile(config AppConfig, tracked TrackedFileConfig, contents []byt
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(target, contents, 0o600); err != nil {
+	if err := writeFileAtomically(target, contents, 0o600); err != nil {
 		return err
 	}
-	if output, err := exec.Command("git", "-C", config.Repository, "add", "--", tracked.RepositoryPath).CombinedOutput(); err != nil {
+	if output, err := gitOutput("-C", config.Repository, "add", "--", tracked.RepositoryPath); err != nil {
 		return fmt.Errorf("git add failed: %s", cleanCommandOutput(output))
 	}
 	message := "Update " + filepath.Base(tracked.RepositoryPath)
-	if output, err := exec.Command("git", "-C", config.Repository, "commit", "--only", "-m", message, "--", tracked.RepositoryPath).CombinedOutput(); err != nil {
+	if output, err := gitOutput("-C", config.Repository, "commit", "--only", "-m", message, "--", tracked.RepositoryPath); err != nil {
 		return fmt.Errorf("git commit failed: %s", cleanCommandOutput(output))
 	}
-	if output, err := exec.Command("git", "-C", config.Repository, "push").CombinedOutput(); err != nil {
-		return fmt.Errorf("git push failed: %s", cleanCommandOutput(output))
+	if output, err := gitOutput("-C", config.Repository, "push"); err != nil {
+		return fmt.Errorf("git push failed: %s; run al watch to retry", cleanCommandOutput(output))
 	}
 	hash := contentHash(contents)
 	return writeSyncStateAt(statePath, SyncState{LocalHash: hash, RemoteHash: hash, Status: "pushed", Message: "committed and pushed local update", UpdatedAt: time.Now()})
@@ -224,34 +241,17 @@ func replaceTrackedFile(path string, contents []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(path+".alias-lens.bak", current, 0o600); err != nil {
+	if err := writePrivateBackup(path+".alias-lens.bak", current); err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".alias-lens-sync-*")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(info.Mode().Perm()); err != nil {
-		temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(contents); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	return os.Rename(temporaryPath, path)
+	return writeFileAtomically(path, contents, info.Mode().Perm())
 }
 
 func writePrivateFile(path string, contents []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, contents, 0o600)
+	return writeFileAtomically(path, contents, 0o600)
 }
 
 func trackedStatePath(tracked TrackedFileConfig) (string, error) {
@@ -267,10 +267,10 @@ func saveTrackedConflict(tracked TrackedFileConfig, local, remote []byte, stateP
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(directory, "local"), local, 0o600); err != nil {
+	if err := writeFileAtomically(filepath.Join(directory, "local"), local, 0o600); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(directory, "remote"), remote, 0o600); err != nil {
+	if err := writeFileAtomically(filepath.Join(directory, "remote"), remote, 0o600); err != nil {
 		return err
 	}
 	state := SyncState{LocalHash: contentHash(local), RemoteHash: contentHash(remote), Status: "conflict", Message: "both copies changed; files were not overwritten", UpdatedAt: time.Now()}
@@ -318,8 +318,8 @@ func reconcileAliases(config AppConfig) error {
 		return err
 	}
 	target := filepath.Join(config.Repository, filepath.Clean(config.AliasFile))
-	if output, err := exec.Command("git", "-C", config.Repository, "pull", "--ff-only").CombinedOutput(); err != nil {
-		return fmt.Errorf("pull deferred: %s", cleanCommandOutput(output))
+	if output, err := gitOutput("-C", config.Repository, "pull", "--ff-only"); err != nil {
+		return fmt.Errorf("pull deferred: %s; run al watch to retry", cleanCommandOutput(output))
 	}
 	local, localErr := os.ReadFile(aliasPath)
 	remote, remoteErr := os.ReadFile(target)
@@ -384,10 +384,10 @@ func saveSyncConflict(local, remote []byte, message string) error {
 		return err
 	}
 	suffix := strings.TrimPrefix(activeShellAdapter().AliasFilename(), ".")
-	if err := os.WriteFile(filepath.Join(directory, "local."+suffix), local, 0o600); err != nil {
+	if err := writeFileAtomically(filepath.Join(directory, "local."+suffix), local, 0o600); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(directory, "remote."+suffix), remote, 0o600); err != nil {
+	if err := writeFileAtomically(filepath.Join(directory, "remote."+suffix), remote, 0o600); err != nil {
 		return err
 	}
 	writeSyncStatus("conflict", message+"; run al diff", contentHash(local), contentHash(remote))
@@ -406,7 +406,7 @@ func writeNewAliasFile(path string, contents []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	return os.WriteFile(path, contents, 0o600)
+	return writeFileAtomically(path, contents, 0o600)
 }
 
 func contentHash(contents []byte) string {
@@ -477,7 +477,7 @@ func writeSyncStateAt(path string, state SyncState) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(contents, '\n'), 0o600)
+	return writeFileAtomically(path, append(contents, '\n'), 0o600)
 }
 
 func syncStatusLabel() string {
