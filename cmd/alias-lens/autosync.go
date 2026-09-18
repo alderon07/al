@@ -159,10 +159,13 @@ func runWatch(daemon bool) error {
 }
 
 func reconcileTrackedFile(config AppConfig, tracked TrackedFileConfig) error {
-	if sensitiveConfigPath(tracked.Source) {
-		return fmt.Errorf("refusing to sync credential-shaped file %s", tracked.Source)
+	if err := validateTrackedFileConfig(tracked); err != nil {
+		return err
 	}
-	target := filepath.Join(config.Repository, filepath.Clean(tracked.RepositoryPath))
+	target, err := repositoryFilePath(config.Repository, tracked.RepositoryPath)
+	if err != nil {
+		return err
+	}
 	local, localErr := os.ReadFile(tracked.Source)
 	remote, remoteErr := os.ReadFile(target)
 	localMissing, remoteMissing := os.IsNotExist(localErr), os.IsNotExist(remoteErr)
@@ -181,11 +184,7 @@ func reconcileTrackedFile(config AppConfig, tracked TrackedFileConfig) error {
 		return writeSyncStateAt(statePath, SyncState{Status: "waiting", Message: "source and repository file do not exist", UpdatedAt: time.Now()})
 	}
 	if localMissing {
-		if err := writePrivateFile(tracked.Source, remote); err != nil {
-			return err
-		}
-		hash := contentHash(remote)
-		return writeSyncStateAt(statePath, SyncState{LocalHash: hash, RemoteHash: hash, Status: "pulled", Message: "restored missing local file", UpdatedAt: time.Now()})
+		return saveTrackedConflict(tracked, nil, remote, statePath)
 	}
 	if remoteMissing {
 		return pushTrackedFile(config, tracked, local, statePath)
@@ -197,10 +196,7 @@ func reconcileTrackedFile(config AppConfig, tracked TrackedFileConfig) error {
 	case actionPush:
 		return pushTrackedFile(config, tracked, local, statePath)
 	case actionPull:
-		if err := replaceTrackedFile(tracked.Source, remote); err != nil {
-			return err
-		}
-		return writeSyncStateAt(statePath, SyncState{LocalHash: remoteHash, RemoteHash: remoteHash, Status: "pulled", Message: "applied remote update", UpdatedAt: time.Now()})
+		return saveTrackedConflict(tracked, local, remote, statePath)
 	case actionConflict:
 		return saveTrackedConflict(tracked, local, remote, statePath)
 	}
@@ -208,14 +204,13 @@ func reconcileTrackedFile(config AppConfig, tracked TrackedFileConfig) error {
 }
 
 func pushTrackedFile(config AppConfig, tracked TrackedFileConfig, contents []byte, statePath string) error {
-	if err := secretFindingsError(findSecretFindings(contents)); err != nil {
-		return fmt.Errorf("%s: %w", tracked.Source, err)
-	}
-	target := filepath.Join(config.Repository, filepath.Clean(tracked.RepositoryPath))
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	if err := validateTrackedFileConfig(tracked); err != nil {
 		return err
 	}
-	if err := writeFileAtomically(target, contents, 0o600); err != nil {
+	if err := secretFindingsErrorFor(tracked.Source, findSecretFindings(contents)); err != nil {
+		return fmt.Errorf("%s: %w", tracked.Source, err)
+	}
+	if err := writeRepositoryFile(config.Repository, tracked.RepositoryPath, contents, 0o600); err != nil {
 		return err
 	}
 	if output, err := gitOutput("-C", config.Repository, "add", "--", tracked.RepositoryPath); err != nil {
@@ -224,6 +219,12 @@ func pushTrackedFile(config AppConfig, tracked TrackedFileConfig, contents []byt
 	message := "Update " + filepath.Base(tracked.RepositoryPath)
 	if output, err := gitOutput("-C", config.Repository, "commit", "--only", "-m", message, "--", tracked.RepositoryPath); err != nil {
 		return fmt.Errorf("git commit failed: %s", cleanCommandOutput(output))
+	}
+	if err := scanOutgoingAliasHistory(config.Repository, config.AliasFile); err != nil {
+		return err
+	}
+	if err := scanOutgoingFileHistory(config.Repository, tracked.RepositoryPath, "tracked-file"); err != nil {
+		return err
 	}
 	if output, err := gitOutput("-C", config.Repository, "push"); err != nil {
 		return fmt.Errorf("git push failed: %s; run al watch to retry", cleanCommandOutput(output))
@@ -317,9 +318,12 @@ func reconcileAliases(config AppConfig) error {
 	if err != nil {
 		return err
 	}
-	target := filepath.Join(config.Repository, filepath.Clean(config.AliasFile))
 	if output, err := gitOutput("-C", config.Repository, "pull", "--ff-only"); err != nil {
 		return fmt.Errorf("pull deferred: %s; run al watch to retry", cleanCommandOutput(output))
+	}
+	target, err := repositoryFilePath(config.Repository, config.AliasFile)
+	if err != nil {
+		return err
 	}
 	local, localErr := os.ReadFile(aliasPath)
 	remote, remoteErr := os.ReadFile(target)
@@ -332,15 +336,12 @@ func reconcileAliases(config AppConfig) error {
 	}
 	if localMissing {
 		if remoteMissing {
-			if err := os.WriteFile(aliasPath, nil, 0o600); err != nil {
+			if err := writeNewAliasFile(aliasPath, nil); err != nil {
 				return err
 			}
 			local = nil
 		} else {
-			if err := writeNewAliasFile(aliasPath, remote); err != nil {
-				return err
-			}
-			local = remote
+			return saveSyncConflict(nil, remote, "remote aliases require approval; review them and run al sync --pull")
 		}
 	}
 	state, _ := loadSyncState()
@@ -354,10 +355,7 @@ func reconcileAliases(config AppConfig) error {
 	case actionPush:
 		return pushAliasSnapshot(config, aliasPath, local)
 	case actionPull:
-		if err := replaceAliasFile(aliasPath, remote); err != nil {
-			return err
-		}
-		return writeSyncStatus("pulled", "applied remote alias update", remoteHash, remoteHash)
+		return saveSyncConflict(local, remote, "remote aliases require approval; review them and run al sync --pull")
 	case actionConflict:
 		return saveSyncConflict(local, remote, "both local and remote aliases changed")
 	}

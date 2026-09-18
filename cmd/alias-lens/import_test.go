@@ -26,6 +26,17 @@ func TestBuildImportPlanReportsDuplicatesConflictsAndSyntax(t *testing.T) {
 	}
 }
 
+func TestImportPreviewEscapesTerminalControlBytes(t *testing.T) {
+	input := "git status\x1b]52;c;clipboard\x07"
+	got := terminalSafeText(input)
+	if strings.ContainsAny(got, "\x1b\x07") {
+		t.Fatalf("preview retained terminal control bytes: %q", got)
+	}
+	if !strings.Contains(got, `\x1b`) || !strings.Contains(got, `\x07`) {
+		t.Fatalf("preview did not make control bytes visible: %q", got)
+	}
+}
+
 func TestTabSelectsWithoutExecuting(t *testing.T) {
 	initial := model{aliases: []Alias{{Name: "gs", Command: "git status"}}, width: 80, height: 24, executeMode: true}
 	updated, command := initial.Update(tea.KeyMsg{Type: tea.KeyTab})

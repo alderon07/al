@@ -34,6 +34,28 @@ func TestUnicodeLayoutUsesTerminalCellWidth(t *testing.T) {
 	}
 }
 
+func TestTruncateCapsZeroWidthInputWork(t *testing.T) {
+	value := strings.Repeat("\u200b", 1_000_000)
+	got := truncate(value, 10)
+	if len(got) > 4100 {
+		t.Fatalf("truncated zero-width output retained %d bytes", len(got))
+	}
+	if width := lipgloss.Width(got); width > 10 {
+		t.Fatalf("truncated zero-width width = %d", width)
+	}
+}
+
+func TestTruncateCapsSingleCombiningCluster(t *testing.T) {
+	input := "a" + strings.Repeat("\u0301", 1_000_000)
+	result := truncate(input, 20)
+	if !strings.HasSuffix(result, "…") {
+		t.Fatalf("truncate did not signal clipped combining cluster: %q", result)
+	}
+	if len(result) > 4100 {
+		t.Fatalf("truncate returned %d bytes after applying its work cap", len(result))
+	}
+}
+
 func TestSmallTerminalShowsRequirement(t *testing.T) {
 	view := (model{width: 40, height: 12}).View()
 	if !strings.Contains(view, "at least 48 columns and 18 rows") || !strings.Contains(view, "40x12") {

@@ -1,8 +1,12 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/subtle"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -13,6 +17,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var version = "dev"
@@ -329,22 +334,78 @@ func runWeb() error {
 		return nil
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/aliases", aliasesHandler)
-
-	static, err := fs.Sub(web, "web")
-	if err != nil {
-		return fmt.Errorf("load web assets: %w", err)
-	}
-	mux.Handle("/", http.FileServer(http.FS(static)))
-
 	address := "127.0.0.1:8787"
-	fmt.Printf("Alias Lens web mode is running at http://%s\n", address)
+	token, err := generateWebToken()
+	if err != nil {
+		return fmt.Errorf("create web session: %w", err)
+	}
+	handler, err := newWebHandler(token, address)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Alias Lens web mode is running at http://%s/#token=%s\n", address, token)
 	fmt.Println("Reading aliases from", aliasDisplayPath())
-	if err := http.ListenAndServe(address, mux); err != nil {
+	server := &http.Server{
+		Addr:              address,
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       30 * time.Second,
+	}
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("start web server: %w; check whether port 8787 is already in use", err)
 	}
 	return nil
+}
+
+func generateWebToken() (string, error) {
+	bytes := make([]byte, 32)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes), nil
+}
+
+func newWebHandler(token, expectedHost string) (http.Handler, error) {
+	static, err := fs.Sub(web, "web")
+	if err != nil {
+		return nil, fmt.Errorf("load web assets: %w", err)
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/aliases", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		provided := r.Header.Get("Authorization")
+		expected := "Bearer " + token
+		if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			http.Error(w, "web session authentication required", http.StatusUnauthorized)
+			return
+		}
+		aliasesHandler(w, r)
+	})
+	mux.Handle("/", http.FileServer(http.FS(static)))
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		if r.Host != expectedHost {
+			http.Error(w, "invalid Host header", http.StatusForbidden)
+			return
+		}
+		if origin := r.Header.Get("Origin"); origin != "" && origin != "http://"+expectedHost {
+			http.Error(w, "invalid Origin header", http.StatusForbidden)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	}), nil
 }
 
 func aliasesHandler(w http.ResponseWriter, r *http.Request) {

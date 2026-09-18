@@ -33,6 +33,38 @@ func TestShadowOriginKnownAnswer(t *testing.T) {
 	}
 }
 
+func TestShadowLineCountRejectsNewlineExpansion(t *testing.T) {
+	source := bytes.Repeat([]byte{'\n'}, shadowMaxLines+1)
+	if count := sourceLineCount(source); count != shadowMaxLines+1 {
+		t.Fatalf("line count = %d", count)
+	}
+}
+
+func TestUnterminatedShadowFunctionConsumesInputOnce(t *testing.T) {
+	source := []byte("broken() {\n" + strings.Repeat("echo still-open\n", 20000))
+	results := importShadowSource("bash", source)
+	if len(results) != 1 || results[0].Status != "unsupported" || results[0].EndByte != len(source) {
+		t.Fatalf("unterminated function produced %d results", len(results))
+	}
+}
+
+func TestShadowSecretMappingHandlesLargeResultSets(t *testing.T) {
+	const count = 5000
+	source := bytes.Repeat([]byte("x\n"), count)
+	results := make([]shadowResult, count)
+	findings := make([]SecretFinding, count)
+	for index := 0; index < count; index++ {
+		results[index] = shadowResult{StartLine: index + 1, EndLine: index + 1, Status: "equivalent", entry: &neutralcatalog.Entry{}}
+		findings[index] = SecretFinding{Line: index + 1, Kind: "test secret"}
+	}
+	results = blockShadowSecrets(results, findings, source)
+	for index, result := range results {
+		if result.Status != "blocked" || result.entry != nil || len(result.Diagnostics) != 1 {
+			t.Fatalf("result %d was not blocked once: %#v", index, result)
+		}
+	}
+}
+
 func TestShadowGenerationHashVectors(t *testing.T) {
 	approval := sha256.Sum256(nil)
 	got := shadowGenerationHash("bash/v1", "linux", approval[:], []byte("# body\n"))

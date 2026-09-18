@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+	"github.com/rivo/uniseg"
 )
 
 var (
@@ -1463,19 +1464,40 @@ func truncate(value string, width int) string {
 	if width <= 1 {
 		return ""
 	}
-	if lipgloss.Width(value) <= width {
-		return value
+	const scanByteLimit = 4096
+	bounded := value
+	clipped := false
+	if len(bounded) > scanByteLimit {
+		boundary := scanByteLimit
+		for boundary > 0 && !utf8.RuneStart(bounded[boundary]) {
+			boundary--
+		}
+		bounded = bounded[:boundary]
+		clipped = true
 	}
-	limit := width - lipgloss.Width("…")
+	limit := width - 1
 	var result strings.Builder
-	for _, character := range value {
-		candidate := result.String() + string(character)
-		if lipgloss.Width(candidate) > limit {
+	cellWidth := 0
+	lastWithinLimit := 0
+	complete := !clipped
+	graphemes := uniseg.NewGraphemes(bounded)
+	for graphemes.Next() {
+		cluster := graphemes.Str()
+		clusterWidth := graphemes.Width()
+		if cellWidth+clusterWidth > width {
+			complete = false
 			break
 		}
-		result.WriteRune(character)
+		result.WriteString(cluster)
+		cellWidth += clusterWidth
+		if cellWidth <= limit {
+			lastWithinLimit = result.Len()
+		}
 	}
-	return result.String() + "…"
+	if complete {
+		return result.String()
+	}
+	return result.String()[:lastWithinLimit] + "…"
 }
 
 func wrapText(value string, width int) string {

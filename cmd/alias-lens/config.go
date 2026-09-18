@@ -45,9 +45,6 @@ func runTrackCommand(arguments []string, remove bool) error {
 	if err != nil {
 		return err
 	}
-	if sensitiveConfigPath(source) {
-		return fmt.Errorf("refusing to track a credential-shaped file: %s", source)
-	}
 	if remove {
 		var kept []TrackedFileConfig
 		for _, tracked := range config.TrackedFiles {
@@ -60,17 +57,19 @@ func runTrackCommand(arguments []string, remove bool) error {
 	}
 	repositoryPath := filepath.Base(source)
 	if len(arguments) == 2 {
-		repositoryPath = filepath.Clean(arguments[1])
+		repositoryPath = arguments[1]
 	}
-	if filepath.IsAbs(repositoryPath) || repositoryPath == ".." || strings.HasPrefix(repositoryPath, ".."+string(filepath.Separator)) {
-		return fmt.Errorf("repository path must stay inside the configured repository")
+	tracked := TrackedFileConfig{Source: source, RepositoryPath: repositoryPath}
+	if err := validateTrackedFileConfig(tracked); err != nil {
+		return err
 	}
-	for _, tracked := range config.TrackedFiles {
-		if tracked.Source == source || tracked.RepositoryPath == repositoryPath {
+	tracked.RepositoryPath = filepath.Clean(tracked.RepositoryPath)
+	for _, existing := range config.TrackedFiles {
+		if existing.Source == source || filepath.Clean(existing.RepositoryPath) == tracked.RepositoryPath {
 			return fmt.Errorf("that source or repository path is already tracked")
 		}
 	}
-	config.TrackedFiles = append(config.TrackedFiles, TrackedFileConfig{Source: source, RepositoryPath: repositoryPath})
+	config.TrackedFiles = append(config.TrackedFiles, tracked)
 	if err := saveConfig(config); err != nil {
 		return err
 	}
@@ -92,8 +91,85 @@ func expandUserPath(path string) (string, error) {
 }
 
 func sensitiveConfigPath(path string) bool {
-	name := strings.ToLower(filepath.Base(path))
-	return name == ".env" || strings.HasPrefix(name, ".env.") || strings.Contains(name, "credential") || strings.Contains(name, "secret") || strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".key") || strings.HasSuffix(name, ".p12") || strings.HasSuffix(name, ".pfx")
+	cleaned := strings.ToLower(filepath.Clean(path))
+	name := filepath.Base(cleaned)
+	if name == ".env" || name == ".envrc" || strings.HasPrefix(name, ".env.") || strings.HasSuffix(name, ".env") {
+		return true
+	}
+	credentialFiles := map[string]bool{
+		".authinfo": true, ".authinfo.gpg": true, ".git-credentials": true,
+		".netrc": true, "_netrc": true, ".npmrc": true, ".pypirc": true,
+		".pgpass": true, ".my.cnf": true, "credentials": true,
+	}
+	if credentialFiles[name] {
+		return true
+	}
+	for _, component := range strings.Split(cleaned, string(filepath.Separator)) {
+		switch component {
+		case ".aws", ".docker", ".gnupg", ".ssh", "gcloud":
+			return true
+		}
+	}
+	if name == "id_rsa" || name == "id_dsa" || name == "id_ecdsa" || name == "id_ed25519" {
+		return true
+	}
+	return strings.Contains(name, "credential") || strings.Contains(name, "password") || strings.Contains(name, "passwd") || strings.Contains(name, "secret") || strings.Contains(name, "token") || strings.HasSuffix(name, ".pem") || strings.HasSuffix(name, ".key") || strings.HasSuffix(name, ".p12") || strings.HasSuffix(name, ".pfx")
+}
+
+func validateTrackedFileConfig(tracked TrackedFileConfig) error {
+	if !filepath.IsAbs(tracked.Source) {
+		return fmt.Errorf("tracked file source must be an absolute path: %s", tracked.Source)
+	}
+	if sensitiveConfigPath(tracked.Source) {
+		return fmt.Errorf("refusing to track a credential-shaped file: %s", tracked.Source)
+	}
+	if resolved, err := filepath.EvalSymlinks(tracked.Source); err == nil && sensitiveConfigPath(resolved) {
+		return fmt.Errorf("refusing to track a link to a credential-shaped file: %s", tracked.Source)
+	}
+	configFile, err := configPath()
+	if err != nil {
+		return err
+	}
+	if sameFilePath(tracked.Source, configFile) {
+		return fmt.Errorf("refusing to track Alias Lens configuration: %s", tracked.Source)
+	}
+	if _, err := cleanRepositoryRelativePath(tracked.RepositoryPath, "tracked repository path"); err != nil {
+		return err
+	}
+	return nil
+}
+
+func sameFilePath(left, right string) bool {
+	if filepath.Clean(left) == filepath.Clean(right) {
+		return true
+	}
+	leftInfo, leftErr := os.Stat(left)
+	rightInfo, rightErr := os.Stat(right)
+	return leftErr == nil && rightErr == nil && os.SameFile(leftInfo, rightInfo)
+}
+
+func validateAppConfig(config AppConfig) error {
+	if _, err := shellAdapter(config.Shell); err != nil {
+		return fmt.Errorf("invalid shell in configuration: %w", err)
+	}
+	if _, err := cleanRepositoryRelativePath(config.AliasFile, "alias_file"); err != nil {
+		return err
+	}
+	seenSources := make(map[string]bool)
+	seenRepositoryPaths := make(map[string]bool)
+	for _, tracked := range config.TrackedFiles {
+		if err := validateTrackedFileConfig(tracked); err != nil {
+			return fmt.Errorf("invalid tracked_files entry: %w; remove it from config.json", err)
+		}
+		source := filepath.Clean(tracked.Source)
+		repositoryPath := filepath.Clean(tracked.RepositoryPath)
+		if seenSources[source] || seenRepositoryPaths[repositoryPath] {
+			return fmt.Errorf("invalid tracked_files entry: duplicate source or repository path; remove it from config.json")
+		}
+		seenSources[source] = true
+		seenRepositoryPaths[repositoryPath] = true
+	}
+	return nil
 }
 
 func runConfigCommand(arguments []string) error {
@@ -231,6 +307,9 @@ func loadConfig() (AppConfig, error) {
 		return defaultConfig(), fmt.Errorf("parse %s: %w", path, err)
 	}
 	config = ensureConfigDefaults(config)
+	if err := validateAppConfig(config); err != nil {
+		return defaultConfig(), fmt.Errorf("parse %s: %w", path, err)
+	}
 	if migrated {
 		if err := saveConfigFile(path, config, contents); err != nil {
 			return defaultConfig(), fmt.Errorf("migrate %s: %w", path, err)
@@ -288,7 +367,11 @@ func saveConfig(config AppConfig) error {
 	if err != nil {
 		return err
 	}
+	config = ensureConfigDefaults(config)
 	config.Version = currentConfigVersion
+	if err := validateAppConfig(config); err != nil {
+		return err
+	}
 	return saveConfigFile(path, config, nil)
 }
 

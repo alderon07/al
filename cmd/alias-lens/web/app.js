@@ -6,6 +6,13 @@ const fileCount = document.querySelector('#file-count');
 const template = document.querySelector('#alias-card');
 let aliases = [];
 let selected = 0;
+const fragment = new URLSearchParams(window.location.hash.slice(1));
+const fragmentToken = fragment.get('token');
+if (fragmentToken) {
+  window.sessionStorage.setItem('alias-lens-token', fragmentToken);
+  window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+}
+const sessionToken = fragmentToken || window.sessionStorage.getItem('alias-lens-token') || '';
 
 const normalize = (value) => value.toLowerCase().replace(/[^a-z0-9]/g, '');
 const distance = (left, right) => {
@@ -55,7 +62,18 @@ function render() {
 function copy(command) { navigator.clipboard.writeText(command); resultCount.textContent = 'Command copied to clipboard'; }
 async function load() {
   resultCount.textContent = 'Reading ~/.bash_aliases…';
-  const response = await fetch('/api/aliases', { cache: 'no-store' });
+	if (!sessionToken) {
+		resultCount.textContent = 'Open the private URL printed by al --web';
+		return;
+	}
+  const response = await fetch('/api/aliases', {
+		cache: 'no-store',
+		headers: { Authorization: `Bearer ${sessionToken}` },
+	});
+	if (!response.ok) {
+		resultCount.textContent = `Could not read aliases (${response.status})`;
+		return;
+	}
   aliases = await response.json();
   fileCount.textContent = `${aliases.length} aliases loaded`;
   render();

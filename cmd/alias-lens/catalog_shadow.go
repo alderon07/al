@@ -42,6 +42,7 @@ const (
 	shadowMaxResults  = 20000
 	shadowMaxEntries  = 10000
 	shadowMaxLaunches = 256
+	shadowMaxLines    = 100000
 )
 
 type shadowDiagnostic struct {
@@ -150,6 +151,9 @@ func inspectCatalogShadow(explicitShell string) (shadowReport, error) {
 	}
 	if bytes.IndexByte(source, 0) >= 0 || !utf8.Valid(source) {
 		return shadowReport{}, fmt.Errorf("alias file is not valid UTF-8 text")
+	}
+	if sourceLineCount(source) > shadowMaxLines {
+		return shadowReport{}, fmt.Errorf("alias file contains more than 100000 lines")
 	}
 	if lineTooLong(source) {
 		return shadowReport{}, fmt.Errorf("alias file contains a line over 1 MiB")
@@ -314,36 +318,32 @@ func decodeUniqueJSON(contents []byte, target any) error {
 }
 
 func readShadowRegular(path string, limit int64) ([]byte, error) {
-	descriptor, err := syscall.Open(path, syscall.O_RDONLY|syscall.O_NONBLOCK|syscall.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, err
-	}
-	file := os.NewFile(uintptr(descriptor), path)
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil {
-		return nil, err
-	}
-	if !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("not a regular file")
-	}
-	reader := io.LimitReader(file, limit+1)
-	contents, err := io.ReadAll(reader)
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(contents)) > limit {
-		return nil, fmt.Errorf("file exceeds %d bytes", limit)
-	}
-	return contents, nil
+	return readRegularFile(path, limit)
 }
 func lineTooLong(source []byte) bool {
-	for _, line := range bytes.Split(source, []byte{'\n'}) {
-		if len(line) > shadowLineLimit {
+	start := 0
+	for start < len(source) {
+		offset := bytes.IndexByte(source[start:], '\n')
+		if offset < 0 {
+			return len(source)-start > shadowLineLimit
+		}
+		if offset > shadowLineLimit {
 			return true
 		}
+		start += offset + 1
 	}
 	return false
+}
+
+func sourceLineCount(source []byte) int {
+	if len(source) == 0 {
+		return 0
+	}
+	count := bytes.Count(source, []byte{'\n'})
+	if source[len(source)-1] != '\n' {
+		count++
+	}
+	return count
 }
 
 func importShadowSource(shell string, source []byte) []shadowResult {
@@ -386,7 +386,7 @@ func importShadowSource(shell string, source []byte) []shadowResult {
 			index++
 			continue
 		}
-		if name, body, endIndex, ok := parseShadowFunction(lines, index); ok {
+		if name, body, endIndex, ok := parseShadowFunction(source, lines, index); ok {
 			if !commentsValid {
 				results = append(results, shadowResult{Unit: len(results), Status: "unsupported", StartByte: start, EndByte: lines[endIndex].end, StartLine: startLine, EndLine: endIndex + 1, Diagnostics: []shadowDiagnostic{{Code: "unsupported_metadata", Message: "metadata is outside the safe shadow grammar"}}})
 				index = endIndex + 1
@@ -742,7 +742,7 @@ func decodeShadowSingleQuote(input string) (string, string, bool) {
 	return "", "", false
 }
 
-func parseShadowFunction(lines []sourceLine, start int) (string, string, int, bool) {
+func parseShadowFunction(source []byte, lines []sourceLine, start int) (string, string, int, bool) {
 	text := string(lines[start].bytes)
 	open := strings.IndexByte(text, '{')
 	if open < 0 {
@@ -758,19 +758,28 @@ func parseShadowFunction(lines []sourceLine, start int) (string, string, int, bo
 	if !shadowFunctionName.MatchString(name) {
 		return "", "", start, false
 	}
-	combined := []byte{}
-	for index := start; index < len(lines); index++ {
-		combined = append(combined, lines[index].bytes...)
-		if close, ok := matchingOuterBrace(combined, bytes.IndexByte(combined, '{')); ok {
-			rawTail := string(combined[close+1:])
-			tail := strings.TrimSpace(rawTail)
-			if tail != "" && ((rawTail[0] != ' ' && rawTail[0] != '\t') || !strings.HasPrefix(tail, "#")) {
-				return "", "", start, false
-			}
-			return name, string(combined[bytes.IndexByte(combined, '{')+1 : close]), index, true
-		}
+	startByte := lines[start].start
+	contents := source[startByte:]
+	open = bytes.IndexByte(contents, '{')
+	close, ok := matchingOuterBrace(contents, open)
+	if !ok {
+		return "", "", start, false
 	}
-	return "", "", start, false
+	absoluteClose := startByte + close
+	lineOffset := sort.Search(len(lines)-start, func(offset int) bool {
+		return lines[start+offset].end > absoluteClose
+	})
+	if lineOffset >= len(lines)-start {
+		return "", "", start, false
+	}
+	endIndex := start + lineOffset
+	lineEnd := lines[endIndex].end - startByte
+	rawTail := string(contents[close+1 : lineEnd])
+	tail := strings.TrimSpace(rawTail)
+	if tail != "" && ((rawTail[0] != ' ' && rawTail[0] != '\t') || !strings.HasPrefix(tail, "#")) {
+		return "", "", start, false
+	}
+	return name, string(contents[open+1 : close]), endIndex, true
 }
 func matchingOuterBrace(contents []byte, open int) (int, bool) {
 	type heredocSpec struct {
@@ -961,20 +970,48 @@ func shadowGenerationHash(renderer, platform string, approvalHash, body []byte) 
 
 func blockShadowSecrets(results []shadowResult, findings []SecretFinding, source []byte) []shadowResult {
 	lines := sourceLines(source)
-	for _, finding := range findings {
-		mapped := false
-		for index := range results {
-			if finding.Line >= results[index].StartLine && finding.Line <= results[index].EndLine {
-				mapped = true
-				results[index].Status = "blocked"
-				results[index].entry = nil
-				results[index].Diagnostics = append(results[index].Diagnostics, shadowDiagnostic{Code: "secret_detected", Message: fmt.Sprintf("possible %s on line %d", finding.Kind, finding.Line)})
+	owners := make([]int, len(lines)+1)
+	for line := range owners {
+		owners[line] = -1
+	}
+	indices := make([]int, len(results))
+	for index := range results {
+		indices[index] = index
+	}
+	sort.SliceStable(indices, func(left, right int) bool {
+		leftResult, rightResult := results[indices[left]], results[indices[right]]
+		if leftResult.StartLine != rightResult.StartLine {
+			return leftResult.StartLine < rightResult.StartLine
+		}
+		return leftResult.EndLine < rightResult.EndLine
+	})
+	resultOffset := 0
+	for line := 1; line <= len(lines) && resultOffset < len(indices); line++ {
+		for resultOffset < len(indices) && results[indices[resultOffset]].EndLine < line {
+			resultOffset++
+		}
+		if resultOffset < len(indices) {
+			candidate := results[indices[resultOffset]]
+			if candidate.StartLine <= line && line <= candidate.EndLine {
+				owners[line] = indices[resultOffset]
 			}
 		}
-		if !mapped && finding.Line > 0 && finding.Line <= len(lines) {
+	}
+	for _, finding := range findings {
+		if finding.Line <= 0 || finding.Line > len(lines) {
+			continue
+		}
+		index := owners[finding.Line]
+		if index < 0 {
 			line := lines[finding.Line-1]
 			results = append(results, shadowResult{Unit: len(results), Status: "blocked", StartByte: line.start, EndByte: line.end, StartLine: finding.Line, EndLine: finding.Line, Diagnostics: []shadowDiagnostic{{Code: "secret_detected", Message: fmt.Sprintf("possible %s on line %d", finding.Kind, finding.Line)}}})
+			index = len(results) - 1
+			owners[finding.Line] = index
+			continue
 		}
+		results[index].Status = "blocked"
+		results[index].entry = nil
+		results[index].Diagnostics = append(results[index].Diagnostics, shadowDiagnostic{Code: "secret_detected", Message: fmt.Sprintf("possible %s on line %d", finding.Kind, finding.Line)})
 	}
 	return results
 }

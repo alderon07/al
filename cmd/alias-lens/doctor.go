@@ -357,20 +357,24 @@ func ensureAliasFileExists(aliasPath string) error {
 	if err != nil {
 		return err
 	}
+	remoteAvailable := false
 	if config.Repository != "" {
-		remotePath := filepath.Join(config.Repository, filepath.Clean(config.AliasFile))
-		if remote, readErr := os.ReadFile(remotePath); readErr == nil {
-			if err := writeNewAliasFile(aliasPath, remote); err != nil {
-				return err
-			}
-			fmt.Println("Restored", aliasDisplayPath(), "from the configured repository.")
-			return nil
-		} else if !os.IsNotExist(readErr) {
-			return readErr
+		remotePath, pathErr := repositoryFilePath(config.Repository, config.AliasFile)
+		if pathErr != nil {
+			return pathErr
+		}
+		if _, statErr := os.Stat(remotePath); statErr == nil {
+			remoteAvailable = true
+		} else if !os.IsNotExist(statErr) {
+			return statErr
 		}
 	}
 	if err := writeNewAliasFile(aliasPath, nil); err != nil {
 		return err
+	}
+	if remoteAvailable {
+		fmt.Println("Created", aliasDisplayPath(), "with mode 0600. Remote aliases were not activated; review them with al diff, then run al sync --pull.")
+		return nil
 	}
 	fmt.Println("Created", aliasDisplayPath(), "with mode 0600.")
 	return nil

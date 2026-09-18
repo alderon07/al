@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
+
+const importFileLimit = 8 << 20
 
 type importIssue struct {
 	Line    int
@@ -32,9 +37,12 @@ func runImportCommand(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	source, err := os.ReadFile(sourcePath)
+	source, err := readRegularFile(sourcePath, importFileLimit)
 	if err != nil {
-		return fmt.Errorf("read import file: %w", err)
+		return fmt.Errorf("read import file: %s; choose a regular file no larger than 8 MiB", terminalSafeText(err.Error()))
+	}
+	if bytes.IndexByte(source, 0) >= 0 || !utf8.Valid(source) {
+		return fmt.Errorf("read import file: expected UTF-8 text without NUL bytes")
 	}
 	aliasPath, err := aliasesPath()
 	if err != nil {
@@ -45,7 +53,11 @@ func runImportCommand(arguments []string) error {
 		return err
 	}
 	plan := buildImportPlan(source, current, activeShellAdapter())
-	if native := activeShellAdapter().CheckSyntax(sourcePath); native != nil {
+	native, err := checkImportSyntax(source, activeShellAdapter())
+	if err != nil {
+		return err
+	}
+	if native != nil {
 		plan.Issues = append(plan.Issues, importIssue{Line: native.Line, Kind: strings.ToLower(string(native.Severity)), Message: native.Message, Fatal: native.Severity == checkError})
 	}
 	printImportPlan(sourcePath, plan)
@@ -55,7 +67,7 @@ func runImportCommand(arguments []string) error {
 	}
 	for _, issue := range plan.Issues {
 		if issue.Fatal {
-			return fmt.Errorf("import has blocking problems; fix them and rerun al import %s", sourcePath)
+			return fmt.Errorf("import has blocking problems; fix them and rerun al import %s", terminalSafeText(sourcePath))
 		}
 	}
 	if len(plan.Add) == 0 {
@@ -80,6 +92,27 @@ func runImportCommand(arguments []string) error {
 	}
 	fmt.Printf("Imported %d aliases. Backup and private revision saved.\n", len(plan.Add))
 	return nil
+}
+
+func checkImportSyntax(contents []byte, adapter ShellAdapter) (*aliasCheckFinding, error) {
+	file, err := os.CreateTemp("", ".alias-lens-import-*")
+	if err != nil {
+		return nil, fmt.Errorf("prepare import syntax check: %w", err)
+	}
+	path := file.Name()
+	defer os.Remove(path)
+	if err := file.Chmod(0o600); err != nil {
+		file.Close()
+		return nil, fmt.Errorf("prepare import syntax check: %w", err)
+	}
+	if _, err := file.Write(contents); err != nil {
+		file.Close()
+		return nil, fmt.Errorf("prepare import syntax check: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		return nil, fmt.Errorf("prepare import syntax check: %w", err)
+	}
+	return adapter.CheckSyntax(path), nil
 }
 
 func buildImportPlan(source, current []byte, adapter ShellAdapter) importPlan {
@@ -167,7 +200,7 @@ func parseImportAliases(contents []byte, adapter ShellAdapter) []Alias {
 }
 
 func printImportPlan(path string, plan importPlan) {
-	fmt.Println("Import preview:", path)
+	fmt.Println("Import preview:", terminalSafeText(path))
 	for _, issue := range plan.Issues {
 		location := ""
 		if issue.Line > 0 {
@@ -179,7 +212,23 @@ func printImportPlan(path string, plan importPlan) {
 		fmt.Println("SKIP ", skipped)
 	}
 	for _, alias := range plan.Add {
-		fmt.Printf("ADD    %-20s %s\n", alias.Name, alias.Command)
+		fmt.Printf("ADD    %-20s %s\n", alias.Name, terminalSafeText(alias.Command))
 	}
 	fmt.Printf("Planned: %d add, %d skip, %d issues.\n", len(plan.Add), len(plan.Skip), len(plan.Issues))
+}
+
+func terminalSafeText(value string) string {
+	var output strings.Builder
+	for _, character := range value {
+		if unicode.IsControl(character) {
+			if character <= 0xff {
+				fmt.Fprintf(&output, `\x%02x`, character)
+			} else {
+				fmt.Fprintf(&output, `\u%04x`, character)
+			}
+			continue
+		}
+		output.WriteRune(character)
+	}
+	return output.String()
 }
