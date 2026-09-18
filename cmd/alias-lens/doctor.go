@@ -7,7 +7,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type DoctorCheck struct {
@@ -58,7 +60,11 @@ func doctorChecks() []DoctorCheck {
 	aliases, _ := os.ReadFile(aliasPath)
 	hasIntegration := strings.Contains(string(aliases), "shell-init "+adapter.Name())
 	setupCommand := "run al setup " + adapter.Name()
-	checks = append(checks, DoctorCheck{Name: "shell actions", OK: hasIntegration, Message: map[bool]string{true: "Enter, al use, and Ctrl+G are enabled", false: setupCommand}[hasIntegration]})
+	actionsMessage := setupCommand
+	if hasIntegration {
+		actionsMessage = shellActionsMessage(adapter)
+	}
+	checks = append(checks, DoctorCheck{Name: "shell actions", OK: hasIntegration, Message: actionsMessage})
 
 	_, gitErr := exec.LookPath("git")
 	checks = append(checks, DoctorCheck{Name: "Git", OK: gitErr == nil, Message: map[bool]string{true: "installed", false: "install Git"}[gitErr == nil]})
@@ -241,8 +247,9 @@ func runSetup(shellName string, repair bool) error {
 		if repair {
 			verb = "Repaired"
 		}
-		fmt.Printf("%s Alias Lens %s integration. Start a new %s shell, then press Ctrl+G on an empty prompt.\n", verb, adapter.DisplayName(), adapter.Name())
+		fmt.Printf("%s Alias Lens %s integration.\n", verb, adapter.DisplayName())
 	}
+	fmt.Println(shellSetupInstruction(adapter))
 	home := filepath.Dir(aliasPath)
 	if err := adapter.ConfigureStartup(home, runtime.GOOS, userExecutableDirectory(home)); err != nil {
 		return err
@@ -259,6 +266,47 @@ func runSetup(shellName string, repair bool) error {
 		return nil
 	}
 	return offerDefaultAliases(aliasPath, os.Stdin, os.Stdout)
+}
+
+func shellActionsMessage(adapter ShellAdapter) string {
+	if adapter.Name() == "bash" {
+		if supported, known := bashCtrlGSupport(); known && !supported {
+			return "Enter and al use are enabled; run al because Ctrl+G requires Bash 4 or newer"
+		}
+	}
+	return "Enter, al use, and Ctrl+G are enabled"
+}
+
+func shellSetupInstruction(adapter ShellAdapter) string {
+	if adapter.Name() == "bash" {
+		if supported, known := bashCtrlGSupport(); known && !supported {
+			return "Start a new bash shell, then run al. Ctrl+G requires Bash 4 or newer."
+		}
+	}
+	return "Start a new " + adapter.Name() + " shell, then press Ctrl+G on an empty prompt."
+}
+
+func bashCtrlGSupport() (supported, known bool) {
+	executable, err := exec.LookPath("bash")
+	if err != nil {
+		return false, false
+	}
+	output, err := commandOutput(context.Background(), 2*time.Second, executable, "--version")
+	if err != nil {
+		return false, false
+	}
+	fields := strings.Fields(string(output))
+	for index, field := range fields {
+		if field != "version" || index+1 >= len(fields) {
+			continue
+		}
+		majorText, _, _ := strings.Cut(fields[index+1], ".")
+		major, parseErr := strconv.Atoi(majorText)
+		if parseErr == nil {
+			return major >= 4, true
+		}
+	}
+	return false, false
 }
 
 func removeSetup(shellName string) error {

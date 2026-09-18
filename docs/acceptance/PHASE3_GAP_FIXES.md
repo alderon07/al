@@ -85,7 +85,7 @@ Change the alias file through `writeAliasFile`.
 The current binary may differ from `a5d6168` only in these results:
 
 - Linux and WSL Bash setup, repair, removal, startup status, and created login files.
-- Bash and Zsh `Ctrl+G` execution internals and the corrected command status.
+- Bash 4+ and Zsh `Ctrl+G` execution internals, Bash 3.2 fallback behavior, and the corrected command status.
 - Alias backup modes when a missing or existing backup is more permissive than `0600`.
 
 All other phase 3 baseline output, files, modes, exit statuses, shell behavior, and command results must match.

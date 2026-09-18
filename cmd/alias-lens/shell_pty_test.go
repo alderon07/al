@@ -4,6 +4,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -124,11 +125,27 @@ func (session *shellPTY) pressCtrlGAndPause() {
 }
 
 func TestBashPTYExecution(t *testing.T) {
-	bash, err := exec.LookPath("bash")
-	if err != nil {
+	paths := []string{"/bin/bash", "/opt/homebrew/bin/bash", "/usr/local/bin/bash"}
+	if bash, err := exec.LookPath("bash"); err == nil {
+		paths = append(paths, bash)
+	}
+	seen := map[string]bool{}
+	tested := 0
+	for _, bash := range paths {
+		resolved, err := filepath.EvalSymlinks(bash)
+		if err != nil || seen[resolved] {
+			continue
+		}
+		seen[resolved] = true
+		major := bashMajorVersion(t, resolved)
+		t.Run(fmt.Sprintf("%s-bash-%d", filepath.Base(filepath.Dir(resolved)), major), func(t *testing.T) {
+			runShellPTYExecutionChecks(t, "bash", resolved, []string{"--noprofile", "--norc", "-i"}, bashIntegration, major >= 4)
+		})
+		tested++
+	}
+	if tested == 0 {
 		t.Skip("bash is not installed")
 	}
-	runShellPTYExecutionChecks(t, "bash", bash, []string{"--noprofile", "--norc", "-i"}, bashIntegration)
 }
 
 func TestZshPTYExecution(t *testing.T) {
@@ -136,7 +153,20 @@ func TestZshPTYExecution(t *testing.T) {
 	if zsh == "" {
 		t.Skip("zsh is not installed")
 	}
-	runShellPTYExecutionChecks(t, "zsh", zsh, []string{"-f"}, zshIntegration)
+	runShellPTYExecutionChecks(t, "zsh", zsh, []string{"-f"}, zshIntegration, true)
+}
+
+func bashMajorVersion(t *testing.T, executable string) int {
+	t.Helper()
+	output, err := exec.Command(executable, "-c", `printf '%s\n' "${BASH_VERSINFO[0]}"`).Output()
+	if err != nil {
+		t.Fatalf("read %s version: %v", executable, err)
+	}
+	major := 0
+	if _, err := fmt.Sscanf(strings.TrimSpace(string(output)), "%d", &major); err != nil {
+		t.Fatalf("parse %s version %q: %v", executable, output, err)
+	}
+	return major
 }
 
 func findZsh() string {
@@ -151,7 +181,7 @@ func findZsh() string {
 	return ""
 }
 
-func runShellPTYExecutionChecks(t *testing.T, shellName, executable string, arguments []string, integration string) {
+func runShellPTYExecutionChecks(t *testing.T, shellName, executable string, arguments []string, integration string, promptBinding bool) {
 	t.Helper()
 	home := t.TempDir()
 	binDirectory := filepath.Join(home, "bin")
@@ -204,7 +234,23 @@ esac
 		environment = append(environment, "PROMPT="+ptyPrompt, "ZDOTDIR="+home)
 	}
 	session := startShellPTY(t, executable, arguments, environment)
+	if shellName == "bash" && !promptBinding {
+		session.run(`bind '"\C-g":"\C-x\C-g\C-x\C-a"'`)
+	}
 	session.run(`source "$HOME/integration"`)
+	if shellName == "bash" && !promptBinding {
+		if output := session.run(`bind -q abort`); !strings.Contains(output, `"\C-g"`) {
+			t.Fatalf("Bash 3.2 did not restore Ctrl+G cancellation:\n%s", output)
+		}
+		if output := session.run(`al; printf 'STATUS=%s\n' "$?"`); !strings.Contains(output, "STATUS=1") {
+			t.Fatalf("Bash 3.2 direct al invocation failed:\n%s", output)
+		}
+		session.run(`bind '"\C-g":"CUSTOM"'; source "$HOME/integration"`)
+		if output := session.run(`bind -s`); !strings.Contains(output, `"\C-g": "CUSTOM"`) {
+			t.Fatalf("Bash 3.2 custom Ctrl+G binding changed:\n%s", output)
+		}
+		return
+	}
 
 	selectionOutput := session.pressCtrlG()
 	if count := strings.Count(selectionOutput, "bad"); count != 1 {

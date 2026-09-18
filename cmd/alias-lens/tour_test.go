@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
 
 func TestSetupTourAppearsOnceAndCanOpenHelp(t *testing.T) {

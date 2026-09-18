@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
 
 func TestSetupDetectsShellFromEnvironment(t *testing.T) {
@@ -443,6 +443,33 @@ func TestZshExtendedHistoryIsNormalized(t *testing.T) {
 	}
 	if counts["git status --short --branch"] != 2 {
 		t.Fatalf("unexpected Zsh history counts: %#v", counts)
+	}
+}
+
+func TestBash32SetupInstructionsUseDirectCommand(t *testing.T) {
+	binDirectory := t.TempDir()
+	bash := filepath.Join(binDirectory, "bash")
+	if err := os.WriteFile(bash, []byte("#!/bin/sh\nprintf 'GNU bash, version 3.2.57(1)-release\\n'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDirectory)
+	if message := shellSetupInstruction(bashShellAdapter{}); !strings.Contains(message, "run al") || !strings.Contains(message, "Bash 4") {
+		t.Fatalf("Bash 3.2 setup instruction = %q", message)
+	}
+	if message := shellActionsMessage(bashShellAdapter{}); !strings.Contains(message, "run al") || strings.Contains(message, "Ctrl+G are enabled") {
+		t.Fatalf("Bash 3.2 doctor instruction = %q", message)
+	}
+}
+
+func TestModernBashSetupInstructionsAdvertiseCtrlG(t *testing.T) {
+	binDirectory := t.TempDir()
+	bash := filepath.Join(binDirectory, "bash")
+	if err := os.WriteFile(bash, []byte("#!/bin/sh\nprintf 'GNU bash, version 5.2.15(1)-release\\n'\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDirectory)
+	if message := shellSetupInstruction(bashShellAdapter{}); !strings.Contains(message, "press Ctrl+G") {
+		t.Fatalf("modern Bash setup instruction = %q", message)
 	}
 }
 

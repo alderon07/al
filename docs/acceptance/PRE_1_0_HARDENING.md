@@ -40,6 +40,9 @@ These criteria cover the remaining safety, privacy, terminal, release, and workf
 - Every action remains keyboard accessible.
 - Truncation, wrapping, and padding use terminal cell width for wide and combining Unicode characters.
 - Built-in themes meet the documented text and control contrast thresholds, or an automated test identifies the failing preset.
+- Bash 3.2 keeps Readline's normal `Ctrl+G` cancellation and uses `al` to open the picker. Alias Lens installs the prompt-aware `Ctrl+G` binding only on Bash 4 or newer and preserves unrelated custom bindings.
+- Reloading the Bash 3.2 integration removes the exact legacy Alias Lens `Ctrl+G` macro without changing another `Ctrl+G` binding.
+- Plain commands such as `al --version` start without waiting for a terminal color-response probe. The TUI still enables alternate-screen and focus reporting after it starts.
 
 ## Selection and import
 
@@ -68,3 +71,10 @@ These criteria cover the remaining safety, privacy, terminal, release, and workf
 - The same release candidate passes clean install and upgrade checks on Ubuntu Bash, WSL Ubuntu after shutdown/restart, macOS Zsh, and macOS Bash.
 - Login and non-login shells pass, plus narrow, medium, wide, and tmux sessions.
 - Evidence records the exact release candidate, operating-system version, shell version, terminal dimensions, and result.
+
+## Command-line failure behavior
+
+- Invalid command syntax and unknown commands exit with status 2 after printing actionable usage to standard error.
+- Operational failures, including unsupported shell integrations and unreadable import files, exit with status 1.
+- Successful help, version, and command operations exit with status 0.
+- Process-tree cancellation tests wait until the validator child is running before cancellation, then verify that the complete process group is reaped on Linux and macOS.

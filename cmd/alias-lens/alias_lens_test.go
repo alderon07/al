@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
 
 func TestParseAliasDefinitionRoundTripsShellQuotes(t *testing.T) {
@@ -706,6 +706,9 @@ func TestBashIntegrationExecutesAliasNameInsteadOfCommandText(t *testing.T) {
 	}
 	if !strings.Contains(bashIntegration, `ALIAS_LENS_NOBIND`) || !strings.Contains(bashIntegration, `[ -n "${READLINE_LINE-}" ]`) || !strings.Contains(bashIntegration, `bind -x '"\C-x\C-g":_alias_lens_prepare_readline'`) || !strings.Contains(bashIntegration, `bind '"\C-g":"\C-x\C-g\C-x\C-a"'`) {
 		t.Fatal("Bash binding cannot be disabled or preserve Ctrl+G on a non-empty prompt")
+	}
+	if !strings.Contains(bashIntegration, `"${BASH_VERSINFO[0]:-0}"`) || !strings.Contains(bashIntegration, `-lt 4`) || !strings.Contains(bashIntegration, `bind '"\C-g":abort'`) {
+		t.Fatal("Bash integration does not preserve Ctrl+G cancellation on Bash 3.2")
 	}
 	if !strings.Contains(bashIntegration, `ALIAS_LENS_PROMPT_ACCEPT=1`) || !strings.Contains(bashIntegration, `READLINE_LINE="$_alias_lens_name"`) || !strings.Contains(bashIntegration, `accept-line`) {
 		t.Fatal("Bash picker selections are not accepted as native command lines")

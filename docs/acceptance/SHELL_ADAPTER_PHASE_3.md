@@ -139,9 +139,9 @@ Each terminal record includes the environment ID, version commands, setup comman
 
 | Field | Required evidence |
 | --- | --- |
-| Initial state | A PTY starts Bash with Readline or Zsh with ZLE. A preexisting `Ctrl+G` binding writes `USER_BINDING`. Repeat with and without `ALIAS_LENS_NOBIND=1`, and with `alias-lens` removed from `PATH` after startup. |
+| Initial state | A PTY starts Bash 3.2, Bash 4+, or Zsh. A preexisting `Ctrl+G` binding writes `USER_BINDING`. Repeat with and without `ALIAS_LENS_NOBIND=1`, and with `alias-lens` removed from `PATH` after startup. |
 | Operation | Press `Ctrl+G` on an empty prompt and after typing `keep-me`. |
-| Expected state | With Alias Lens binding enabled, an empty Bash or Zsh prompt opens the picker. Bash clears a non-empty Readline buffer and does not open the picker. Zsh sends `send-break`, redraws a clean prompt, and does not run the typed buffer. With `ALIAS_LENS_NOBIND=1`, `USER_BINDING` appears and the existing binding remains. If the executable disappears, the shell returns to an interactive prompt with nonzero command status and no file change. |
+| Expected state | With Alias Lens binding enabled, an empty Bash 4+ or Zsh prompt opens the picker. Bash 4+ clears a non-empty Readline buffer and does not open the picker. Zsh sends `send-break`, redraws a clean prompt, and does not run the typed buffer. Bash 3.2 keeps Readline cancellation and opens Alias Lens through `al`. Reloading removes only the exact legacy Alias Lens macro. With `ALIAS_LENS_NOBIND=1`, `USER_BINDING` appears and the existing binding remains. If the executable disappears, the shell returns to an interactive prompt with nonzero command status and no file change. |
 | Failure result | Running without an interactive line editor emits the baseline shell error and does not edit shell files. |
 | Automated evidence | `TestBashPTYBinding`, `TestZshPTYBinding`, `TestBashPTYBindingDisabledPreservesUserBinding`, and `TestZshPTYBindingDisabledPreservesUserBinding` |
 | Terminal evidence | Repeat the enabled, non-empty, disabled, and missing-executable cases in every environment that supplies that shell. Record the exact buffer and prompt state. |

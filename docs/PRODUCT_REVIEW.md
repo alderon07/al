@@ -24,9 +24,9 @@ al meta cl tags=daily,terminal category=utility
 
 ## Launch shortcut
 
-After `al setup`, press `Ctrl+G` on an empty Bash or Zsh prompt to open Alias Lens. Selecting an alias runs it. Typing `al` remains a fallback and a way to run subcommands.
+After `al setup`, press `Ctrl+G` on an empty Zsh or Bash 4+ prompt to open Alias Lens. Selecting an alias runs it. Stock macOS Bash 3.2 users run `al`.
 
-`Ctrl+G` normally cancels the current Readline or ZLE operation. Alias Lens preserves that behavior when the prompt contains text. On an empty prompt, the binding opens the alias picker. This prompt-aware rule avoids taking a useful editing shortcut away from the user.
+`Ctrl+G` normally cancels the current Readline or ZLE operation. On Zsh and Bash 4+, Alias Lens preserves that behavior when the prompt contains text and opens the picker from an empty prompt. Bash 3.2 cannot safely expose or replace the current Readline buffer, so Alias Lens leaves `Ctrl+G` alone.
 
 No terminal shortcut is collision-free across every shell, terminal, multiplexer, and user configuration. Set `ALIAS_LENS_NOBIND=1` before the Alias Lens integration to install no binding. The integration still defines `_alias_lens_launch`, which users can bind with their shell's normal binding command.
 

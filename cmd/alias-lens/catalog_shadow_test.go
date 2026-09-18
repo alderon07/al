@@ -832,23 +832,38 @@ func TestShadowValidatorKillsProcessGroup(t *testing.T) {
 	originalValidator := shadowValidatorPath
 	shadowValidatorPath = func(string) (string, error) { return script, nil }
 	t.Cleanup(func() { shadowValidatorPath = originalValidator })
-	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
-	defer cancel()
-	err := validateShadowSyntax(ctx, "bash", []byte("alias x='true'\n"))
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("validator error = %v", err)
-	}
-	payload, err := os.ReadFile(pidPath)
-	if err != nil {
-		t.Fatal(err)
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		result <- validateShadowSyntax(ctx, "bash", []byte("alias x='true'\n"))
+	}()
+
 	var pid int
-	if _, err := fmt.Sscanf(strings.TrimSpace(string(payload)), "%d", &pid); err != nil {
-		t.Fatal(err)
+	readyDeadline := time.Now().Add(5 * time.Second)
+	for pid == 0 {
+		payload, err := os.ReadFile(pidPath)
+		if err == nil {
+			_, _ = fmt.Sscanf(strings.TrimSpace(string(payload)), "%d", &pid)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			cancel()
+			<-result
+			t.Fatal(err)
+		}
+		if time.Now().After(readyDeadline) {
+			cancel()
+			err := <-result
+			t.Fatalf("validator child did not become ready: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	cancel()
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("validator error = %v", err)
 	}
 	deadline := time.Now().Add(time.Second)
 	for {
-		err = syscall.Kill(pid, 0)
+		err := syscall.Kill(pid, 0)
 		if errors.Is(err, syscall.ESRCH) {
 			break
 		}

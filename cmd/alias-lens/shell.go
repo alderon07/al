@@ -594,6 +594,13 @@ fi
 _alias_lens_flush_history() {
   builtin history -a
 }
+_alias_lens_edit_notice() {
+  if [ "${BASH_VERSINFO[0]:-0}" -lt 4 ]; then
+    printf 'Selected %s. Bash 3.2 cannot insert it into the prompt; type the alias to edit it.\n' "$1" >&2
+  else
+    printf 'Selected %s. Use Ctrl+G from an empty prompt to edit it.\n' "$1" >&2
+  fi
+}
 _alias_lens_execute() {
   local _alias_lens_name="$1" _alias_lens_definition _alias_lens_status
   _alias_lens_definition="$(command env ALIAS_LENS_SHELL=bash alias-lens shell-entry "$_alias_lens_name")" || return
@@ -612,7 +619,7 @@ al() {
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens)" || return
     [ -z "$_alias_lens_name" ] && return
     case "$_alias_lens_name" in
-      __alias_lens_edit__:*) printf 'Selected %s. Use Ctrl+G from an empty prompt to edit it.\n' "${_alias_lens_name#__alias_lens_edit__:}" >&2; return ;;
+      __alias_lens_edit__:*) _alias_lens_edit_notice "${_alias_lens_name#__alias_lens_edit__:}"; return ;;
     esac
     _alias_lens_execute "$_alias_lens_name"
     return $?
@@ -626,7 +633,7 @@ al() {
     local _alias_lens_name
     _alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens pick --execute "$@")" || return
     [ -z "$_alias_lens_name" ] && return
-    case "$_alias_lens_name" in __alias_lens_edit__:*) printf 'Selected %s. Use Ctrl+G from an empty prompt to edit it.\n' "${_alias_lens_name#__alias_lens_edit__:}" >&2; return ;; esac
+    case "$_alias_lens_name" in __alias_lens_edit__:*) _alias_lens_edit_notice "${_alias_lens_name#__alias_lens_edit__:}"; return ;; esac
     _alias_lens_execute "$_alias_lens_name"
     return $?
   fi
@@ -656,11 +663,17 @@ _alias_lens_prepare_readline() {
     bind '"\C-x\C-a":accept-line'
   fi
 }
-if [ -z "${ALIAS_LENS_NOBIND-}" ]; then
+_alias_lens_bash_major="${BASH_VERSINFO[0]:-0}"
+if [ "$_alias_lens_bash_major" -lt 4 ]; then
+  case "$(bind -s 2>/dev/null)" in
+    *'"\C-g": "\C-x\C-g\C-x\C-a"'*) bind '"\C-g":abort' ;;
+  esac
+elif [ -z "${ALIAS_LENS_NOBIND-}" ]; then
   bind '"\C-x\C-a":abort'
   bind -x '"\C-x\C-g":_alias_lens_prepare_readline'
   bind '"\C-g":"\C-x\C-g\C-x\C-a"'
 fi
+unset _alias_lens_bash_major
 command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.bash_history}" alias-lens watch --ensure >/dev/null 2>&1
 `
 

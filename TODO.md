@@ -87,7 +87,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Use terminal history as the only source for alias usage counts.
 - [x] Export aliases and stats as JSON, YAML, or CSV.
 - [x] Show the expanded command in the terminal after a picker launch.
-- [x] Make `Ctrl+G` launch the picker from an empty Bash or Zsh prompt.
+- [x] Make `Ctrl+G` launch the picker from an empty Zsh or Bash 4+ prompt; Bash 3.2 uses `al`.
 - [x] Preserve `Ctrl+G` cancel behavior when the prompt contains text.
 - [x] Let users disable the binding with `ALIAS_LENS_NOBIND=1` and bind `_alias_lens_launch` themselves.
 - [x] Move the executable package and embedded browser assets under `cmd/alias-lens/`.

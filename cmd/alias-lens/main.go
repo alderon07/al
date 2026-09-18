@@ -39,9 +39,13 @@ type Alias struct {
 }
 
 func main() {
+	os.Exit(runMain())
+}
+
+func runMain() int {
 	if len(os.Args) == 1 {
 		runTUI()
-		return
+		return 0
 	}
 	if os.Args[1] == "help" || isHelpFlag(os.Args[1]) {
 		if len(os.Args) == 2 {
@@ -50,62 +54,74 @@ func main() {
 			printCommandUsage(os.Args[2])
 		} else {
 			fmt.Fprintln(os.Stderr, "Usage: al help [COMMAND]")
+			return 2
 		}
-		return
+		return 0
 	}
 	if len(os.Args) == 3 && isHelpFlag(os.Args[2]) {
 		printCommandUsage(os.Args[1])
-		return
+		return 0
 	}
 	switch os.Args[1] {
 	case "version", "--version", "-v":
 		fmt.Printf("alias-lens %s\n", displayVersion())
 	case "--web":
+		if len(os.Args) > 2 {
+			printUsage()
+			return 2
+		}
 		if err := runWeb(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "repo":
 		if len(os.Args) == 2 {
 			if err := runRepoPicker(""); err != nil {
 				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				return 1
 			}
-			return
+			return 0
 		}
 		if len(os.Args) != 3 {
 			fmt.Fprintln(os.Stderr, "Usage: al repo [/path/to/dotfiles]")
-			return
+			return 2
 		}
 		if os.Args[2] == "github" || os.Args[2] == "bitbucket" || os.Args[2] == "gitlab" {
 			if err := runRepoPicker(os.Args[2]); err != nil {
 				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				return 1
 			}
-			return
+			return 0
 		}
 		if err := configureRepository(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
-			return
+			return 1
 		}
 		config, _ := loadConfig()
 		fmt.Printf("Alias Lens will sync only %s in %s\n", config.AliasFile, os.Args[2])
 	case "config":
 		if err := runConfigCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "data":
 		if err := runDataCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "catalog":
 		exitCode, err := runCatalogCommand(os.Args[2:])
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			if exitCode == 0 {
+				return 1
+			}
 		}
-		if exitCode != 0 {
-			os.Exit(exitCode)
-		}
+		return exitCode
 	case "theme":
 		if err := runThemeCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "pick":
 		commandOnly := false
@@ -126,7 +142,7 @@ func main() {
 	pickerArgumentsParsed:
 		if len(arguments) > 1 {
 			fmt.Fprintln(os.Stderr, "Usage: al pick [--command] [--execute] [QUERY]")
-			return
+			return 2
 		}
 		query := ""
 		if len(arguments) == 1 {
@@ -134,92 +150,105 @@ func main() {
 		}
 		if err := runAliasPicker(query, commandOnly, executeSelection); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "shell-init":
 		if len(os.Args) != 3 {
 			fmt.Fprintln(os.Stderr, "Usage: al shell-init bash|zsh")
-			return
+			return 2
 		}
 		if err := printShellIntegration(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "shell-entry":
 		if len(os.Args) != 3 {
 			fmt.Fprintln(os.Stderr, "Usage: alias-lens shell-entry NAME")
-			return
+			return 2
 		}
 		if err := printShellEntry(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
-			os.Exit(1)
+			return 1
 		}
 	case "suggest":
 		if err := runHistorySuggestions(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "search":
 		if err := runSearchCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "stats":
 		if err := runStatsCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "record-use":
 		if len(os.Args) != 3 {
 			fmt.Fprintln(os.Stderr, "Usage: alias-lens record-use NAME")
-			return
+			return 2
 		}
 		if err := recordAliasUse(os.Args[2]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "export":
 		if err := runExportCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "import":
 		if err := runImportCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "scan":
 		if len(os.Args) != 2 {
 			fmt.Fprintln(os.Stderr, "Usage: al scan")
-			return
+			return 2
 		}
 		if err := runSecretScan(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "check":
 		exitCode, err := runAliasCheck(os.Args[2:])
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			if exitCode == 0 {
+				return 1
+			}
 		}
-		if exitCode != 0 {
-			os.Exit(exitCode)
-		}
+		return exitCode
 	case "meta":
 		if err := runMetadataCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "describe":
 		if len(os.Args) != 2 {
 			fmt.Fprintln(os.Stderr, "Usage: al describe")
-			return
+			return 2
 		}
 		if err := addAliasDescriptions(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "history":
 		if len(os.Args) != 2 {
 			fmt.Fprintln(os.Stderr, "Usage: al history")
-			return
+			return 2
 		}
 		if err := runRevisionHistory(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "undo":
 		if len(os.Args) > 3 {
 			fmt.Fprintln(os.Stderr, "Usage: al undo [REVISION]")
-			return
+			return 2
 		}
 		revision := "latest"
 		if len(os.Args) == 3 {
@@ -227,22 +256,26 @@ func main() {
 		}
 		if err := restoreRevision(revision); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "doctor":
 		if len(os.Args) != 2 {
 			fmt.Fprintln(os.Stderr, "Usage: al doctor")
-			return
+			return 2
 		}
 		if err := runDoctor(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "setup":
 		if err := runSetupCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "autosync":
 		if err := runAutoSyncCommand(os.Args[2:]); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "watch":
 		if len(os.Args) == 3 && os.Args[2] == "--ensure" {
@@ -252,53 +285,61 @@ func main() {
 			}
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				return 1
 			}
-			return
+			return 0
 		}
 		daemon := len(os.Args) == 3 && os.Args[2] == "--daemon"
 		if len(os.Args) > 3 || (len(os.Args) == 3 && !daemon) {
 			fmt.Fprintln(os.Stderr, "Usage: al watch")
-			return
+			return 2
 		}
-		if err := runWatch(daemon); err != nil && !daemon {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		if err := runWatch(daemon); err != nil {
+			if !daemon {
+				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			}
+			return 1
 		}
 	case "track", "untrack":
 		if err := runTrackCommand(os.Args[2:], os.Args[1] == "untrack"); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	case "sync":
 		if len(os.Args) > 3 || (len(os.Args) == 3 && os.Args[2] != "--push" && os.Args[2] != "--pull") {
 			printUsage()
-			return
+			return 2
 		}
 		if len(os.Args) == 3 && os.Args[2] == "--pull" {
 			message, err := pullRepository()
 			if err != nil {
 				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
-				return
+				return 1
 			}
 			fmt.Println(message)
-			return
+			return 0
 		}
 		push := len(os.Args) == 3 && os.Args[2] == "--push"
 		message, err := syncRepository(push)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
-			return
+			return 1
 		}
 		fmt.Println(message)
 	case "diff":
 		if len(os.Args) != 2 {
 			fmt.Fprintln(os.Stderr, "Usage: al diff")
-			return
+			return 2
 		}
 		if err := showRepositoryDiff(); err != nil {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
 		}
 	default:
 		printUsage()
+		return 2
 	}
+	return 0
 }
 
 func displayVersion() string {

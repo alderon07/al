@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "alias-lens/cmd/alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )

@@ -20,13 +20,13 @@ gl     git log --oneline --graph        Show the compact commit graph
 gcb    git checkout -b                  Create and switch to a branch
 ```
 
-Press `Ctrl+G` at an empty prompt to open the terminal interface. Pick an alias, press `Enter`, and Alias Lens prints the alias before it runs. No mystery commands.
+Press `Ctrl+G` at an empty Zsh or Bash 4+ prompt to open the terminal interface. Stock macOS Bash 3.2 users run `al` instead. Pick an alias, press `Enter`, and Alias Lens prints the alias before it runs. No mystery commands.
 
 ## Install it
 
 Alias Lens supports Bash and Zsh on Linux, WSL, and macOS.
 
-With Go 1.24 or newer:
+With Go 1.24.2 or newer:
 
 ```bash
 go install github.com/alderon07/al/cmd/alias-lens@latest
@@ -41,7 +41,7 @@ install -m 0755 alias-lens "$HOME/.local/bin/alias-lens"
 "$HOME/.local/bin/alias-lens" setup
 ```
 
-To build from source, you need Make and Go 1.24 or newer:
+To build from source, you need Make and Go 1.24.2 or newer:
 
 ```bash
 git clone https://github.com/alderon07/al.git
@@ -88,7 +88,7 @@ Alias Lens is available under the [Apache License 2.0](LICENSE).
 
 ## Find the shortcut before you forget it
 
-Open Alias Lens with `Ctrl+G` or run `al`. Search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.
+Open Alias Lens with `Ctrl+G` on Zsh or Bash 4+, or run `al` on any supported shell. Stock macOS Bash 3.2 keeps the normal Readline `Ctrl+G` cancellation behavior. Search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.
 
 The idle screen brings useful aliases back into view. Select one and press `Enter` to run it in the current shell. Press `Tab` to return the alias to the prompt without running it, then edit it or add arguments. New and edited aliases work without restarting the shell.
 
@@ -122,7 +122,7 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 
 Some terminals reserve `Ctrl+S` for flow control, so `F2` is the reliable shortcut for stats.
 
-On a non-empty prompt, `Ctrl+G` keeps its normal cancel behavior. Set `ALIAS_LENS_NOBIND=1` before the shell integration loads if you do not want the key binding.
+On Zsh and Bash 4+, `Ctrl+G` keeps its normal cancel behavior when the prompt contains text. Bash 3.2 does not install the picker binding; run `al` instead. Set `ALIAS_LENS_NOBIND=1` before the shell integration loads if you do not want the key binding.
 
 ## Add context to cryptic names
 

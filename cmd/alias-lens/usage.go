@@ -8,7 +8,7 @@ import (
 const usageText = `Alias Lens manages Bash and Zsh aliases from a terminal interface.
 
 Usage:
-  Ctrl+G                     Open the alias browser from an empty prompt
+  Ctrl+G                     Open from an empty Zsh or Bash 4+ prompt
   al                         Open the same browser without using the shortcut
   al COMMAND [ARGUMENTS]     Run a command without opening the browser
   al help [COMMAND]          Explain all commands or one command
@@ -183,8 +183,9 @@ Failed checks print the command or action that should fix them.
   al setup --remove [bash|zsh]
 
 Detect the current Bash or Zsh shell and install the function used by "al" and
-"al use", plus a prompt-aware Ctrl+G launcher. Ctrl+G opens Alias Lens when the
-prompt is empty and keeps its cancel behavior when the prompt contains text.
+"al use". Zsh and Bash 4+ also get a prompt-aware Ctrl+G launcher. Ctrl+G opens
+Alias Lens when the prompt is empty and keeps its cancel behavior when the
+prompt contains text. Bash 3.2 keeps normal Readline cancellation; run "al".
 --repair restores missing generated integration and removes duplicate generated
 blocks. --remove removes only the Alias Lens integration. It keeps aliases,
 configuration, revisions, and repositories.
@@ -297,9 +298,10 @@ Examples:
 `,
 	"shell-init": `Usage: al shell-init bash|zsh
 
-Print the selected shell's functions and prompt-aware Ctrl+G binding. This
-command does not edit shell files by itself. "al setup" installs the correct
-output safely. Set ALIAS_LENS_NOBIND=1 to skip the binding.
+Print the selected shell's functions and prompt integration. Zsh and Bash 4+
+install a prompt-aware Ctrl+G binding. Bash 3.2 keeps normal cancellation and
+uses "al". This command does not edit shell files by itself. "al setup" installs
+the correct output safely. Set ALIAS_LENS_NOBIND=1 to skip the binding.
 `,
 	"--web": `Usage: al --web
 

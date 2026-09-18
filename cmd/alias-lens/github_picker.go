@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "alias-lens/cmd/alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 )
 

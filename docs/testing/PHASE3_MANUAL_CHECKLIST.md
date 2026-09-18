@@ -31,7 +31,8 @@ Delete `/tmp/al-phase3` after the tests. Do not substitute your real home direct
 
 ## Check the PTY behavior
 
-- [x] Test `Ctrl+G` in Bash on an empty prompt.
+- [x] Test `Ctrl+G` in Bash 4+ on an empty prompt.
+- [ ] On stock macOS Bash 3.2, confirm `Ctrl+G` cancels and `al` opens the picker.
 - [x] Select an alias and press Enter.
 - [x] Confirm that the terminal shows the accepted alias once before the command output.
 - [x] Confirm that the command runs in the current shell.
