@@ -4,6 +4,7 @@ These criteria cover the remaining safety, privacy, terminal, release, and workf
 
 ## Data safety and sync
 
+- `al diff` and the sync dashboard use the same whole-file equality rule. An exact match clears stale conflict state; differences outside parsed alias commands are reported instead of being called a match.
 - Alias and tracked-file replacements create a private backup before the live path changes.
 - Writes use a temporary file in the destination directory, sync file contents, rename atomically, and sync the directory.
 - A failed write leaves the old file or the complete new file at the live path.

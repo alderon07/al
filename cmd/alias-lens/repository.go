@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -164,6 +165,10 @@ func compareAliasFiles(local, remote []byte) (localOnly, remoteOnly []string, co
 }
 
 func showRepositoryDiff() error {
+	return showRepositoryDiffTo(os.Stdout)
+}
+
+func showRepositoryDiffTo(output io.Writer) error {
 	_, source, target, err := repositoryPaths()
 	if err != nil {
 		return err
@@ -178,19 +183,31 @@ func showRepositoryDiff() error {
 	} else if err != nil {
 		return err
 	}
+	if bytes.Equal(local, remote) {
+		hash := contentHash(local)
+		if err := writeSyncStatus("synced", "files match", hash, hash); err != nil {
+			return fmt.Errorf("alias files match, but refresh sync status: %w; run al diff again", err)
+		}
+		fmt.Fprintln(output, "The local and tracked alias files match.")
+		return nil
+	}
 	localOnly, remoteOnly, conflicts := compareAliasFiles(local, remote)
 	if len(localOnly)+len(remoteOnly)+len(conflicts) == 0 {
-		fmt.Println("The local and tracked alias files match.")
+		fmt.Fprintln(output, "FILES DIFFER outside parsed alias commands")
+		fmt.Fprintln(output, "The commands and functions match, but comments, metadata, ordering, whitespace, or unparsed syntax differ.")
+		fmt.Fprintf(output, "  local:   %s\n", source)
+		fmt.Fprintf(output, "  tracked: %s\n", target)
+		fmt.Fprintln(output, "Run al sync to keep the local file, or reconcile the two files manually.")
 		return nil
 	}
 	for _, name := range localOnly {
-		fmt.Println("LOCAL ONLY ", name)
+		fmt.Fprintln(output, "LOCAL ONLY ", name)
 	}
 	for _, name := range remoteOnly {
-		fmt.Println("REMOTE ONLY", name)
+		fmt.Fprintln(output, "REMOTE ONLY", name)
 	}
 	for _, conflict := range conflicts {
-		fmt.Printf("CHANGED    %s\n  local:  %s\n  remote: %s\n", conflict.Name, conflict.Local, conflict.Remote)
+		fmt.Fprintf(output, "CHANGED    %s\n  local:  %s\n  remote: %s\n", conflict.Name, conflict.Local, conflict.Remote)
 	}
 	return nil
 }
