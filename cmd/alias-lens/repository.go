@@ -197,7 +197,7 @@ func showRepositoryDiffTo(output io.Writer) error {
 		fmt.Fprintln(output, "The commands and functions match, but comments, metadata, ordering, whitespace, or unparsed syntax differ.")
 		fmt.Fprintf(output, "  local:   %s\n", source)
 		fmt.Fprintf(output, "  tracked: %s\n", target)
-		fmt.Fprintln(output, "Run al sync to keep the local file, or reconcile the two files manually.")
+		fmt.Fprintln(output, "Run al sync to keep the local file. To combine both files, compare them and choose which lines to keep.")
 		return nil
 	}
 	for _, name := range localOnly {

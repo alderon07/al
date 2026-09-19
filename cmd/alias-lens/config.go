@@ -7,20 +7,26 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 )
 
-const currentConfigVersion = 1
+const currentConfigVersion = 2
+
+var profileNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 
 type AppConfig struct {
-	Version      int                       `json:"version"`
-	Repository   string                    `json:"repository"`
-	AliasFile    string                    `json:"alias_file"`
-	Shell        string                    `json:"shell"`
-	Providers    map[string]ProviderConfig `json:"providers"`
-	AutoSync     AutoSyncConfig            `json:"auto_sync"`
-	TrackedFiles []TrackedFileConfig       `json:"tracked_files,omitempty"`
+	Version         int                       `json:"version"`
+	Repository      string                    `json:"repository"`
+	AliasFile       string                    `json:"alias_file"`
+	Shell           string                    `json:"shell"`
+	Profiles        []string                  `json:"profiles,omitempty"`
+	ShortcutProfile string                    `json:"shortcut_profile,omitempty"`
+	Providers       map[string]ProviderConfig `json:"providers"`
+	AutoSync        AutoSyncConfig            `json:"auto_sync"`
+	TrackedFiles    []TrackedFileConfig       `json:"tracked_files,omitempty"`
+	Footer          FooterConfig              `json:"footer"`
 }
 
 type AutoSyncConfig struct {
@@ -155,6 +161,25 @@ func validateAppConfig(config AppConfig) error {
 	if _, err := cleanRepositoryRelativePath(config.AliasFile, "alias_file"); err != nil {
 		return err
 	}
+	if config.ShortcutProfile != "" {
+		if _, err := parseShortcutProfile(config.ShortcutProfile); err != nil {
+			return fmt.Errorf("invalid shortcut_profile in configuration: %w", err)
+		}
+	}
+	if len(config.Profiles) > 32 {
+		return fmt.Errorf("invalid profiles in configuration: keep 32 or fewer profile names")
+	}
+	for index, profile := range config.Profiles {
+		if !profileNamePattern.MatchString(profile) {
+			return fmt.Errorf("invalid profile name %q: use a lowercase letter first, followed by lowercase letters, numbers, _ or -", profile)
+		}
+		if index > 0 && config.Profiles[index-1] >= profile {
+			return fmt.Errorf("invalid profiles in configuration: names must be unique and sorted")
+		}
+	}
+	if err := validateFooterConfig(config.Footer); err != nil {
+		return fmt.Errorf("invalid footer configuration: %w", err)
+	}
 	seenSources := make(map[string]bool)
 	seenRepositoryPaths := make(map[string]bool)
 	for _, tracked := range config.TrackedFiles {
@@ -259,8 +284,23 @@ func runConfigCommand(arguments []string) error {
 		}
 		settings.Enabled = false
 		config.Providers[name] = settings
+	case "footer-message":
+		if len(arguments) != 2 {
+			return fmt.Errorf("usage: al config footer-message MESSAGE")
+		}
+		config.Footer.Message = arguments[1]
+	case "footer-icon":
+		if len(arguments) != 2 {
+			return fmt.Errorf("usage: al config footer-icon ICON")
+		}
+		config.Footer.Icon = arguments[1]
+	case "footer-reset":
+		if len(arguments) != 1 {
+			return fmt.Errorf("usage: al config footer-reset")
+		}
+		config.Footer = defaultFooterConfig()
 	default:
-		return fmt.Errorf("usage: al config [shell|provider|protocol|disable]")
+		return fmt.Errorf("usage: al config [shell|provider|protocol|disable|footer-message|footer-icon|footer-reset]")
 	}
 	if err := saveConfig(config); err != nil {
 		return err
@@ -295,6 +335,21 @@ func loadConfig() (AppConfig, error) {
 	if err := json.Unmarshal(contents, &header); err != nil {
 		return config, fmt.Errorf("parse %s: %w", path, err)
 	}
+	rawVersion := 0
+	if header.Version != nil {
+		rawVersion = *header.Version
+	}
+	if rawVersion <= 1 {
+		var fields map[string]json.RawMessage
+		if err := json.Unmarshal(contents, &fields); err != nil {
+			return config, fmt.Errorf("parse %s: %w", path, err)
+		}
+		for _, field := range []string{"profiles", "shortcut_profile", "footer"} {
+			if _, exists := fields[field]; exists {
+				return config, fmt.Errorf("parse %s: configuration version %d cannot contain %q; remove that field or set it after migration", path, rawVersion, field)
+			}
+		}
+	}
 	if err := json.Unmarshal(contents, &config); err != nil {
 		return config, fmt.Errorf("parse %s: %w", path, err)
 	}
@@ -323,6 +378,9 @@ func migrateConfig(config AppConfig) (AppConfig, bool, error) {
 	case 0:
 		config.Version = currentConfigVersion
 		return config, true, nil
+	case 1:
+		config.Version = currentConfigVersion
+		return config, true, nil
 	case currentConfigVersion:
 		return config, false, nil
 	default:
@@ -347,6 +405,11 @@ func ensureConfigDefaults(config AppConfig) AppConfig {
 	if config.AutoSync.IntervalSeconds < 5 {
 		config.AutoSync.IntervalSeconds = 15
 	}
+	if config.Footer.Message == "" && config.Footer.Icon == "" {
+		config.Footer = defaultFooterConfig()
+	} else if config.Footer.Icon == "" {
+		config.Footer.Icon = defaultFooterConfig().Icon
+	}
 	return config
 }
 
@@ -359,6 +422,7 @@ func defaultConfig() AppConfig {
 			"github": {Enabled: true, Host: "github.com", Protocol: "auto"},
 		},
 		AutoSync: AutoSyncConfig{IntervalSeconds: 15},
+		Footer:   defaultFooterConfig(),
 	}
 }
 

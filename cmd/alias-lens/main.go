@@ -123,6 +123,11 @@ func runMain() int {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			return 1
 		}
+	case "shortcuts":
+		if err := runShortcutsCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
+		}
 	case "pick":
 		commandOnly := false
 		executeSelection := false

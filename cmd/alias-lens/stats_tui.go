@@ -28,22 +28,25 @@ var statsViews = []struct {
 }
 
 type statsModel struct {
-	data        statsData
-	periodIndex int
-	viewIndex   int
-	selected    int
-	width       int
-	height      int
-	theme       Theme
-	now         time.Time
-	appHeader   string
-	closeHint   string
-	errorText   string
+	data            statsData
+	periodIndex     int
+	viewIndex       int
+	selected        int
+	width           int
+	height          int
+	theme           Theme
+	now             time.Time
+	appHeader       string
+	closeHint       string
+	errorText       string
+	shortcutProfile ShortcutProfile
 }
 
 func runStatsTUI(data statsData, period string, now time.Time) error {
 	theme, _ := loadTheme()
 	applyTheme(theme)
+	config, _ := loadConfig()
+	applyFooterConfig(config.Footer)
 	index := 0
 	viewIndex := 0
 	periods := statsPeriods
@@ -66,7 +69,7 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 		lipgloss.SetDefaultRenderer(renderer)
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
-	_, err := tea.NewProgram(statsModel{data: data, periodIndex: index, viewIndex: viewIndex, width: 80, height: 24, theme: theme, now: now}, options...).Run()
+	_, err := tea.NewProgram(statsModel{data: data, periodIndex: index, viewIndex: viewIndex, width: 80, height: 24, theme: theme, now: now, shortcutProfile: resolvedShortcutProfile(config)}, options...).Run()
 	return err
 }
 
@@ -161,7 +164,7 @@ func (m statsModel) View() string {
 	for _, row := range rows {
 		total += row.Count
 	}
-	header := accent.Render("◒ Alias rhythm") + muted.Render(fmt.Sprintf("  %d uses · %d aliases", total, len(rows)))
+	header := pixelIconLabel(iconStats, "Alias rhythm", accent) + muted.Render(fmt.Sprintf("  %d uses · %d aliases", total, len(rows)))
 	var tabs []string
 	for index, name := range periods {
 		label := fmt.Sprintf("%d %s", index+1, name)
@@ -223,6 +226,12 @@ func (m statsModel) View() string {
 		top = m.appHeader + "\n\n" + top
 	}
 	bottom := note + "\n" + foot
+	if m.appHeader != "" {
+		if navigation := pageNavigationHint(inner, m.shortcutProfile); navigation != "" {
+			bottom += "\n" + muted.Render(navigation)
+		}
+	}
+	bottom = footerWithMaker(bottom, inner)
 	spacerHeight := max(1, height-lipgloss.Height(top)-lipgloss.Height(bottom)-2)
 	content := top + strings.Repeat("\n", spacerHeight) + bottom
 	return preserveStatsBackground(page.Render(content), m.theme.Background)
@@ -277,6 +286,10 @@ func (m *model) refreshStatsData() {
 }
 
 func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
+		m.refreshStatsData()
+		return m, nil
+	}
 	switch message.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
@@ -285,9 +298,6 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyF2, tea.KeyCtrlS:
 		m.statsOpen = false
-		return m, nil
-	case tea.KeyCtrlR:
-		m.refreshStatsData()
 		return m, nil
 	case tea.KeyLeft:
 		m.statsPeriod = (m.statsPeriod + len(statsPeriods) - 1) % len(statsPeriods)
@@ -347,16 +357,17 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) statsView(header string) string {
 	return (statsModel{
-		data:        m.statsData,
-		periodIndex: m.statsPeriod,
-		viewIndex:   m.statsViewIndex,
-		selected:    m.statsSelected,
-		width:       m.width,
-		height:      m.height,
-		theme:       m.theme,
-		now:         m.statsNow,
-		appHeader:   header,
-		closeHint:   "F2/esc return",
-		errorText:   m.statsErr,
+		data:            m.statsData,
+		periodIndex:     m.statsPeriod,
+		viewIndex:       m.statsViewIndex,
+		selected:        m.statsSelected,
+		width:           m.width,
+		height:          m.height,
+		theme:           m.theme,
+		now:             m.statsNow,
+		appHeader:       header,
+		closeHint:       "F2/esc return",
+		errorText:       m.statsErr,
+		shortcutProfile: m.shortcutProfile,
 	}).View()
 }

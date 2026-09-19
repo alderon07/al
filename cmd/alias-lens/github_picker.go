@@ -65,6 +65,7 @@ func runRepoPicker(only string) error {
 	}
 	theme, _ := loadTheme()
 	applyTheme(theme)
+	applyFooterConfig(config.Footer)
 	program := tea.NewProgram(repoPickerModel{repos: repos, config: config, provider: provider, warnings: warnings, width: 80, height: 24, ctx: ctx}, tea.WithAltScreen())
 	finished, err := program.Run()
 	if err != nil {
@@ -131,9 +132,15 @@ func (m repoPickerModel) View() string {
 	if m.cursor >= len(filtered) {
 		m.cursor = max(0, len(filtered)-1)
 	}
-	header := brandStyle.Render("ALIAS LENS") + "  " + titleStyle.Render("Choose a remote repository")
+	brand := brandStyle.Render("ALIAS LENS")
+	pickerTitle := titleStyle.Render("Choose a remote repository")
+	if contentWidth >= 52 {
+		brand = pixelIconLabel(iconBrand, "ALIAS LENS", brandStyle)
+		pickerTitle = pixelIconLabel(iconRepository, "Choose a remote repository", titleStyle)
+	}
+	header := brand + "  " + pickerTitle
 	subtitle := dimStyle.Render(fmt.Sprintf("%d writable repositories across configured providers", len(m.repos)))
-	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle("⌕") + " " + searchText(m.query))
+	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(renderPixelIcon(iconSearch)) + " " + searchText(m.query))
 
 	var list strings.Builder
 	visible := max(1, m.height-12)
@@ -172,7 +179,9 @@ func (m repoPickerModel) View() string {
 		footer = statusStyle.Render("Cloning and configuring repository…")
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, subtitle, "", search, "", list.String(), "", footer)
-	return lipgloss.NewStyle().Width(width).Height(max(18, m.height)).Padding(1, 3).Render(page)
+	height := max(18, m.height)
+	page = pageWithMaker(page, contentWidth, height)
+	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 
 func filterRemoteRepos(repos []RemoteRepo, query string) []RemoteRepo {

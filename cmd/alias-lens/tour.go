@@ -76,10 +76,11 @@ func (m model) tourView(width, height, contentWidth int, header string) string {
 		aliasStyle.Render("Ctrl+T") + dimStyle.Render("    Preview and save a dark theme"),
 		aliasStyle.Render("?") + dimStyle.Render("         Open the searchable keyboard guide"),
 	}
-	body := titleStyle.Render("Alias Lens is ready.") +
+	body := pixelIconLabel(iconBrand, "Alias Lens is ready.", titleStyle) +
 		"\n" + dimStyle.Render("Four keys are enough to get started.") +
 		"\n\n" + strings.Join(steps, "\n\n")
 	footer := aliasStyle.Render("enter") + dimStyle.Render(" start  ·  ") + aliasStyle.Render("?") + dimStyle.Render(" full guide  ·  esc dismiss")
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
+	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }

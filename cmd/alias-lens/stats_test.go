@@ -100,7 +100,7 @@ func TestStatsChartsShowConcentrationStalenessAndGroups(t *testing.T) {
 		theme:  builtInTheme("phosphor"),
 	}
 	rows := []statsRow{{Alias: Alias{Name: "ll"}, Count: 8}, {Alias: Alias{Name: "gs"}, Count: 2}}
-	if chart := renderConcentration(rows, styles); !strings.Contains(chart, "Top-five share  100%") || !strings.Contains(chart, "10 of 10 executions") {
+	if chart := renderConcentration(rows, styles); !strings.Contains(chart, "Top-five share  100%") || !strings.Contains(chart, "10 of 10 runs") {
 		t.Fatalf("unexpected concentration chart:\n%s", chart)
 	}
 	data := statsData{

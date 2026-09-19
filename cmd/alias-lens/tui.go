@@ -48,6 +48,10 @@ type model struct {
 	themePicker     bool
 	themeCursor     int
 	themeBefore     Theme
+	settingsOpen    bool
+	settingsField   int
+	settingsForm    [2]string
+	settingsBefore  FooterConfig
 	helpVisible     bool
 	helpQuery       string
 	statsOpen       bool
@@ -84,11 +88,25 @@ type model struct {
 	editSelection   bool
 	cursorHidden    bool
 	terminalBlurred bool
+	shortcutProfile ShortcutProfile
 }
 
 type cursorBlinkMsg struct{}
 
 const cursorBlinkInterval = 500 * time.Millisecond
+
+type tuiPage int
+
+const (
+	pageAliases tuiPage = iota
+	pageHelp
+	pageStats
+	pageSettings
+	pageThemes
+	pageRevisions
+	pageSync
+	pageHealth
+)
 
 type trackedFileItem struct {
 	Config TrackedFileConfig
@@ -107,6 +125,8 @@ func runTUI() {
 		return
 	}
 	theme, themeErr := loadTheme()
+	config, _ := loadConfig()
+	applyFooterConfig(config.Footer)
 	status := ""
 	if themeErr != nil {
 		status = themeErr.Error()
@@ -131,7 +151,7 @@ func runTUI() {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status, executeMode: true, tourVisible: tourShouldShow()}, options...).Run()
+	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status, executeMode: true, tourVisible: tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config)}, options...).Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Alias Lens could not start:", err)
 		return
@@ -178,6 +198,8 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 		return nil
 	}
 	theme, _ := loadTheme()
+	config, _ := loadConfig()
+	applyFooterConfig(config.Footer)
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	var terminal *os.File
 	var terminalOutput io.Writer = os.Stderr
@@ -197,7 +219,7 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection}
+	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config)}
 	finished, err := tea.NewProgram(initial, options...).Run()
 	if err != nil {
 		return err
@@ -250,15 +272,6 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.tourVisible {
 			return m.updateTour(message)
 		}
-		if m.helpVisible {
-			return m.updateHelp(message)
-		}
-		if m.statsOpen {
-			return m.updateStatsView(message)
-		}
-		if m.themePicker {
-			return m.updateThemePicker(message)
-		}
 		if m.adding {
 			return m.updateAddForm(message)
 		}
@@ -268,73 +281,54 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.runConfirm != nil {
 			return m.updateRunConfirmation(message)
 		}
+		if m.revisionOpen && m.revisionConfirm {
+			return m.updateRevisionDrawer(message)
+		}
+		if m.settingsOpen && matchesShortcut(message, m.shortcutProfile, shortcutSave) {
+			return m.updateFooterSettings(message)
+		}
+		if updated, handled := m.updatePageNavigation(message); handled {
+			return updated, nil
+		}
+		if m.helpVisible {
+			return m.updateHelp(message)
+		}
+		if m.statsOpen {
+			return m.updateStatsView(message)
+		}
+		if m.settingsOpen {
+			return m.updateFooterSettings(message)
+		}
+		if m.themePicker {
+			return m.updateThemePicker(message)
+		}
 		if m.revisionOpen {
 			return m.updateRevisionDrawer(message)
 		}
 		m.status = ""
-		if message.Type == tea.KeyCtrlF && !m.selectMode {
-			m.trackedOnly = !m.trackedOnly
-			m.cursor = 0
-			if m.trackedOnly {
-				m = m.refreshTrackedFiles()
-			}
-			return m, nil
-		}
 		if m.trackedOnly {
 			return m.updateTrackedFiles(message)
 		}
-		if message.Type == tea.KeyRunes && len(message.Runes) == 1 && message.Runes[0] == '?' {
-			m.helpVisible = true
-			m.status = ""
+		matches := m.currentAliases()
+		if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
+			m.reloadAliasesAndTheme()
 			return m, nil
 		}
-		matches := m.currentAliases()
+		if matchesShortcut(message, m.shortcutProfile, shortcutAdd) {
+			m.startAddForm()
+			return m, nil
+		}
+		if matchesShortcut(message, m.shortcutProfile, shortcutEdit) {
+			m.startEditForm(matches)
+			return m, nil
+		}
 		switch message.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
-		case tea.KeyCtrlR:
-			aliases, err := loadAliases()
-			if err != nil {
-				m.status = "Reload failed: " + err.Error()
-			} else {
-				m.aliases = aliases
-				m.cursor = 0
-				m.status = fmt.Sprintf("Reloaded %d aliases", len(aliases))
-			}
-			theme, err := loadTheme()
-			if err == nil {
-				m.theme = theme
-				applyTheme(theme)
-			}
-		case tea.KeyCtrlT:
-			m.openThemePicker()
-		case tea.KeyF2, tea.KeyCtrlS:
-			if !m.selectMode {
-				m.openStatsView()
-			}
-		case tea.KeyCtrlZ:
-			if !m.selectMode {
-				m.openRevisionDrawer()
-			}
-		case tea.KeyCtrlA:
-			m.startAddForm()
-		case tea.KeyCtrlE:
-			if len(matches) > 0 {
-				selected := matches[m.cursor]
-				m.adding = true
-				m.editingName = selected.Name
-				m.field = 2
-				m.form = [5]string{selected.Name, selected.Command, selected.Description, strings.Join(selected.Tags, ","), selected.Category}
-				m.editingMetadata = EntryMetadata{Platforms: selected.Platforms, Favorite: selected.Favorite}
-			}
 		case tea.KeyCtrlD:
 			if len(matches) > 0 {
 				m.deleteName = matches[m.cursor].Name
 			}
-		case tea.KeyCtrlH:
-			m.healthOnly = !m.healthOnly
-			m.query = ""
-			m.cursor = 0
 		case tea.KeyCtrlG:
 			message, err := syncRepository(false)
 			if err != nil {
@@ -378,12 +372,146 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.startAddForm()
 			}
 		case tea.KeyRunes:
+			if message.Super {
+				return m, nil
+			}
 			m.healthOnly = false
 			m.query += string(message.Runes)
 			m.cursor = 0
 		}
 	}
 	return m, nil
+}
+
+func (m *model) reloadAliasesAndTheme() {
+	aliases, err := loadAliases()
+	if err != nil {
+		m.status = "Could not reload aliases: " + err.Error()
+	} else {
+		m.aliases = aliases
+		m.cursor = 0
+		m.status = fmt.Sprintf("Reloaded %d aliases", len(aliases))
+	}
+	theme, err := loadTheme()
+	if err == nil {
+		m.theme = theme
+		applyTheme(theme)
+	}
+}
+
+func (m *model) startEditForm(matches []Alias) {
+	if len(matches) == 0 {
+		return
+	}
+	selected := matches[m.cursor]
+	m.adding = true
+	m.editingName = selected.Name
+	m.field = 2
+	m.form = [5]string{selected.Name, selected.Command, selected.Description, strings.Join(selected.Tags, ","), selected.Category}
+	m.editingMetadata = EntryMetadata{Platforms: selected.Platforms, Favorite: selected.Favorite}
+}
+
+func (m model) updatePageNavigation(message tea.KeyMsg) (model, bool) {
+	target, ok := pageForShortcut(message, m.shortcutProfile)
+	if !ok || (m.selectMode && target != pageHelp) {
+		return m, false
+	}
+	if m.currentPage() == target {
+		m.closePages()
+		return m, true
+	}
+
+	m.closePages()
+	switch target {
+	case pageHelp:
+		m.helpVisible = true
+	case pageStats:
+		m.openStatsView()
+	case pageSettings:
+		m.openFooterSettings()
+	case pageThemes:
+		m.openThemePicker()
+	case pageRevisions:
+		m.openRevisionDrawer()
+	case pageSync:
+		m.trackedOnly = true
+		m.cursor = 0
+		m = m.refreshTrackedFiles()
+	case pageHealth:
+		m.healthOnly = true
+		m.query = ""
+		m.cursor = 0
+	}
+	return m, true
+}
+
+func pageForShortcut(message tea.KeyMsg, profile ShortcutProfile) (tuiPage, bool) {
+	if matchesShortcut(message, profile, shortcutHelp) {
+		return pageHelp, true
+	}
+	switch {
+	case matchesShortcut(message, profile, shortcutStats):
+		return pageStats, true
+	case matchesShortcut(message, profile, shortcutSettings):
+		return pageSettings, true
+	case matchesShortcut(message, profile, shortcutThemes):
+		return pageThemes, true
+	case matchesShortcut(message, profile, shortcutRevisions):
+		return pageRevisions, true
+	case matchesShortcut(message, profile, shortcutSync):
+		return pageSync, true
+	case matchesShortcut(message, profile, shortcutHealth):
+		return pageHealth, true
+	default:
+		return pageAliases, false
+	}
+}
+
+func (m model) currentPage() tuiPage {
+	switch {
+	case m.helpVisible:
+		return pageHelp
+	case m.statsOpen:
+		return pageStats
+	case m.settingsOpen:
+		return pageSettings
+	case m.themePicker:
+		return pageThemes
+	case m.revisionOpen:
+		return pageRevisions
+	case m.trackedOnly:
+		return pageSync
+	case m.healthOnly:
+		return pageHealth
+	default:
+		return pageAliases
+	}
+}
+
+func (m *model) closePages() {
+	if m.themePicker {
+		m.theme = m.themeBefore
+		m.themeBefore = Theme{}
+		applyTheme(m.theme)
+	}
+	if m.settingsOpen {
+		applyFooterConfig(m.settingsBefore)
+	}
+	m.helpVisible = false
+	m.helpQuery = ""
+	m.statsOpen = false
+	m.settingsOpen = false
+	m.settingsField = 0
+	m.settingsForm = [2]string{}
+	m.settingsBefore = FooterConfig{}
+	m.themePicker = false
+	m.revisionOpen = false
+	m.revisionConfirm = false
+	m.revisions = nil
+	m.revisionErr = ""
+	m.trackedOnly = false
+	m.healthOnly = false
+	m.status = ""
 }
 
 func (m model) View() string {
@@ -404,17 +532,21 @@ func (m model) View() string {
 		}
 		headerDetails += fmt.Sprintf("  •  %d %s", issues, label)
 	}
-	header := brandStyle.Render("ALIAS LENS") + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render(aliasDisplayPath()) + dimStyle.Render(headerDetails)
-	title := titleStyle.Render("Find the shortcut before you forget it.") + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
+	brand := brandStyle.Render("ALIAS LENS")
+	if contentWidth >= 48 {
+		brand = pixelIconLabel(iconBrand, "ALIAS LENS", brandStyle)
+	}
+	header := brand + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render(aliasDisplayPath()) + dimStyle.Render(headerDetails)
+	title := pixelIconLabel(iconSearch, "Find the shortcut before you forget it.", titleStyle) + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
 	if m.selectMode {
-		title = titleStyle.Render("Choose an alias to use in your shell.") + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
+		title = pixelIconLabel(iconAlias, "Choose an alias to use in your shell.", titleStyle) + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
 	} else if m.executeMode {
-		title = titleStyle.Render("Choose an alias to run.") + "\n" + dimStyle.Render("Enter executes it. Esc exits without running anything.")
+		title = pixelIconLabel(iconCommand, "Choose an alias to run.", titleStyle) + "\n" + dimStyle.Render("Press Enter to run it. Press Esc to leave without running anything.")
 	}
 	if len(m.aliases) == 0 {
-		title = titleStyle.Render("Set up your first shortcut.") + "\n" + dimStyle.Render("Create an alias here or add one to the active alias file.")
+		title = pixelIconLabel(iconAlias, "Set up your first shortcut.", titleStyle) + "\n" + dimStyle.Render("Create an alias here or add one to the active alias file.")
 		if m.selectMode {
-			title = titleStyle.Render("No aliases are available to select.") + "\n" + dimStyle.Render("Open Alias Lens normally to create one.")
+			title = pixelIconLabel(iconAlias, "No aliases are available to select.", titleStyle) + "\n" + dimStyle.Render("Open Alias Lens normally to create one.")
 		}
 	}
 	if m.tourVisible {
@@ -425,6 +557,9 @@ func (m model) View() string {
 	}
 	if m.themePicker {
 		return m.themePickerView(width, height, contentWidth, header)
+	}
+	if m.settingsOpen {
+		return m.footerSettingsView(width, height, contentWidth, header)
 	}
 	if m.helpVisible {
 		return m.helpView(width, height, contentWidth, header)
@@ -446,16 +581,16 @@ func (m model) View() string {
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(acidColor).
-		Render(acidStyle("$") + " " + searchTextCursor(m.query, m.searchFocused() && !m.cursorHidden))
+		Render(acidStyle(renderPixelIcon(iconSearch)) + " " + searchTextCursor(m.query, m.searchFocused() && !m.cursorHidden))
 
 	var body strings.Builder
 	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
 		body.WriteString(m.emptyStateView(contentWidth))
 	} else if m.healthOnly {
-		body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("⚠ ALIAS HEALTH"))
+		body.WriteString(pixelIconLabel(iconHealth, "ALIAS HEALTH", lipgloss.NewStyle().Bold(true).Foreground(coralColor)))
 		body.WriteByte('\n')
 	} else if strings.TrimSpace(m.query) == "" {
-		body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("✦ SUGGESTED FOR YOU"))
+		body.WriteString(pixelIconLabel(iconSpark, "SUGGESTED FOR YOU", lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
 		body.WriteByte('\n')
 	}
 	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
@@ -480,7 +615,7 @@ func (m model) View() string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  tab edit at prompt  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  F2 stats  ·  ^t themes  ·  ^f sync  ·  ^h health  ·  esc quit")
+	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  tab edit at prompt  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  esc quit")
 	if contentWidth < 96 {
 		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  F2 stats  ·  ? help  ·  esc quit")
 	}
@@ -490,10 +625,23 @@ func (m model) View() string {
 			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
 		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("enter ") + cyanStyle("execute") + dimStyle.Render("  ·  tab edit  ·  F2 stats  ·  ? help  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("run") + dimStyle.Render("  ·  tab edit  ·  F2 stats  ·  ? help  ·  esc quit")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("execute") + dimStyle.Render("  ·  ? help  ·  F2 stats  ·  ^t themes  ·  ^f sync  ·  ^h health  ·  esc quit")
+			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("run") + dimStyle.Render("  ·  tab edit  ·  ? help  ·  esc quit")
 		}
+	}
+	if contentWidth < 50 {
+		action := "select"
+		if m.executeMode {
+			action = "run"
+		}
+		footer = dimStyle.Render("enter ") + cyanStyle(action) + dimStyle.Render("  ·  ? help  ·  esc quit")
+		if m.selectMode {
+			footer = dimStyle.Render("enter select  ·  ? help  ·  esc cancel")
+		}
+	}
+	if contentWidth >= 79 && !m.selectMode {
+		footer += "\n" + dimStyle.Render(pageNavigationHint(contentWidth, m.shortcutProfile))
 	}
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
@@ -501,8 +649,8 @@ func (m model) View() string {
 	if m.deleteName != "" {
 		footer = lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("Delete " + m.deleteName + "?  y confirm  ·  n cancel")
 	}
-
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", body.String(), "", footer)
+	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().
 		Width(width).
 		Height(height).
@@ -520,14 +668,22 @@ func (m *model) startAddForm() {
 
 func (m model) emptyStateView(contentWidth int) string {
 	var body strings.Builder
-	body.WriteString(titleStyle.Render("No aliases yet."))
-	body.WriteString("\n" + dimStyle.Render(wrapText("Alias Lens is reading "+aliasDisplayPath()+" for "+activeShellAdapter().DisplayName()+".", contentWidth)))
-	if m.selectMode {
-		body.WriteString("\n\n" + dimStyle.Render("Open ") + cyanStyle("al") + dimStyle.Render(" and press ") + aliasStyle.Render("Ctrl+A") + dimStyle.Render(" to create one."))
+	if contentWidth < 60 {
+		if m.selectMode {
+			return dimStyle.Render("Open ") + cyanStyle("al") + dimStyle.Render(" and press ") + aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutAdd)) + dimStyle.Render(" to create an alias.")
+		}
+		body.WriteString(aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutAdd)) + dimStyle.Render("  Create your first alias"))
+		body.WriteString("\n" + dimStyle.Render(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + dimStyle.Render("  Reload aliases"))
 		return body.String()
 	}
-	body.WriteString("\n\n" + aliasStyle.Render("Enter") + dimStyle.Render(" or ") + aliasStyle.Render("Ctrl+A") + dimStyle.Render("  Create your first alias"))
-	body.WriteString("\n" + dimStyle.Render("Ctrl+R") + dimStyle.Render("             Reload aliases added outside Alias Lens"))
+	body.WriteString(pixelIconLabel(iconAlias, "No aliases yet.", titleStyle))
+	body.WriteString("\n" + dimStyle.Render(wrapText("Alias Lens is reading "+aliasDisplayPath()+" for "+activeShellAdapter().DisplayName()+".", contentWidth)))
+	if m.selectMode {
+		body.WriteString("\n\n" + dimStyle.Render("Open ") + cyanStyle("al") + dimStyle.Render(" and press ") + aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutAdd)) + dimStyle.Render(" to create one."))
+		return body.String()
+	}
+	body.WriteString("\n\n" + aliasStyle.Render("Enter") + dimStyle.Render(" or ") + aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutAdd)) + dimStyle.Render("  Create your first alias"))
+	body.WriteString("\n" + dimStyle.Render(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + dimStyle.Render("  Reload aliases added outside Alias Lens"))
 	return body.String()
 }
 
@@ -549,6 +705,9 @@ func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeySpace:
 		m.helpQuery += " "
 	case tea.KeyRunes:
+		if message.Super {
+			return m, nil
+		}
 		m.helpQuery += string(message.Runes)
 	}
 	return m, nil
@@ -592,38 +751,19 @@ func (m model) runConfirmationView(width, height, contentWidth int, header strin
 		Background(panelColor).
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(coralColor).
-		Render("$ " + wrapText(alias.Command, max(24, contentWidth-10)))
-	body := titleStyle.Render("Review before running") +
+		Render(renderPixelIcon(iconCommand) + " " + wrapText(alias.Command, max(24, contentWidth-13)))
+	body := pixelIconLabel(iconHealth, "Review before running", titleStyle) +
 		"\n" + dimStyle.Render("Alias ") + name + dimStyle.Render(" may make changes that are hard to undo.") +
 		"\n\n" + command +
 		"\n\n" + lipgloss.NewStyle().Foreground(coralColor).Render(wrapText(reason, contentWidth))
 	footer := aliasStyle.Render("y") + dimStyle.Render(" run alias  ·  ") + aliasStyle.Render("n") + dimStyle.Render(" or esc cancel")
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
+	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 
 func (m model) helpView(width, height, contentWidth int, header string) string {
-	enterAction := "Run the selected alias"
-	if m.selectMode {
-		enterAction = "Select without running"
-	}
-	shortcuts := [][2]string{
-		{"Type", "Search names, commands, and descriptions"},
-		{"↑↓ / PgUp PgDn", "Move through results"},
-		{"Enter", enterAction},
-		{"Tab", "Return the alias to the prompt for editing"},
-		{"Ctrl+A", "Add an alias"},
-		{"Ctrl+E", "Edit description, command, or name"},
-		{"Ctrl+D", "Delete an alias after confirmation"},
-		{"Ctrl+Z", "Browse and restore private revisions"},
-		{"F2 / Ctrl+S", "Open alias usage stats"},
-		{"Ctrl+H", "Show aliases with health issues"},
-		{"Ctrl+F", "Open sync status and tracked files"},
-		{"Ctrl+G", "Commit alias changes locally"},
-		{"Ctrl+T", "Choose a theme with live preview"},
-		{"Ctrl+R", "Reload aliases and theme settings"},
-		{"? / Esc", "Close this guide"},
-	}
+	shortcuts := shortcutGuide(m.shortcutProfile, m.selectMode)
 	if query := strings.TrimSpace(strings.ToLower(m.helpQuery)); query != "" {
 		filtered := shortcuts[:0]
 		for _, shortcut := range shortcuts {
@@ -635,13 +775,17 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 	}
 
 	keyWidth := 16
+	if m.shortcutProfile == shortcutMacOS {
+		keyWidth = 23
+	}
 	if contentWidth < 60 {
-		keyWidth = 14
+		keyWidth = min(keyWidth, max(14, contentWidth/2))
 	}
 	var rows strings.Builder
 	visible := min(len(shortcuts), max(3, height-14))
 	for index, shortcut := range shortcuts[:visible] {
-		key := aliasStyle.Render(fmt.Sprintf("%-*s", keyWidth, shortcut[0]))
+		keyLabel := truncate(shortcut[0], max(1, keyWidth-1))
+		key := aliasStyle.Render(fmt.Sprintf("%-*s", keyWidth, keyLabel))
 		descriptionWidth := max(12, contentWidth-keyWidth-2)
 		rows.WriteString(key + dimStyle.Render(truncate(shortcut[1], descriptionWidth)))
 		if index < len(shortcuts)-1 {
@@ -652,14 +796,33 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 		rows.WriteString(dimStyle.Render("No shortcut matched " + fmt.Sprintf("%q", m.helpQuery)))
 	}
 
-	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle("?") + " " + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
-	title := titleStyle.Render("Keyboard guide") + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
+	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(renderPixelIcon(iconHelp)) + " " + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
+	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
 	footer := "? or esc close  ·  ctrl+c quit"
 	if len(shortcuts) > visible {
 		footer = fmt.Sprintf("showing %d of %d  ·  type to filter  ·  esc close", visible, len(shortcuts))
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", rows.String(), "", dimStyle.Render(footer))
+	footerView := dimStyle.Render(footer)
+	if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
+		footerView += "\n" + dimStyle.Render(navigation)
+	}
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", rows.String(), "", footerView)
+	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+}
+
+func pageNavigationHint(width int, profiles ...ShortcutProfile) string {
+	if width < 79 {
+		return ""
+	}
+	profile := shortcutLinux
+	if len(profiles) > 0 {
+		profile = profiles[0]
+	}
+	if profile == shortcutMacOS {
+		return "? help  ·  ⌘2 stats  ·  F3 settings  ·  ⌘T themes  ·  ⌘Z versions  ·  ⌘⇧S sync  ·  ⌘H health"
+	}
+	return "? help  ·  F2 stats  ·  F3 settings  ·  ^T themes  ·  ^Z versions  ·  ^F sync  ·  ^H health"
 }
 
 func (m *model) openThemePicker() {
@@ -760,12 +923,16 @@ func (m model) themePickerView(width, height, contentWidth int, header string) s
 		rows.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(themes))))
 	}
 
-	title := titleStyle.Render("Choose a theme") + "\n" + dimStyle.Render("The preview changes as you move. Save only when it looks right.")
+	title := pixelIconLabel(iconTheme, "Choose a theme", titleStyle) + "\n" + dimStyle.Render("The preview changes as you move. Save only when it looks right.")
 	footer := dimStyle.Render("↑↓ preview  ·  pgup/pgdn jump  ·  enter ") + cyanStyle("save") + dimStyle.Render("  ·  esc restore")
+	if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
+		footer += "\n" + dimStyle.Render(navigation)
+	}
 	if m.status != "" {
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render(truncate(m.status, contentWidth))
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", rows.String(), "", footer)
+	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 
@@ -817,15 +984,17 @@ func (m model) refreshTrackedFiles() model {
 }
 
 func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
+		m = m.refreshTrackedFiles()
+		m.status = "Sync status refreshed"
+		return m, nil
+	}
 	switch message.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
 	case tea.KeyEsc:
 		m.trackedOnly = false
 		m.cursor = 0
-	case tea.KeyCtrlR:
-		m = m.refreshTrackedFiles()
-		m.status = "Sync status refreshed"
 	case tea.KeyCtrlG:
 		message, err := syncRepository(false)
 		m = m.refreshTrackedFiles()
@@ -856,7 +1025,7 @@ func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m model) trackedFilesView(width, height, contentWidth int, header string) string {
 	var body strings.Builder
-	body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("SYNC STATUS"))
+	body.WriteString(pixelIconLabel(iconSync, "SYNC STATUS", lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
 	autoLabel := "AUTO OFF"
 	autoColor := mutedColor
 	if m.autoSyncEnabled {
@@ -878,9 +1047,9 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 	if m.trackedErr != "" {
 		body.WriteString(lipgloss.NewStyle().Foreground(coralColor).Render(wrapText("Could not load sync status: "+m.trackedErr, contentWidth)))
 	} else {
-		body.WriteString(titleStyle.Render("PRIMARY ALIAS FILE"))
+		body.WriteString(pixelIconLabel(iconAlias, "PRIMARY ALIAS FILE", titleStyle))
 		body.WriteString("\n" + renderTrackedFile(m.primarySync, false, contentWidth))
-		body.WriteString("\n\n" + lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("EXTRA TRACKED FILES"))
+		body.WriteString("\n\n" + pixelIconLabel(iconRepository, "EXTRA TRACKED FILES", lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
 		body.WriteString(dimStyle.Render(fmt.Sprintf("  %d enrolled", len(m.tracked))))
 		body.WriteString("\n")
 		if len(m.tracked) == 0 {
@@ -910,7 +1079,11 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", titleStyle.Render("See what Alias Lens keeps in sync."), "", body.String(), "", footer)
+	if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
+		footer += "\n" + dimStyle.Render(navigation)
+	}
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", pixelIconLabel(iconSync, "See what Alias Lens keeps in sync.", titleStyle), "", body.String(), "", footer)
+	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 
@@ -942,7 +1115,7 @@ func renderTrackedFile(item trackedFileItem, active bool, width int) string {
 	lineOne := aliasStyle.Render(marker+compactHomePath(item.Config.Source)) + "  " + statusBadge
 	lineTwo := dimStyle.Render("No repository configured")
 	if item.Config.RepositoryPath != "" {
-		lineTwo = cyanStyle("↳ repo/") + lipgloss.NewStyle().Foreground(inkColor).Render(truncate(filepath.ToSlash(item.Config.RepositoryPath), cardWidth-10))
+		lineTwo = cyanStyle(renderPixelIcon(iconRepository)+" repo/") + lipgloss.NewStyle().Foreground(inkColor).Render(truncate(filepath.ToSlash(item.Config.RepositoryPath), cardWidth-14))
 	}
 	detail := item.State.Message
 	if item.Error != "" {
@@ -979,6 +1152,9 @@ func compactHomePath(path string) string {
 
 func (m model) updateAddForm(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	m.status = ""
+	if matchesShortcut(message, m.shortcutProfile, shortcutSave) {
+		return m.saveAliasForm()
+	}
 	switch message.Type {
 	case tea.KeyCtrlC:
 		return m, tea.Quit
@@ -995,8 +1171,6 @@ func (m model) updateAddForm(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyShiftTab:
 		m.field = (m.field + len(m.form) - 1) % len(m.form)
-	case tea.KeyCtrlS:
-		return m.saveAliasForm()
 	case tea.KeyBackspace, tea.KeyDelete:
 		if m.form[m.field] != "" {
 			_, size := utf8.DecodeLastRuneInString(m.form[m.field])
@@ -1009,6 +1183,9 @@ func (m model) updateAddForm(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.form[m.field] += " "
 		}
 	case tea.KeyRunes:
+		if message.Super {
+			return m, nil
+		}
 		m.form[m.field] += string(message.Runes)
 	}
 	return m, nil
@@ -1088,13 +1265,15 @@ func (m model) addFormView(width, height, contentWidth int, header string) strin
 	labels := []string{"ALIAS NAME", "COMMAND", "WHAT IT DOES", "TAGS", "CATEGORY"}
 	hints := []string{"ex: gpf", "ex: git push --force-with-lease", "ex: Safely force-push the current branch", "ex: git,daily", "ex: git"}
 	var form strings.Builder
-	heading := "＋ ADD AN ALIAS"
+	headingIcon := iconAlias
+	heading := "ADD AN ALIAS"
 	message := "It will be placed beside related commands in " + aliasDisplayPath() + "."
 	if m.editingName != "" {
-		heading = "✎ EDIT " + m.editingName
+		headingIcon = iconEdit
+		heading = "EDIT " + m.editingName
 		message = "Update its description, command, or name. Tags and category are editable here too."
 	}
-	form.WriteString(lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(heading))
+	form.WriteString(pixelIconLabel(headingIcon, heading, lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
 	form.WriteString("\n" + dimStyle.Render(message))
 	for index := range m.form {
 		border := lineColor
@@ -1116,6 +1295,7 @@ func (m model) addFormView(width, height, contentWidth int, header string) strin
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render(m.status)
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", form.String(), "", footer)
+	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 
@@ -1136,7 +1316,7 @@ func (m model) currentAliases() []Alias {
 }
 
 func (m model) searchFocused() bool {
-	return !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.helpVisible && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
+	return !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.settingsOpen && !m.helpVisible && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
 }
 
 func renderAlias(alias Alias, active bool, width int) string {
@@ -1150,18 +1330,18 @@ func renderAlias(alias Alias, active bool, width int) string {
 	category := lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(categoryColor).Padding(0, 1).Render(strings.ToUpper(alias.Category))
 	lineOne := aliasStyle.Render(marker+alias.Name) + "  " + category
 	if alias.Type == "function" {
-		lineOne += "  " + lipgloss.NewStyle().Foreground(violetColor).Render("FUNCTION")
+		lineOne += "  " + pixelIconLabel(iconFunction, "FUNCTION", lipgloss.NewStyle().Foreground(violetColor))
 	}
 	if alias.Favorite {
-		lineOne += "  " + lipgloss.NewStyle().Foreground(amberColor).Render("★")
+		lineOne += "  " + lipgloss.NewStyle().Foreground(amberColor).Render(renderPixelIcon(iconFavorite))
 	}
 	if len(alias.Tags) > 0 {
 		lineOne += "  " + dimStyle.Render("#"+strings.Join(alias.Tags, " #"))
 	}
 	description := lipgloss.NewStyle().Foreground(inkColor).Render(wrapText(alias.Description, cardWidth-6))
-	lineTwo := lipgloss.NewStyle().Foreground(cyanColor).Render("↳ " + truncate(alias.Command, cardWidth-6))
+	lineTwo := lipgloss.NewStyle().Foreground(cyanColor).Render(renderPixelIcon(iconCommand) + " " + truncate(alias.Command, cardWidth-10))
 	if len(alias.Issues) > 0 {
-		lineTwo += "\n" + lipgloss.NewStyle().Foreground(coralColor).Render("⚠ "+strings.Join(alias.Issues, " · "))
+		lineTwo += "\n" + lipgloss.NewStyle().Foreground(coralColor).Render(renderPixelIcon(iconHealth)+" "+strings.Join(alias.Issues, " · "))
 	}
 
 	borderColor := lineColor

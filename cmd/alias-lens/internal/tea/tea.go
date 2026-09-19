@@ -38,6 +38,7 @@ const (
 	KeyCtrlF KeyType = 6
 	KeyCtrlG KeyType = 7
 	KeyCtrlH KeyType = 8
+	KeyCtrlN KeyType = 14
 	KeyCtrlR KeyType = 18
 	KeyCtrlS KeyType = 19
 	KeyCtrlT KeyType = 20
@@ -57,20 +58,38 @@ const (
 	KeyPgDown
 	KeyDelete
 	KeySpace
+	KeyF1
 	KeyF2
+	KeyF3
 )
 
 type KeyMsg struct {
 	Type  KeyType
 	Runes []rune
 	Alt   bool
+	Ctrl  bool
+	Meta  bool
+	Shift bool
+	Super bool
 	Paste bool
 }
 
 func (message KeyMsg) String() string {
 	prefix := ""
+	if message.Super {
+		prefix += "cmd+"
+	}
+	if message.Meta {
+		prefix += "meta+"
+	}
 	if message.Alt {
-		prefix = "alt+"
+		prefix += "alt+"
+	}
+	if message.Ctrl {
+		prefix += "ctrl+"
+	}
+	if message.Shift {
+		prefix += "shift+"
 	}
 	if message.Type == KeyRunes {
 		value := string(message.Runes)
@@ -83,9 +102,9 @@ func (message KeyMsg) String() string {
 		KeyEnter: "enter", KeyBackspace: "backspace", KeyTab: "tab", KeyEsc: "esc",
 		KeySpace: " ", KeyUp: "up", KeyDown: "down", KeyRight: "right", KeyLeft: "left",
 		KeyShiftTab: "shift+tab", KeyHome: "home", KeyEnd: "end", KeyPgUp: "pgup",
-		KeyPgDown: "pgdown", KeyDelete: "delete", KeyF2: "f2",
+		KeyPgDown: "pgdown", KeyDelete: "delete", KeyF1: "f1", KeyF2: "f2", KeyF3: "f3",
 		KeyCtrlA: "ctrl+a", KeyCtrlC: "ctrl+c", KeyCtrlD: "ctrl+d", KeyCtrlE: "ctrl+e",
-		KeyCtrlF: "ctrl+f", KeyCtrlG: "ctrl+g", KeyCtrlH: "ctrl+h", KeyCtrlR: "ctrl+r",
+		KeyCtrlF: "ctrl+f", KeyCtrlG: "ctrl+g", KeyCtrlH: "ctrl+h", KeyCtrlN: "ctrl+n", KeyCtrlR: "ctrl+r",
 		KeyCtrlS: "ctrl+s", KeyCtrlT: "ctrl+t", KeyCtrlZ: "ctrl+z",
 	}
 	return prefix + names[message.Type]
@@ -209,37 +228,42 @@ func translateMessage(message tea2.Msg) Msg {
 
 func translateKey(key tea2.Key) KeyMsg {
 	alt := key.Mod&tea2.ModAlt != 0
-	if key.Mod&tea2.ModCtrl != 0 {
+	ctrl := key.Mod&tea2.ModCtrl != 0
+	meta := key.Mod&tea2.ModMeta != 0
+	shift := key.Mod&tea2.ModShift != 0
+	super := key.Mod&tea2.ModSuper != 0
+	if ctrl {
 		if keyType, ok := controlKeyType(key.Code); ok {
-			return KeyMsg{Type: keyType, Alt: alt}
+			return KeyMsg{Type: keyType, Alt: alt, Meta: meta, Shift: shift, Super: super}
 		}
 	}
 	special := map[rune]KeyType{
 		tea2.KeyEnter: KeyEnter, tea2.KeyBackspace: KeyBackspace,
 		tea2.KeyEscape: KeyEsc, tea2.KeySpace: KeySpace, tea2.KeyUp: KeyUp, tea2.KeyDown: KeyDown,
 		tea2.KeyRight: KeyRight, tea2.KeyLeft: KeyLeft, tea2.KeyHome: KeyHome, tea2.KeyEnd: KeyEnd,
-		tea2.KeyPgUp: KeyPgUp, tea2.KeyPgDown: KeyPgDown, tea2.KeyDelete: KeyDelete, tea2.KeyF2: KeyF2,
+		tea2.KeyPgUp: KeyPgUp, tea2.KeyPgDown: KeyPgDown, tea2.KeyDelete: KeyDelete,
+		tea2.KeyF1: KeyF1, tea2.KeyF2: KeyF2, tea2.KeyF3: KeyF3,
 	}
 	if key.Code == tea2.KeyTab {
 		if key.Mod&tea2.ModShift != 0 {
-			return KeyMsg{Type: KeyShiftTab, Alt: alt}
+			return KeyMsg{Type: KeyShiftTab, Alt: alt, Ctrl: ctrl, Meta: meta, Super: super}
 		}
-		return KeyMsg{Type: KeyTab, Alt: alt}
+		return KeyMsg{Type: KeyTab, Alt: alt, Ctrl: ctrl, Meta: meta, Super: super}
 	}
 	if keyType, ok := special[key.Code]; ok {
-		return KeyMsg{Type: keyType, Alt: alt}
+		return KeyMsg{Type: keyType, Alt: alt, Ctrl: ctrl, Meta: meta, Shift: shift, Super: super}
 	}
 	text := key.Text
 	if text == "" && key.Code >= 0 {
 		text = string(key.Code)
 	}
-	return KeyMsg{Type: KeyRunes, Runes: []rune(text), Alt: alt}
+	return KeyMsg{Type: KeyRunes, Runes: []rune(text), Alt: alt, Ctrl: ctrl, Meta: meta, Shift: shift, Super: super}
 }
 
 func controlKeyType(code rune) (KeyType, bool) {
 	keys := map[rune]KeyType{
 		'a': KeyCtrlA, 'c': KeyCtrlC, 'd': KeyCtrlD, 'e': KeyCtrlE, 'f': KeyCtrlF,
-		'g': KeyCtrlG, 'h': KeyCtrlH, 'r': KeyCtrlR, 's': KeyCtrlS, 't': KeyCtrlT,
+		'g': KeyCtrlG, 'h': KeyCtrlH, 'n': KeyCtrlN, 'r': KeyCtrlR, 's': KeyCtrlS, 't': KeyCtrlT,
 		'z': KeyCtrlZ,
 	}
 	keyType, ok := keys[unicode.ToLower(code)]

@@ -148,7 +148,7 @@ func renderConcentration(rows []statsRow, styles statsChartStyles) string {
 	const width = 20
 	filled := percent * width / 100
 	bar := styles.accent.Render(strings.Repeat("━", filled)) + styles.muted.Render(strings.Repeat("─", width-filled))
-	return styles.text.Bold(true).Render("Top-five share") + styles.accent.Render(fmt.Sprintf("  %d%%", percent)) + "\n" + bar + "\n" + styles.muted.Render(fmt.Sprintf("%d of %d executions", leading, total))
+	return styles.text.Bold(true).Render("Top-five share") + styles.accent.Render(fmt.Sprintf("  %d%%", percent)) + "\n" + bar + "\n" + styles.muted.Render(fmt.Sprintf("%d of %d runs", leading, total))
 }
 
 type activityDay struct {
@@ -191,7 +191,7 @@ func renderActivityHistogram(events []usageEvent, period string, now time.Time, 
 		bucketLabel = "active bucket"
 	}
 	body.WriteString(styles.text.Bold(true).Render(title))
-	summary := fmt.Sprintf("  %d executions · %d %s", total, activeBuckets, bucketLabel)
+	summary := fmt.Sprintf("  %d runs · %d %s", total, activeBuckets, bucketLabel)
 	if width < 70 {
 		summary = fmt.Sprintf("  %d uses · %d active", total, activeBuckets)
 	}
@@ -458,7 +458,7 @@ func renderGroupShare(data statsData, period string, now time.Time, width int, s
 	})
 	var body strings.Builder
 	body.WriteString(styles.text.Bold(true).Render("Usage by group"))
-	body.WriteString(styles.muted.Render(fmt.Sprintf("  %s · %d executions", period, total)))
+	body.WriteString(styles.muted.Render(fmt.Sprintf("  %s · %d runs", period, total)))
 	body.WriteString("\n\n")
 	if len(groups) == 0 {
 		body.WriteString(styles.accent.Render("No grouped activity in this period."))

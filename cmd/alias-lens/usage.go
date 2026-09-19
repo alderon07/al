@@ -14,8 +14,8 @@ Usage:
   al help [COMMAND]          Explain all commands or one command
 
 Find and use aliases:
-  pick       Select an alias and print its name or command; never executes it
-  use        Select and immediately execute an alias; requires al setup
+  pick       Select an alias and print its name or command; never runs it
+  use        Select and immediately run an alias; requires al setup
   search     Print aliases that match a name, command, description, or tag
   stats      Rank aliases used directly or launched through Alias Lens
   export     Export aliases or usage stats as JSON, YAML, or CSV
@@ -25,7 +25,7 @@ Find and use aliases:
   describe   Add generated comments to aliases that do not have descriptions
 
 Protect and recover aliases:
-  check      Validate alias syntax and metadata without executing the file
+  check      Check alias syntax and details without running the file
   scan       Report likely secrets by type and line number; hides secret values
   history    List private revisions created before Alias Lens changes the file
   undo       Restore a revision after saving the current alias file first
@@ -42,10 +42,11 @@ Configure Git sync:
   sync       Copy and commit aliases locally, or explicitly push or pull
   diff       Compare local and repository aliases without changing either file
   autosync   Enable, disable, or show the background sync status
-  watch      Run one automatic-sync reconciliation cycle in the foreground
+  watch      Check once for alias changes that need to sync
 
 Other commands:
   theme      List dark themes or select one by preset name
+  shortcuts  Show or choose Windows, Linux, or macOS keyboard shortcuts
   shell-init Print Bash or Zsh integration; normally called by al setup
   --web      Start the optional local web interface on 127.0.0.1:8787
   --version  Print the installed version
@@ -57,7 +58,7 @@ var commandUsage = map[string]string{
 	"catalog": `Usage: al catalog shadow [--shell bash|zsh] [--json]
 
 Inspect the selected shell alias file through the shell-neutral catalog pipeline.
-Shadow mode parses, renders, validates, reparses, and compares supported entries.
+Shadow mode safely converts supported entries and checks that they stay the same.
 It never writes a catalog, alias file, startup file, configuration, or sync state.
 Exit status 0 means every inspected entry is equivalent. Status 1 means at least
 one entry needs attention. Status 2 means Alias Lens could not inspect the file.
@@ -66,7 +67,7 @@ one entry needs attention. Status 2 means Alias Lens could not inspect the file.
 
 Open a terminal picker, optionally filtered by QUERY. By default, the selected
 alias name is printed to standard output. --command prints the underlying shell
-command instead. This command only prints a selection and never executes it.
+command instead. This command only prints a selection and never runs it.
 Inside an integration-launched picker, Tab returns the alias to the prompt for
 editing instead of accepting it.
 
@@ -77,11 +78,11 @@ Examples:
 `,
 	"use": `Usage: al use [QUERY]
 
-Open the picker and immediately execute the selected alias command. This action
+Open the picker and immediately run the selected alias command. This action
 is provided by the shell integration, so run "al setup" and start a new shell
 first. This is the same Enter behavior as plain "al", with an optional
-starting query. Press Tab to return the alias to the prompt without executing
-it. Use "al pick" when you want a result without executing it.
+starting query. Press Tab to return the alias to the prompt without running it.
+Use "al pick" when you want a result without running it.
 `,
 	"suggest": `Usage:
   al suggest
@@ -111,7 +112,7 @@ file. Time-based periods require timestamped Bash or Zsh history.
 `,
 	"export": `Usage: al export aliases|stats [--format json|yaml|csv] [--period PERIOD] [--output PATH]
 
-Export aliases or ranked usage stats without executing alias commands. JSON is
+Export aliases or ranked usage stats without running alias commands. JSON is
 the default format. Stats periods are all, today, week, and year. --output writes
 the export atomically with private file permissions; otherwise output goes to
 standard output.
@@ -151,7 +152,7 @@ Secret values are never printed. Alias Lens runs this check before every push.
 `,
 	"check": `Usage: al check [--strict]
 
-Validate the active alias file without sourcing or executing it. Alias Lens
+Check the active alias file without loading or running it. Alias Lens
 checks definitions, duplicate names, metadata, multiline aliases, likely
 secrets, and missing executables. It also runs the configured shell in syntax-
 only mode. Diagnostics never include the source line or a secret value.
@@ -224,10 +225,16 @@ a scoped API token without echo and keeps it only for the current picker.
   al config provider gitlab [HOST]
   al config protocol PROVIDER auto|ssh|https
   al config disable PROVIDER
+  al config footer-message MESSAGE
+  al config footer-icon ICON
+  al config footer-reset
 
 With no arguments, print the effective Alias Lens configuration without tokens.
 The other forms select a shell, enable a provider, choose its Git clone protocol,
-or disable it.
+disable it, or customize the TUI footer. Use {icon} in MESSAGE to place the icon.
+ICON may be heart, spark, brand, alias, command, stats, sync, theme, none, one
+emoji written as emoji:VALUE, or a custom 4x2 bitmap such as #..#/.##. Quote
+messages, emoji values, and custom bitmaps in a shell.
 GitHub uses the gh CLI. Bitbucket and GitLab read tokens from environment
 variables and never store them in config.json.
 `,
@@ -281,10 +288,9 @@ Automatic sync may pull, commit, and push aliases and explicitly tracked files.
 `,
 	"watch": `Usage: al watch
 
-Run one automatic-sync reconciliation cycle in the foreground. The cycle pulls
-with fast-forward-only Git behavior, compares saved hashes, and then safely
-pulls or pushes when only one side changed. If both sides changed, it saves
-private conflict copies and leaves the live alias file unchanged.
+Check once for alias changes that need to sync. Alias Lens safely downloads or
+uploads when only one side changed. If both sides changed, it saves private
+copies for comparison and leaves the alias file you use unchanged.
 `,
 	"theme": `Usage: al theme [PRESET|--check]
 
@@ -295,6 +301,18 @@ contrast ratios. Ctrl+T opens a live-preview theme picker inside the TUI.
 Examples:
   al theme
   al theme tokyo-night
+`,
+	"shortcuts": `Usage: al shortcuts [windows|linux|macos|test]
+
+Show the keyboard style Alias Lens uses. Without a saved choice, Alias Lens
+chooses Windows on Windows and WSL, macOS on macOS, and Linux on Linux. You can
+choose any style on any computer. The test option shows the active shortcuts
+without changing your shortcut choice.
+
+Examples:
+  al shortcuts
+  al shortcuts macos
+  al shortcuts test
 `,
 	"shell-init": `Usage: al shell-init bash|zsh
 

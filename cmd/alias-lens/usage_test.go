@@ -7,7 +7,7 @@ import (
 
 func TestUsageDescribesImportantCommandEffects(t *testing.T) {
 	checks := []string{
-		"pick       Select an alias and print its name or command; never executes it",
+		"pick       Select an alias and print its name or command; never runs it",
 		"repo       Choose or clone a Git repository and enable automatic sync",
 		"sync       Copy and commit aliases locally, or explicitly push or pull",
 		"setup      Install, repair, or remove the Bash or Zsh integration",

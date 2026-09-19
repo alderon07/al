@@ -39,14 +39,16 @@ func (m model) updateRevisionDrawer(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m.restoreSelectedRevision()
 	}
+	if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
+		m.openRevisionDrawer()
+		return m, nil
+	}
 
 	switch message.Type {
 	case tea.KeyEsc, tea.KeyCtrlZ:
 		m.revisionOpen = false
 		m.revisions = nil
 		m.revisionErr = ""
-	case tea.KeyCtrlR:
-		m.openRevisionDrawer()
 	case tea.KeyUp:
 		m.revisionCursor = max(0, m.revisionCursor-1)
 	case tea.KeyDown:
@@ -105,7 +107,7 @@ func (m model) revisionVisibleCount() int {
 
 func (m model) revisionDrawerView(width, height, contentWidth int, header string) string {
 	var body strings.Builder
-	body.WriteString(titleStyle.Render("Restore an earlier alias file"))
+	body.WriteString(pixelIconLabel(iconHistory, "Restore an earlier alias file", titleStyle))
 	body.WriteString("\n" + dimStyle.Render("Alias Lens saves the current file before restoring your choice."))
 	body.WriteString("\n\n")
 
@@ -142,8 +144,11 @@ func (m model) revisionDrawerView(width, height, contentWidth int, header string
 	if m.revisionConfirm && len(m.revisions) > 0 {
 		selected := m.revisions[min(max(0, m.revisionCursor), len(m.revisions)-1)]
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render("Restore " + selected.Time.Local().Format("Jan 2, 15:04") + "?  y confirm  ·  n or esc cancel")
+	} else if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
+		footer += "\n" + dimStyle.Render(navigation)
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body.String(), "", footer)
+	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -52,7 +53,7 @@ func TestLoadConfigMigratesLegacyFileWithPrivateBackup(t *testing.T) {
 		t.Fatalf("legacy configuration was not migrated: %+v", config)
 	}
 	contents, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(contents), `"version": 1`) {
+	if err != nil || !strings.Contains(string(contents), fmt.Sprintf(`"version": %d`, currentConfigVersion)) {
 		t.Fatalf("migrated configuration was not saved: %s, %v", contents, err)
 	}
 	backup, err := os.ReadFile(path + ".alias-lens.bak")
@@ -75,6 +76,56 @@ func TestLoadConfigMigratesLegacyFileWithPrivateBackup(t *testing.T) {
 	}
 }
 
+func TestLoadConfigMigratesVersionOneForShortcutProfiles(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, ".config", "alias-lens", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	versionOne := []byte("{\n  \"version\": 1,\n  \"alias_file\": \".bash_aliases\",\n  \"shell\": \"bash\"\n}\n")
+	if err := os.WriteFile(path, versionOne, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.Version != 2 || config.ShortcutProfile != "" {
+		t.Fatalf("migrated config = %#v", config)
+	}
+	backup, err := os.ReadFile(path + ".alias-lens.bak")
+	if err != nil || !bytes.Equal(backup, versionOne) {
+		t.Fatalf("version 1 backup = %q, %v", backup, err)
+	}
+}
+
+func TestLoadConfigDoesNotWriteDetectedShortcutDefault(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, ".config", "alias-lens", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	contents := []byte("{\n  \"version\": 2,\n  \"alias_file\": \".bash_aliases\",\n  \"shell\": \"bash\",\n  \"footer\": {\"message\": \"Made with {icon} by Naqi\", \"icon\": \"heart\"}\n}\n")
+	if err := os.WriteFile(path, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	config, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ShortcutProfile != "" {
+		t.Fatalf("shortcut profile was persisted as %q", config.ShortcutProfile)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(after, contents) {
+		t.Fatalf("reading detected default changed config: %q, %v", after, err)
+	}
+}
+
 func TestLoadConfigRejectsNewerSchemaWithoutChangingFile(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -82,7 +133,7 @@ func TestLoadConfigRejectsNewerSchemaWithoutChangingFile(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	newer := []byte("{\n  \"version\": 2,\n  \"shell\": \"bash\"\n}\n")
+	newer := []byte(fmt.Sprintf("{\n  \"version\": %d,\n  \"shell\": \"bash\"\n}\n", currentConfigVersion+1))
 	if err := os.WriteFile(path, newer, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +161,7 @@ func TestSaveConfigWritesCurrentVersionPrivately(t *testing.T) {
 	}
 	path := filepath.Join(home, ".config", "alias-lens", "config.json")
 	contents, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(contents), `"version": 1`) {
+	if err != nil || !strings.Contains(string(contents), fmt.Sprintf(`"version": %d`, currentConfigVersion)) {
 		t.Fatalf("saved configuration = %s, %v", contents, err)
 	}
 	info, err := os.Stat(path)

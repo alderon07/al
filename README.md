@@ -112,7 +112,8 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | `Ctrl+A` | Add an alias |
 | `Ctrl+E` | Edit the selected alias |
 | `Ctrl+D` | Delete the selected alias after confirmation |
-| `F2` | Open usage stats |
+| `F2` or `Ctrl+S` | Open usage stats |
+| `F3` | Customize the TUI footer |
 | `Ctrl+H` | Show alias health warnings |
 | `Ctrl+F` | Show tracked files and sync status |
 | `Ctrl+G` | Sync while the TUI is open |
@@ -120,7 +121,20 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | `Ctrl+Z` | Browse and restore revisions |
 | `Esc` | Exit |
 
-Some terminals reserve `Ctrl+S` for flow control, so `F2` is the reliable shortcut for stats.
+The page shortcuts work from the alias list, help, stats, themes, revisions, sync status, and alias health. Press the current page's shortcut again to return to the alias list.
+
+Some terminals reserve `Ctrl+S` for flow control, so use `F2` if `Ctrl+S` does not reach Alias Lens.
+
+Alias Lens chooses a familiar keyboard style for your computer: Windows on Windows and WSL, macOS on macOS, and Linux on Linux. See the active style or choose the one you already know:
+
+```bash
+al shortcuts
+al shortcuts macos
+al shortcuts windows
+al shortcuts linux
+```
+
+You can use any style on any computer. The macOS style shows Command shortcuts with Control-key fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
 
 On Zsh and Bash 4+, `Ctrl+G` keeps its normal cancel behavior when the prompt contains text. Bash 3.2 does not install the picker binding; run `al` instead. Set `ALIAS_LENS_NOBIND=1` before the shell integration loads if you do not want the key binding.
 
@@ -213,6 +227,21 @@ al theme --check
 ```
 
 Moving through the picker previews each theme. Press `Enter` to save it or `Esc` to keep the previous theme.
+
+Customize the credit at the bottom of the TUI:
+
+```bash
+al config footer-message 'Built with {icon} by Sam'
+al config footer-icon spark
+```
+
+`{icon}` marks the icon position. Built-in choices include `heart`, `spark`, `brand`, `alias`, `command`, `stats`, `sync`, and `theme`. Use `none` to hide it. Prefix one emoji with `emoji:` to use it as the icon. A custom pixel icon is a quoted 4×2 bitmap with `#` for filled pixels and `.` for empty pixels:
+
+```bash
+al config footer-icon 'emoji:🚀'
+al config footer-icon '#..#/.##.'
+al config footer-reset
+```
 
 ## Sync aliases without babysitting Git
 

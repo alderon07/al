@@ -438,7 +438,7 @@ func TestShadowReadOnlyConfigMatrix(t *testing.T) {
 		{name: "version one", config: `{"version":1,"shell":"zsh"}`, shell: "zsh"},
 		{name: "empty shell", config: `{"version":1,"shell":""}`, shell: "bash"},
 		{name: "negative", config: `{"version":-1}`, errorText: "invalid configuration version"},
-		{name: "future", config: `{"version":2}`, errorText: "configuration version unsupported"},
+		{name: "future", config: fmt.Sprintf(`{"version":%d}`, currentConfigVersion+1), errorText: "configuration version unsupported"},
 		{name: "null version", config: `{"version":null}`, errorText: "invalid configuration"},
 		{name: "null shell", config: `{"shell":null}`, errorText: "invalid configuration"},
 		{name: "wrong type", config: `{"version":"one"}`, errorText: "invalid configuration"},

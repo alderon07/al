@@ -678,7 +678,7 @@ func TestExecuteModeExplainsThatEnterRunsTheAlias(t *testing.T) {
 		executeMode: true,
 	}
 	view := m.View()
-	for _, expected := range []string{"Choose an alias to run.", "Enter executes it.", "execute"} {
+	for _, expected := range []string{"Choose an alias to run.", "Press Enter to run it.", "enter run"} {
 		if !strings.Contains(view, expected) {
 			t.Errorf("execute-mode view is missing %q:\n%s", expected, view)
 		}
