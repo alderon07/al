@@ -34,6 +34,73 @@ const (
 	shortcutSave
 )
 
+type shortcutKey struct {
+	typeCode   tea.KeyType
+	runeCode   rune
+	super      bool
+	shift      bool
+	allowShift bool
+}
+
+type shortcutChoice struct {
+	label string
+	keys  []shortcutKey
+}
+
+type shortcutDefinition struct {
+	action  shortcutAction
+	windows shortcutChoice
+	linux   shortcutChoice
+	macos   shortcutChoice
+}
+
+var shortcutDefinitions = []shortcutDefinition{
+	{action: shortcutHelp,
+		windows: shortcutChoice{label: "F1 / ?", keys: []shortcutKey{{typeCode: tea.KeyF1}, {typeCode: tea.KeyRunes, runeCode: '?', allowShift: true}}},
+		linux:   shortcutChoice{label: "F1 / ?", keys: []shortcutKey{{typeCode: tea.KeyF1}, {typeCode: tea.KeyRunes, runeCode: '?', allowShift: true}}},
+		macos:   shortcutChoice{label: "Cmd+? / F1 / ?", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: '?', super: true, allowShift: true}, {typeCode: tea.KeyF1}, {typeCode: tea.KeyRunes, runeCode: '?', allowShift: true}}}},
+	{action: shortcutStats,
+		windows: shortcutChoice{label: "F2 / Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyF2}, {typeCode: tea.KeyCtrlS}}},
+		linux:   shortcutChoice{label: "F2 / Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyF2}, {typeCode: tea.KeyCtrlS}}},
+		macos:   shortcutChoice{label: "Cmd+2 / F2", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: '2', super: true}, {typeCode: tea.KeyF2}}}},
+	{action: shortcutSettings,
+		windows: shortcutChoice{label: "F3", keys: []shortcutKey{{typeCode: tea.KeyF3}}},
+		linux:   shortcutChoice{label: "F3", keys: []shortcutKey{{typeCode: tea.KeyF3}}},
+		macos:   shortcutChoice{label: "Cmd+, / F3", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: ',', super: true}, {typeCode: tea.KeyF3}}}},
+	{action: shortcutThemes,
+		windows: shortcutChoice{label: "Ctrl+T", keys: []shortcutKey{{typeCode: tea.KeyCtrlT}}},
+		linux:   shortcutChoice{label: "Ctrl+T", keys: []shortcutKey{{typeCode: tea.KeyCtrlT}}},
+		macos:   shortcutChoice{label: "Cmd+T / Ctrl+T", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 't', super: true}, {typeCode: tea.KeyCtrlT}}}},
+	{action: shortcutRevisions,
+		windows: shortcutChoice{label: "Ctrl+Z", keys: []shortcutKey{{typeCode: tea.KeyCtrlZ}}},
+		linux:   shortcutChoice{label: "Ctrl+Z", keys: []shortcutKey{{typeCode: tea.KeyCtrlZ}}},
+		macos:   shortcutChoice{label: "Cmd+Z / Ctrl+Z", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'z', super: true}, {typeCode: tea.KeyCtrlZ}}}},
+	{action: shortcutSync,
+		windows: shortcutChoice{label: "Ctrl+F", keys: []shortcutKey{{typeCode: tea.KeyCtrlF}}},
+		linux:   shortcutChoice{label: "Ctrl+F", keys: []shortcutKey{{typeCode: tea.KeyCtrlF}}},
+		macos:   shortcutChoice{label: "Cmd+Shift+S / Ctrl+F", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 's', super: true, shift: true}, {typeCode: tea.KeyCtrlF}}}},
+	{action: shortcutHealth,
+		windows: shortcutChoice{label: "Ctrl+H", keys: []shortcutKey{{typeCode: tea.KeyCtrlH}}},
+		linux:   shortcutChoice{label: "Ctrl+H", keys: []shortcutKey{{typeCode: tea.KeyCtrlH}}},
+		macos:   shortcutChoice{label: "Cmd+H / Ctrl+H", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'h', super: true}, {typeCode: tea.KeyCtrlH}}}},
+	{action: shortcutAdd,
+		windows: shortcutChoice{label: "Ctrl+A", keys: []shortcutKey{{typeCode: tea.KeyCtrlA}}},
+		linux:   shortcutChoice{label: "Ctrl+A", keys: []shortcutKey{{typeCode: tea.KeyCtrlA}}},
+		macos:   shortcutChoice{label: "Cmd+N / Ctrl+A", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'n', super: true}, {typeCode: tea.KeyCtrlA}}}},
+	{action: shortcutEdit,
+		windows: shortcutChoice{label: "Ctrl+E", keys: []shortcutKey{{typeCode: tea.KeyCtrlE}}},
+		linux:   shortcutChoice{label: "Ctrl+E", keys: []shortcutKey{{typeCode: tea.KeyCtrlE}}},
+		macos:   shortcutChoice{label: "Cmd+E / Ctrl+E", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'e', super: true}, {typeCode: tea.KeyCtrlE}}}},
+	{action: shortcutRefresh,
+		windows: shortcutChoice{label: "Ctrl+R", keys: []shortcutKey{{typeCode: tea.KeyCtrlR}}},
+		linux:   shortcutChoice{label: "Ctrl+R", keys: []shortcutKey{{typeCode: tea.KeyCtrlR}}},
+		macos:   shortcutChoice{label: "Cmd+R / Ctrl+R", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'r', super: true}, {typeCode: tea.KeyCtrlR}}}},
+	{action: shortcutSave,
+		windows: shortcutChoice{label: "Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyCtrlS}}},
+		linux:   shortcutChoice{label: "Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyCtrlS}}},
+		macos:   shortcutChoice{label: "Cmd+S / Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 's', super: true}, {typeCode: tea.KeyCtrlS}}}},
+}
+
 func parseShortcutProfile(value string) (ShortcutProfile, error) {
 	switch profile := ShortcutProfile(strings.ToLower(strings.TrimSpace(value))); profile {
 	case shortcutWindows, shortcutLinux, shortcutMacOS:
@@ -122,7 +189,7 @@ func runShortcutsCommand(arguments []string) error {
 	}
 	fmt.Println()
 	if profile == shortcutMacOS {
-		fmt.Println("If your terminal keeps a Command shortcut, use the Control shortcut shown beside it.")
+		fmt.Println("If your terminal keeps a Command shortcut, use the terminal-safe fallback shown beside it.")
 	}
 	if profile == shortcutMacOS {
 		fmt.Println("Your terminal normally uses Cmd+C to copy and Cmd+V to paste.")
@@ -142,151 +209,98 @@ func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
 	if selectMode {
 		enterAction = "Select without running"
 	}
-	return [][2]string{
+	guide := [][2]string{
 		{"Type", "Search names, commands, and descriptions"},
 		{"↑↓ / PgUp PgDn", "Move through results"},
 		{"Enter", enterAction},
 		{"Tab", "Return the alias to the prompt for editing"},
-		{shortcutLabel(profile, shortcutAdd), "Add an alias"},
-		{shortcutLabel(profile, shortcutEdit), "Edit description, command, or name"},
-		{"Ctrl+D", "Delete an alias after confirmation"},
-		{shortcutLabel(profile, shortcutRevisions), "Browse and restore saved versions"},
-		{shortcutLabel(profile, shortcutStats), "Open alias usage stats"},
-		{shortcutLabel(profile, shortcutSettings), "Customize the TUI footer"},
-		{shortcutLabel(profile, shortcutHealth), "Show aliases that need attention"},
-		{shortcutLabel(profile, shortcutSync), "Open sync status and tracked files"},
-		{"Ctrl+G", "Save alias changes to the local repository"},
-		{shortcutLabel(profile, shortcutThemes), "Choose a theme with live preview"},
-		{shortcutLabel(profile, shortcutRefresh), "Reload aliases and theme settings"},
-		{"? / Esc", "Close this guide"},
 	}
+	if selectMode {
+		return append(guide, [2]string{shortcutLabel(profile, shortcutHelp) + " / Esc", "Close this guide"})
+	}
+	return append(guide,
+		[2]string{shortcutLabel(profile, shortcutAdd), "Add an alias"},
+		[2]string{shortcutLabel(profile, shortcutEdit), "Edit description, command, or name"},
+		[2]string{"Ctrl+D", "Delete an alias after confirmation"},
+		[2]string{shortcutLabel(profile, shortcutRevisions), "Browse and restore saved versions"},
+		[2]string{shortcutLabel(profile, shortcutStats), "Open alias usage stats"},
+		[2]string{shortcutLabel(profile, shortcutSettings), "Customize the TUI footer"},
+		[2]string{shortcutLabel(profile, shortcutHealth), "Show aliases that need attention"},
+		[2]string{shortcutLabel(profile, shortcutSync), "Open sync status and tracked files"},
+		[2]string{"Ctrl+G", "Save alias changes to the local repository"},
+		[2]string{shortcutLabel(profile, shortcutThemes), "Choose a theme with live preview"},
+		[2]string{shortcutLabel(profile, shortcutRefresh), "Reload aliases and theme settings"},
+		[2]string{shortcutLabel(profile, shortcutHelp) + " / Esc", "Close this guide"},
+	)
 }
 
 func shortcutLabel(profile ShortcutProfile, action shortcutAction) string {
-	if profile == shortcutMacOS {
-		switch action {
-		case shortcutHelp:
-			return "Cmd+? / ?"
-		case shortcutStats:
-			return "Cmd+2 / F2"
-		case shortcutSettings:
-			return "Cmd+, / F3"
-		case shortcutThemes:
-			return "Cmd+T / Ctrl+T"
-		case shortcutRevisions:
-			return "Cmd+Z / Ctrl+Z"
-		case shortcutSync:
-			return "Cmd+Shift+S / Ctrl+F"
-		case shortcutHealth:
-			return "Cmd+H / Ctrl+H"
-		case shortcutAdd:
-			return "Cmd+N / Ctrl+A"
-		case shortcutEdit:
-			return "Cmd+E / Ctrl+E"
-		case shortcutRefresh:
-			return "Cmd+R / Ctrl+R"
-		case shortcutSave:
-			return "Cmd+S / Ctrl+S"
+	for _, definition := range shortcutDefinitions {
+		if definition.action == action {
+			return shortcutChoiceForProfile(definition, profile).label
 		}
 	}
-	switch action {
-	case shortcutHelp:
-		return "?"
-	case shortcutStats:
-		return "F2 / Ctrl+S"
-	case shortcutSettings:
-		return "F3"
-	case shortcutThemes:
-		return "Ctrl+T"
-	case shortcutRevisions:
-		return "Ctrl+Z"
-	case shortcutSync:
-		return "Ctrl+F"
-	case shortcutHealth:
-		return "Ctrl+H"
-	case shortcutAdd:
-		return "Ctrl+A"
-	case shortcutEdit:
-		return "Ctrl+E"
-	case shortcutRefresh:
-		return "Ctrl+R"
-	case shortcutSave:
-		return "Ctrl+S"
+	return ""
+}
+
+func primaryShortcutLabel(profile ShortcutProfile, action shortcutAction) string {
+	label := shortcutLabel(profile, action)
+	if primary, _, found := strings.Cut(label, " / "); found {
+		return primary
+	}
+	return label
+}
+
+func shortcutChoiceForProfile(definition shortcutDefinition, profile ShortcutProfile) shortcutChoice {
+	switch profile {
+	case shortcutWindows:
+		return definition.windows
+	case shortcutMacOS:
+		return definition.macos
 	default:
-		return ""
+		return definition.linux
 	}
 }
 
 func matchesShortcut(message tea.KeyMsg, profile ShortcutProfile, action shortcutAction) bool {
-	if action == shortcutHelp {
-		return message.Type == tea.KeyF1 || keyRune(message, '?', false)
-	}
-	if action == shortcutStats && message.Type == tea.KeyF2 {
-		return true
-	}
-	if action == shortcutSettings && message.Type == tea.KeyF3 {
-		return true
-	}
-	if profile == shortcutMacOS && matchesMacShortcut(message, action) {
-		return true
-	}
-	switch action {
-	case shortcutStats, shortcutSave:
-		return message.Type == tea.KeyCtrlS
-	case shortcutThemes:
-		return message.Type == tea.KeyCtrlT
-	case shortcutRevisions:
-		return message.Type == tea.KeyCtrlZ
-	case shortcutSync:
-		return message.Type == tea.KeyCtrlF
-	case shortcutHealth:
-		return message.Type == tea.KeyCtrlH
-	case shortcutAdd:
-		return message.Type == tea.KeyCtrlA
-	case shortcutEdit:
-		return message.Type == tea.KeyCtrlE
-	case shortcutRefresh:
-		return message.Type == tea.KeyCtrlR
-	default:
-		return false
-	}
+	resolved, ok := resolveShortcut(message, profile, action)
+	return ok && resolved == action
 }
 
-func matchesMacShortcut(message tea.KeyMsg, action shortcutAction) bool {
-	if !message.Super {
-		return false
+func resolveShortcut(message tea.KeyMsg, profile ShortcutProfile, allowed ...shortcutAction) (shortcutAction, bool) {
+	if message.Paste || message.Alt || message.Ctrl || message.Meta {
+		return 0, false
 	}
-	switch action {
-	case shortcutHelp:
-		return keyRune(message, '?', true)
-	case shortcutStats:
-		return keyRune(message, '2', true)
-	case shortcutThemes:
-		return keyRune(message, 't', true)
-	case shortcutRevisions:
-		return keyRune(message, 'z', true)
-	case shortcutSync:
-		return message.Shift && keyRune(message, 's', true)
-	case shortcutHealth:
-		return keyRune(message, 'h', true)
-	case shortcutAdd:
-		return keyRune(message, 'n', true)
-	case shortcutEdit:
-		return keyRune(message, 'e', true)
-	case shortcutRefresh:
-		return keyRune(message, 'r', true)
-	case shortcutSettings:
-		return keyRune(message, ',', true)
-	case shortcutSave:
-		return keyRune(message, 's', true)
-	default:
-		return false
+	for _, action := range allowed {
+		for _, definition := range shortcutDefinitions {
+			if definition.action != action {
+				continue
+			}
+			for _, key := range shortcutChoiceForProfile(definition, profile).keys {
+				if shortcutKeyMatches(message, key) {
+					return action, true
+				}
+			}
+		}
 	}
+	return 0, false
 }
 
-func keyRune(message tea.KeyMsg, expected rune, requireSuper bool) bool {
-	return message.Type == tea.KeyRunes && len(message.Runes) == 1 &&
-		unicodeLower(message.Runes[0]) == unicodeLower(expected) && (!requireSuper || message.Super)
+func shortcutKeyMatches(message tea.KeyMsg, key shortcutKey) bool {
+	if message.Type != key.typeCode || message.Super != key.super {
+		return false
+	}
+	if !key.allowShift && message.Shift != key.shift {
+		return false
+	}
+	if key.typeCode != tea.KeyRunes {
+		return true
+	}
+	return len(message.Runes) == 1 && unicodeLower(message.Runes[0]) == unicodeLower(key.runeCode)
+}
+
+func acceptsTextInput(message tea.KeyMsg) bool {
+	return !message.Alt && !message.Ctrl && !message.Meta && !message.Super
 }
 
 func unicodeLower(value rune) rune {

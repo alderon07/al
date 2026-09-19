@@ -1,6 +1,6 @@
 # State, planning, and portability specification
 
-Status: proposed on 2026-09-18. This document defines acceptance criteria before implementation. It does not authorize code changes. Each work phase needs an approval record before implementation starts.
+Status: proposed on 2026-09-18. This document defines acceptance criteria before implementation. The user approved the plain-language and shortcut-profile portion on 2026-09-19. Every other work phase still needs an approval record before implementation starts.
 
 ## Purpose
 
@@ -649,7 +649,7 @@ The first profile version uses these defaults:
 | Open health | `Ctrl+H` | `Ctrl+H` | `Cmd+H` | `Ctrl+H` |
 | Open stats | `F2` or `Ctrl+S` | `F2` or `Ctrl+S` | `Cmd+2` | `F2` |
 | Open settings | `F3` | `F3` | `Cmd+,` | `F3` |
-| Open help | `F1` or `?` | `F1` or `?` | `Cmd+?` or `?` | `?` |
+| Open help | `F1` or `?` | `F1` or `?` | `Cmd+?`, `F1`, or `?` | `F1` or `?` |
 
 Copy and paste stay owned by the terminal:
 
@@ -923,6 +923,8 @@ The review found and corrected these blocking ambiguities:
 - Semantic merge had hashes but no durable base bytes. Private canonical snapshots now supply merge and installed comparison inputs.
 - Remote bootstrap did not separate preview from repository creation. Preview now uses a bounded provider API read, while application uses a verified no-checkout staged clone.
 - Delivery phase numbers conflicted with the existing shell-neutral rollout. This document now uses named delivery stages.
+
+An implementation review on 2026-09-19 checked the approved plain-language and shortcut-profile work. It found and corrected version-1 decoding of version-2 fields, missing profile validation, pasted and modified keys reaching actions or text fields, Meta being treated as Command, duplicated shortcut label and matching rules, hidden configuration errors, and help text that claimed unavailable fallbacks. The release checklist still requires native terminal evidence before shortcut profiles are complete.
 
 No unresolved product-boundary, compatibility, or safety blocker remains in the draft. Independent approval is still required before any implementation stage starts.
 

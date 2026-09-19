@@ -97,7 +97,11 @@ func runMain() int {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			return 1
 		}
-		config, _ := loadConfig()
+		config, err := loadConfig()
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens could not read its settings:", err)
+			return 1
+		}
 		fmt.Printf("Alias Lens will sync only %s in %s\n", config.AliasFile, os.Args[2])
 	case "config":
 		if err := runConfigCommand(os.Args[2:]); err != nil {

@@ -136,8 +136,9 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
   - [ ] Add semantic catalog diff, three-way reconciliation, and native-approval gates.
   - [ ] Add versioned machine profiles and catalog conditions.
   - [ ] Use plain-language copy shared by CLI and TUI results.
-  - [x] Add selectable Windows, Linux, and macOS shortcut profiles with terminal-safe fallbacks.
-    - [ ] Check preferred keys and fallbacks in Windows Terminal, a Linux terminal, and macOS Terminal.
+  - [ ] Add selectable Windows, Linux, and macOS shortcut profiles with terminal-safe fallbacks.
+    - [x] Add automatic OS and WSL defaults, saved overrides, shared semantic bindings, friendly help, and automated tests.
+    - [ ] Check preferred keys and fallbacks in Windows Terminal, a Linux terminal, and macOS Terminal before release.
   - [ ] Add one-command catalog bootstrap.
   - [ ] Add generated Bash and Zsh completions from one command specification.
   - [ ] Defer alias packs until the required stable release cycle has passed.

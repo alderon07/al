@@ -121,7 +121,7 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | `Ctrl+Z` | Browse and restore revisions |
 | `Esc` | Exit |
 
-The page shortcuts work from the alias list, help, stats, themes, revisions, sync status, and alias health. Press the current page's shortcut again to return to the alias list.
+The page shortcuts work from the alias list, help, stats, footer settings, themes, revisions, sync status, and alias health. Press the current page's shortcut again to return to the alias list.
 
 Some terminals reserve `Ctrl+S` for flow control, so use `F2` if `Ctrl+S` does not reach Alias Lens.
 
@@ -134,7 +134,7 @@ al shortcuts windows
 al shortcuts linux
 ```
 
-You can use any style on any computer. The macOS style shows Command shortcuts with Control-key fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
+You can use any style on any computer. The macOS style shows Command shortcuts with terminal-safe fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
 
 On Zsh and Bash 4+, `Ctrl+G` keeps its normal cancel behavior when the prompt contains text. Bash 3.2 does not install the picker binding; run `al` instead. Set `ALIAS_LENS_NOBIND=1` before the shell integration loads if you do not want the key binding.
 

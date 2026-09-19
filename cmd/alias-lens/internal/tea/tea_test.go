@@ -14,7 +14,9 @@ func TestTranslateV2Keys(t *testing.T) {
 	}{
 		{name: "rune", key: tea2.Key{Code: 'a', Text: "a"}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'a'}}},
 		{name: "ctrl", key: tea2.Key{Code: 'g', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyCtrlG}},
+		{name: "unknown ctrl", key: tea2.Key{Code: 'x', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'x'}, Ctrl: true}},
 		{name: "command", key: tea2.Key{Code: 'n', Mod: tea2.ModSuper}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'n'}, Super: true}},
+		{name: "meta is not command", key: tea2.Key{Code: 'n', Mod: tea2.ModMeta}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'n'}, Meta: true}},
 		{name: "command shift", key: tea2.Key{Code: 's', Mod: tea2.ModSuper | tea2.ModShift}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'s'}, Shift: true, Super: true}},
 		{name: "shift tab", key: tea2.Key{Code: tea2.KeyTab, Mod: tea2.ModShift}, want: KeyMsg{Type: KeyShiftTab}},
 		{name: "function", key: tea2.Key{Code: tea2.KeyF2}, want: KeyMsg{Type: KeyF2}},
@@ -23,7 +25,7 @@ func TestTranslateV2Keys(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			got := translateKey(test.key)
-			if got.Type != test.want.Type || string(got.Runes) != string(test.want.Runes) || got.Alt != test.want.Alt || got.Shift != test.want.Shift || got.Super != test.want.Super {
+			if got.Type != test.want.Type || string(got.Runes) != string(test.want.Runes) || got.Alt != test.want.Alt || got.Ctrl != test.want.Ctrl || got.Meta != test.want.Meta || got.Shift != test.want.Shift || got.Super != test.want.Super {
 				t.Fatalf("translateKey(%+v) = %+v, want %+v", test.key, got, test.want)
 			}
 		})

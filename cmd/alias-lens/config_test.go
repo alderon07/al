@@ -101,6 +101,55 @@ func TestLoadConfigMigratesVersionOneForShortcutProfiles(t *testing.T) {
 	}
 }
 
+func TestLoadConfigRejectsVersionOneWithVersionTwoFields(t *testing.T) {
+	for _, field := range []string{`"profiles": ["work"]`, `"shortcut_profile": "macos"`, `"footer": {"message": "x", "icon": "none"}`} {
+		t.Run(field, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			path := filepath.Join(home, ".config", "alias-lens", "config.json")
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			contents := []byte("{\"version\":1,\"alias_file\":\".bash_aliases\",\"shell\":\"bash\"," + field + "}\n")
+			if err := os.WriteFile(path, contents, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "cannot contain") {
+				t.Fatalf("version 1 field error = %v", err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(after, contents) {
+				t.Fatalf("invalid version 1 config changed: %q, %v", after, err)
+			}
+		})
+	}
+}
+
+func TestValidateAppConfigChecksProfiles(t *testing.T) {
+	tests := [][]string{
+		{"Work"},
+		{"work", "work"},
+		{"work", "laptop"},
+	}
+	tooMany := make([]string, 33)
+	for index := range tooMany {
+		tooMany[index] = fmt.Sprintf("p%02d", index)
+	}
+	tests = append(tests, tooMany)
+	for _, profiles := range tests {
+		config := defaultConfig()
+		config.Profiles = profiles
+		if err := validateAppConfig(config); err == nil {
+			t.Errorf("invalid profiles were accepted: %#v", profiles)
+		}
+	}
+	config := defaultConfig()
+	config.Profiles = []string{"laptop", "work"}
+	if err := validateAppConfig(config); err != nil {
+		t.Fatalf("valid profiles were rejected: %v", err)
+	}
+}
+
 func TestLoadConfigDoesNotWriteDetectedShortcutDefault(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

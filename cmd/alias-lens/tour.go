@@ -54,7 +54,7 @@ func (m model) updateTour(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if message.Type == tea.KeyCtrlC {
 		return m, tea.Quit
 	}
-	openHelp := message.Type == tea.KeyRunes && len(message.Runes) == 1 && message.Runes[0] == '?'
+	openHelp := matchesShortcut(message, m.shortcutProfile, shortcutHelp)
 	if message.Type != tea.KeyEnter && message.Type != tea.KeyEsc && !openHelp {
 		return m, nil
 	}
@@ -73,8 +73,8 @@ func (m model) tourView(width, height, contentWidth int, header string) string {
 	steps := []string{
 		aliasStyle.Render("Type") + dimStyle.Render("      Search aliases, commands, and descriptions"),
 		aliasStyle.Render("Enter") + dimStyle.Render("     Run the selected alias by name"),
-		aliasStyle.Render("Ctrl+T") + dimStyle.Render("    Preview and save a dark theme"),
-		aliasStyle.Render("?") + dimStyle.Render("         Open the searchable keyboard guide"),
+		aliasStyle.Render(primaryShortcutLabel(m.shortcutProfile, shortcutThemes)) + dimStyle.Render("  Preview and save a dark theme"),
+		aliasStyle.Render(primaryShortcutLabel(m.shortcutProfile, shortcutHelp)) + dimStyle.Render("  Open the searchable keyboard guide"),
 	}
 	body := pixelIconLabel(iconBrand, "Alias Lens is ready.", titleStyle) +
 		"\n" + dimStyle.Render("Four keys are enough to get started.") +

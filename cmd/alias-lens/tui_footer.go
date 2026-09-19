@@ -74,6 +74,9 @@ func (m model) footerSettingsView(width, height, contentWidth int, header string
 	if m.status != "" {
 		footer = statusStyle.Render(wrapText(m.status, contentWidth)) + "\n" + footer
 	}
+	if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
+		footer += "\n" + dimStyle.Render(navigation)
+	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", fields.String(), "", footer)
 	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)

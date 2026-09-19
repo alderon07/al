@@ -51,9 +51,12 @@ func (m model) updateFooterSettings(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.settingsForm[m.settingsField] = value[:len(value)-size]
 		}
 	case tea.KeySpace:
+		if !acceptsTextInput(message) {
+			return m, nil
+		}
 		m.settingsForm[m.settingsField] += " "
 	case tea.KeyRunes:
-		if message.Super {
+		if !acceptsTextInput(message) {
 			return m, nil
 		}
 		m.settingsForm[m.settingsField] += string(message.Runes)

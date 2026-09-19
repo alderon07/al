@@ -45,7 +45,10 @@ type statsModel struct {
 func runStatsTUI(data statsData, period string, now time.Time) error {
 	theme, _ := loadTheme()
 	applyTheme(theme)
-	config, _ := loadConfig()
+	config, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("could not read Alias Lens settings: %w", err)
+	}
 	applyFooterConfig(config.Footer)
 	index := 0
 	viewIndex := 0
@@ -69,7 +72,7 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 		lipgloss.SetDefaultRenderer(renderer)
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
-	_, err := tea.NewProgram(statsModel{data: data, periodIndex: index, viewIndex: viewIndex, width: 80, height: 24, theme: theme, now: now, shortcutProfile: resolvedShortcutProfile(config)}, options...).Run()
+	_, err = tea.NewProgram(statsModel{data: data, periodIndex: index, viewIndex: viewIndex, width: 80, height: 24, theme: theme, now: now, shortcutProfile: resolvedShortcutProfile(config)}, options...).Run()
 	return err
 }
 
@@ -80,6 +83,19 @@ func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = message.Width, message.Height
 	case tea.KeyMsg:
+		if matchesShortcut(message, m.shortcutProfile, shortcutStats) {
+			return m, tea.Quit
+		}
+		if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
+			data, err := loadStatsData()
+			if err != nil {
+				m.errorText = err.Error()
+			} else {
+				m.data = data
+				m.errorText = ""
+			}
+			return m, nil
+		}
 		switch message.String() {
 		case "q", "esc", "ctrl+c":
 			return m, tea.Quit
@@ -296,9 +312,6 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyEsc:
 		m.statsOpen = false
 		return m, nil
-	case tea.KeyF2, tea.KeyCtrlS:
-		m.statsOpen = false
-		return m, nil
 	case tea.KeyLeft:
 		m.statsPeriod = (m.statsPeriod + len(statsPeriods) - 1) % len(statsPeriods)
 		m.statsSelected = 0
@@ -316,6 +329,9 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		rows, _ := rankedStatsRows(m.statsData, statsPeriods[m.statsPeriod], m.statsNow)
 		m.statsSelected = min(max(0, len(rows)-1), m.statsSelected+1)
 	case tea.KeyRunes:
+		if message.Paste || !acceptsTextInput(message) {
+			return m, nil
+		}
 		if len(message.Runes) != 1 {
 			return m, nil
 		}
@@ -366,7 +382,7 @@ func (m model) statsView(header string) string {
 		theme:           m.theme,
 		now:             m.statsNow,
 		appHeader:       header,
-		closeHint:       "F2/esc return",
+		closeHint:       primaryShortcutLabel(m.shortcutProfile, shortcutStats) + "/esc return",
 		errorText:       m.statsErr,
 		shortcutProfile: m.shortcutProfile,
 	}).View()

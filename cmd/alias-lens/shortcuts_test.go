@@ -125,6 +125,26 @@ func TestMacShortcutsUseCommandWithControlFallbacks(t *testing.T) {
 	}
 }
 
+func TestEveryDisplayedShortcutComesFromAnAcceptedBinding(t *testing.T) {
+	for _, profile := range []ShortcutProfile{shortcutWindows, shortcutLinux, shortcutMacOS} {
+		for _, definition := range shortcutDefinitions {
+			choice := shortcutChoiceForProfile(definition, profile)
+			if choice.label == "" || len(choice.keys) == 0 {
+				t.Fatalf("%s action %d has no displayed or accepted key", profile, definition.action)
+			}
+			for _, key := range choice.keys {
+				message := tea.KeyMsg{Type: key.typeCode, Super: key.super, Shift: key.shift}
+				if key.typeCode == tea.KeyRunes {
+					message.Runes = []rune{key.runeCode}
+				}
+				if !matchesShortcut(message, profile, definition.action) {
+					t.Fatalf("%s action %d rejected binding %#v", profile, definition.action, key)
+				}
+			}
+		}
+	}
+}
+
 func TestShortcutGuideUsesFriendlyMacLabels(t *testing.T) {
 	rows := shortcutGuide(shortcutMacOS, false)
 	var text strings.Builder
@@ -157,5 +177,68 @@ func TestUnassignedCommandKeysDoNotBecomeText(t *testing.T) {
 	form, _ := (model{adding: true, field: 1, form: [5]string{"gs", "git"}, shortcutProfile: shortcutMacOS}).Update(key)
 	if got := form.(model).form[1]; got != "git" {
 		t.Fatalf("Command+C changed form text to %q", got)
+	}
+}
+
+func TestPastedAndModifiedKeysDoNotTriggerActions(t *testing.T) {
+	pastedQuestion := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}, Paste: true}
+	updated, _ := (model{shortcutProfile: shortcutMacOS}).Update(pastedQuestion)
+	result := updated.(model)
+	if result.helpVisible || result.query != "?" {
+		t.Fatalf("pasted question mark triggered help or was lost: %#v", result)
+	}
+	for _, key := range []tea.KeyMsg{
+		{Type: tea.KeyRunes, Runes: []rune{'n'}, Alt: true},
+		{Type: tea.KeyRunes, Runes: []rune{'n'}, Ctrl: true},
+		{Type: tea.KeyRunes, Runes: []rune{'n'}, Meta: true},
+	} {
+		updated, _ := (model{query: "git", shortcutProfile: shortcutMacOS}).Update(key)
+		if got := updated.(model).query; got != "git" {
+			t.Fatalf("modified key changed search text to %q: %#v", got, key)
+		}
+		if matchesShortcut(key, shortcutMacOS, shortcutAdd) {
+			t.Fatalf("modified key triggered add: %#v", key)
+		}
+	}
+	form, _ := (model{adding: true, field: 1, form: [5]string{"gs", "git"}, shortcutProfile: shortcutMacOS}).Update(tea.KeyMsg{Type: tea.KeySpace, Super: true})
+	if got := form.(model).form[1]; got != "git" {
+		t.Fatalf("modified Space changed form text to %q", got)
+	}
+}
+
+func TestSelectModeGuideOnlyShowsAvailableActions(t *testing.T) {
+	rows := shortcutGuide(shortcutMacOS, true)
+	for _, row := range rows {
+		if strings.Contains(row[1], "stats") || strings.Contains(row[1], "theme") || strings.Contains(row[1], "sync") {
+			t.Fatalf("select-mode guide advertised a blocked action: %#v", row)
+		}
+	}
+}
+
+func TestInvalidSettingsStopPickerBeforeAliasAccess(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	path := filepath.Join(home, ".config", "alias-lens", "config.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(`{"version":2,"shell":"zsh","alias_file":".zsh_aliases","shortcut_profile":"amiga","footer":{"message":"x","icon":"none"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := runAliasPicker("", false, false); err == nil || !strings.Contains(err.Error(), "shortcut style") {
+		t.Fatalf("picker settings error = %v", err)
+	}
+	for _, name := range []string{".bash_aliases", ".zsh_aliases"} {
+		if _, err := os.Stat(filepath.Join(home, name)); !os.IsNotExist(err) {
+			t.Fatalf("picker touched %s before rejecting settings: %v", name, err)
+		}
+	}
+}
+
+func TestMacStatsDoesNotAcceptUndisclosedControlShortcut(t *testing.T) {
+	m := model{statsOpen: true, shortcutProfile: shortcutMacOS}
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	if !updated.(model).statsOpen {
+		t.Fatal("Ctrl+S closed macOS stats even though it is not in the macOS profile")
 	}
 }

@@ -115,6 +115,11 @@ type trackedFileItem struct {
 }
 
 func runTUI() {
+	config, configErr := loadConfig()
+	if configErr != nil {
+		fmt.Fprintln(os.Stderr, "Alias Lens could not read its settings:", configErr)
+		return
+	}
 	aliases, err := loadAliases()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Could not read %s: %v\n", aliasDisplayPath(), err)
@@ -125,7 +130,6 @@ func runTUI() {
 		return
 	}
 	theme, themeErr := loadTheme()
-	config, _ := loadConfig()
 	applyFooterConfig(config.Footer)
 	status := ""
 	if themeErr != nil {
@@ -189,6 +193,10 @@ func writeAliasEditSelection(stdout, terminal io.Writer, name string, stdoutIsTe
 }
 
 func runAliasPicker(query string, commandOnly, executeSelection bool) error {
+	config, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("could not read Alias Lens settings: %w", err)
+	}
 	aliases, err := loadAliases()
 	if err != nil {
 		return err
@@ -198,7 +206,6 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 		return nil
 	}
 	theme, _ := loadTheme()
-	config, _ := loadConfig()
 	applyFooterConfig(config.Footer)
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	var terminal *os.File
@@ -372,7 +379,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				m.startAddForm()
 			}
 		case tea.KeyRunes:
-			if message.Super {
+			if !acceptsTextInput(message) {
 				return m, nil
 			}
 			m.healthOnly = false
@@ -446,21 +453,24 @@ func (m model) updatePageNavigation(message tea.KeyMsg) (model, bool) {
 }
 
 func pageForShortcut(message tea.KeyMsg, profile ShortcutProfile) (tuiPage, bool) {
-	if matchesShortcut(message, profile, shortcutHelp) {
-		return pageHelp, true
+	action, ok := resolveShortcut(message, profile, shortcutHelp, shortcutStats, shortcutSettings, shortcutThemes, shortcutRevisions, shortcutSync, shortcutHealth)
+	if !ok {
+		return pageAliases, false
 	}
-	switch {
-	case matchesShortcut(message, profile, shortcutStats):
+	switch action {
+	case shortcutHelp:
+		return pageHelp, true
+	case shortcutStats:
 		return pageStats, true
-	case matchesShortcut(message, profile, shortcutSettings):
+	case shortcutSettings:
 		return pageSettings, true
-	case matchesShortcut(message, profile, shortcutThemes):
+	case shortcutThemes:
 		return pageThemes, true
-	case matchesShortcut(message, profile, shortcutRevisions):
+	case shortcutRevisions:
 		return pageRevisions, true
-	case matchesShortcut(message, profile, shortcutSync):
+	case shortcutSync:
 		return pageSync, true
-	case matchesShortcut(message, profile, shortcutHealth):
+	case shortcutHealth:
 		return pageHealth, true
 	default:
 		return pageAliases, false
@@ -617,7 +627,7 @@ func (m model) View() string {
 
 	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  tab edit at prompt  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  esc quit")
 	if contentWidth < 96 {
-		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  F2 stats  ·  ? help  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutHelp)+" help  ·  esc quit")
 	}
 	if m.selectMode {
 		footer = dimStyle.Render("type · ↑↓ move · enter select · ? help · esc cancel")
@@ -625,7 +635,7 @@ func (m model) View() string {
 			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
 		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("enter ") + cyanStyle("run") + dimStyle.Render("  ·  tab edit  ·  F2 stats  ·  ? help  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("run") + dimStyle.Render("  ·  tab edit  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutHelp)+" help  ·  esc quit")
 		if contentWidth >= 96 {
 			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("run") + dimStyle.Render("  ·  tab edit  ·  ? help  ·  esc quit")
 		}
@@ -691,7 +701,7 @@ func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if message.Type == tea.KeyCtrlC {
 		return m, tea.Quit
 	}
-	if message.Type == tea.KeyEsc || (message.Type == tea.KeyRunes && len(message.Runes) == 1 && message.Runes[0] == '?') {
+	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutHelp) {
 		m.helpVisible = false
 		m.helpQuery = ""
 		return m, nil
@@ -703,9 +713,12 @@ func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.helpQuery = m.helpQuery[:len(m.helpQuery)-size]
 		}
 	case tea.KeySpace:
+		if !acceptsTextInput(message) {
+			return m, nil
+		}
 		m.helpQuery += " "
 	case tea.KeyRunes:
-		if message.Super {
+		if !acceptsTextInput(message) {
 			return m, nil
 		}
 		m.helpQuery += string(message.Runes)
@@ -798,7 +811,7 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 
 	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(renderPixelIcon(iconHelp)) + " " + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
 	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
-	footer := "? or esc close  ·  ctrl+c quit"
+	footer := strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutHelp)) + " or esc close  ·  ctrl+c quit"
 	if len(shortcuts) > visible {
 		footer = fmt.Sprintf("showing %d of %d  ·  type to filter  ·  esc close", visible, len(shortcuts))
 	}
@@ -820,9 +833,29 @@ func pageNavigationHint(width int, profiles ...ShortcutProfile) string {
 		profile = profiles[0]
 	}
 	if profile == shortcutMacOS {
-		return "? help  ·  ⌘2 stats  ·  F3 settings  ·  ⌘T themes  ·  ⌘Z versions  ·  ⌘⇧S sync  ·  ⌘H health"
+		return fmt.Sprintf("%s help  ·  %s stats  ·  %s settings  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
+			compactKeyLabel(primaryShortcutLabel(profile, shortcutHelp)),
+			compactKeyLabel(primaryShortcutLabel(profile, shortcutStats)),
+			compactKeyLabel(primaryShortcutLabel(profile, shortcutSettings)),
+			compactKeyLabel(primaryShortcutLabel(profile, shortcutThemes)),
+			compactKeyLabel(primaryShortcutLabel(profile, shortcutRevisions)),
+			compactKeyLabel(primaryShortcutLabel(profile, shortcutSync)),
+			compactKeyLabel(primaryShortcutLabel(profile, shortcutHealth)))
 	}
-	return "? help  ·  F2 stats  ·  F3 settings  ·  ^T themes  ·  ^Z versions  ·  ^F sync  ·  ^H health"
+	return fmt.Sprintf("%s help  ·  %s stats  ·  %s settings  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
+		compactKeyLabel(primaryShortcutLabel(profile, shortcutHelp)),
+		compactKeyLabel(primaryShortcutLabel(profile, shortcutStats)),
+		compactKeyLabel(primaryShortcutLabel(profile, shortcutSettings)),
+		compactKeyLabel(primaryShortcutLabel(profile, shortcutThemes)),
+		compactKeyLabel(primaryShortcutLabel(profile, shortcutRevisions)),
+		compactKeyLabel(primaryShortcutLabel(profile, shortcutSync)),
+		compactKeyLabel(primaryShortcutLabel(profile, shortcutHealth)))
+}
+
+func compactKeyLabel(label string) string {
+	label = strings.ReplaceAll(label, "Cmd+Shift+", "⌘⇧")
+	label = strings.ReplaceAll(label, "Cmd+", "⌘")
+	return strings.ReplaceAll(label, "Ctrl+", "^")
 }
 
 func (m *model) openThemePicker() {
@@ -1075,7 +1108,7 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  ctrl+g save to repo  ·  ctrl+r refresh  ·  ctrl+f or esc aliases  ·  ctrl+c quit")
+	footer := dimStyle.Render("↑↓ move  ·  ctrl+g save to repo  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSync)) + " or esc aliases  ·  ctrl+c quit")
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
@@ -1177,13 +1210,16 @@ func (m model) updateAddForm(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.form[m.field] = m.form[m.field][:len(m.form[m.field])-size]
 		}
 	case tea.KeySpace:
+		if !acceptsTextInput(message) {
+			return m, nil
+		}
 		if m.field == 0 {
 			m.status = "Alias names cannot contain spaces"
 		} else {
 			m.form[m.field] += " "
 		}
 	case tea.KeyRunes:
-		if message.Super {
+		if !acceptsTextInput(message) {
 			return m, nil
 		}
 		m.form[m.field] += string(message.Runes)
@@ -1290,7 +1326,7 @@ func (m model) addFormView(width, height, contentWidth int, header string) strin
 		field := lipgloss.NewStyle().Width(max(20, contentWidth-20)).Padding(0, 1).Background(panelColor).Foreground(inkColor).Border(lipgloss.ThickBorder(), false, false, false, true).BorderForeground(border).Render(value + cursor)
 		form.WriteString("\n\n" + label + field)
 	}
-	footer := dimStyle.Render("tab/enter next  ·  ctrl+s save  ·  esc cancel")
+	footer := dimStyle.Render("tab/enter next  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSave)) + " save  ·  esc cancel")
 	if m.status != "" {
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render(m.status)
 	}

@@ -115,6 +115,9 @@ func (m repoPickerModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cloneAndConfigureCmd(m.ctx, m.config, m.provider, filtered[m.cursor])
 			}
 		case tea.KeyRunes:
+			if !acceptsTextInput(message) {
+				return m, nil
+			}
 			m.query += string(message.Runes)
 			m.cursor = 0
 		}

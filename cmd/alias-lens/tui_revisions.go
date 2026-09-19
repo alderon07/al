@@ -140,7 +140,7 @@ func (m model) revisionDrawerView(width, height, contentWidth int, header string
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  enter restore  ·  ctrl+r refresh  ·  ctrl+z or esc close")
+	footer := dimStyle.Render("↑↓ move  ·  enter restore  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRevisions)) + " or esc close")
 	if m.revisionConfirm && len(m.revisions) > 0 {
 		selected := m.revisions[min(max(0, m.revisionCursor), len(m.revisions)-1)]
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render("Restore " + selected.Time.Local().Format("Jan 2, 15:04") + "?  y confirm  ·  n or esc cancel")
