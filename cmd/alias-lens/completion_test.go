@@ -305,7 +305,7 @@ func TestCompletionCandidatesUseResolvedCatalogNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	portable := &neutralcatalog.Portable{Program: "git", Args: []string{"status"}, PassArguments: true}
-	catalog := neutralcatalog.Catalog{SchemaVersion: neutralcatalog.SchemaVersion2, Entries: []neutralcatalog.Entry{
+	catalog := neutralcatalog.Catalog{SchemaVersion: neutralcatalog.SchemaVersion, Entries: []neutralcatalog.Entry{
 		{ID: "00000000000000000000000000000001", Name: "always", Kind: "command", Portable: portable},
 		{ID: "00000000000000000000000000000002", Name: "work-only", Kind: "command", Portable: portable, When: &neutralcatalog.Conditions{ProfilesAny: []string{"work"}}},
 		{ID: "00000000000000000000000000000003", Name: "zsh-only", Kind: "command", Portable: portable, When: &neutralcatalog.Conditions{Shells: []string{"zsh"}}},

@@ -24,7 +24,7 @@ type MergeResult struct {
 func ThreeWayMerge(base, local, remote Catalog) MergeResult {
 	result := MergeResult{Conflicts: []MergeConflict{}}
 	if base.SchemaVersion != local.SchemaVersion || base.SchemaVersion != remote.SchemaVersion {
-		result.Conflicts = append(result.Conflicts, MergeConflict{Path: "schema_version", Kind: "version", Message: "Catalog data formats differ. Run the catalog migration before combining changes."})
+		result.Conflicts = append(result.Conflicts, MergeConflict{Path: "schema_version", Kind: "version", Message: "Catalog data formats differ. Both catalogs must use the current format."})
 		return result
 	}
 	for _, item := range []struct {

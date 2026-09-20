@@ -13,8 +13,7 @@ import (
 )
 
 const (
-	SchemaVersion    = 1
-	SchemaVersion2   = 2
+	SchemaVersion    = 2
 	MaxDocumentBytes = 8 << 20
 	MaxEntries       = 10000
 	MaxDiagnostics   = 100
@@ -52,33 +51,12 @@ type NativeImplementation struct {
 	FunctionBody *string `json:"function_body,omitempty"`
 }
 
-// wireCatalogV1 and wireCatalogV2 are deliberately separate wire models. The v1
-// decoder has no conditions field, so a v2-only value cannot cross the v1
-// serialization boundary by accident.
-type wireCatalogV1 struct {
-	SchemaVersion int           `json:"schema_version"`
-	Entries       []wireEntryV1 `json:"entries"`
+type wireCatalog struct {
+	SchemaVersion int         `json:"schema_version"`
+	Entries       []wireEntry `json:"entries"`
 }
 
-type wireEntryV1 struct {
-	ID          string                          `json:"id"`
-	Name        string                          `json:"name"`
-	Kind        string                          `json:"kind"`
-	Description string                          `json:"description,omitempty"`
-	Category    string                          `json:"category,omitempty"`
-	Tags        []string                        `json:"tags,omitempty"`
-	Platforms   []string                        `json:"platforms,omitempty"`
-	Favorite    bool                            `json:"favorite,omitempty"`
-	Portable    *Portable                       `json:"portable,omitempty"`
-	Native      map[string]NativeImplementation `json:"native,omitempty"`
-}
-
-type wireCatalogV2 struct {
-	SchemaVersion int           `json:"schema_version"`
-	Entries       []wireEntryV2 `json:"entries"`
-}
-
-type wireEntryV2 struct {
+type wireEntry struct {
 	ID          string                          `json:"id"`
 	Name        string                          `json:"name"`
 	Kind        string                          `json:"kind"`
@@ -131,8 +109,8 @@ func diagnostic(code string, index int, field, message string) Diagnostic {
 
 func Validate(value Catalog) []Diagnostic {
 	var result []Diagnostic
-	if value.SchemaVersion != SchemaVersion && value.SchemaVersion != SchemaVersion2 {
-		result = append(result, diagnostic("invalid_schema_version", -1, "schema_version", "schema_version must be 1 or 2"))
+	if value.SchemaVersion != SchemaVersion {
+		result = append(result, diagnostic("invalid_schema_version", -1, "schema_version", "schema_version must be 2"))
 	}
 	if value.Entries == nil {
 		result = append(result, diagnostic("missing_entries", -1, "entries", "entries is required"))
@@ -185,10 +163,7 @@ func Validate(value Catalog) []Diagnostic {
 				result = append(result, diagnostic("invalid_platform", index, "platforms", "platform is not supported"))
 			}
 		}
-		if value.SchemaVersion == SchemaVersion && entry.When != nil {
-			result = append(result, diagnostic("unsupported_when", index, "when", "when requires schema_version 2"))
-		}
-		if value.SchemaVersion == SchemaVersion2 && entry.When != nil {
+		if entry.When != nil {
 			validateConditions(&result, index, entry.When)
 		}
 		if entry.Portable != nil {
@@ -382,13 +357,7 @@ func Encode(value Catalog) ([]byte, []Diagnostic) {
 	encoder := json.NewEncoder(&output)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	var wire any
-	if value.SchemaVersion == SchemaVersion {
-		wire = toCatalogV1(value)
-	} else {
-		wire = toCatalogV2(value)
-	}
-	if err := encoder.Encode(wire); err != nil {
+	if err := encoder.Encode(toWireCatalog(value)); err != nil {
 		return nil, []Diagnostic{diagnostic("encode_failed", -1, "root", "catalog encoding failed")}
 	}
 	if output.Len() > MaxDocumentBytes {
@@ -416,25 +385,16 @@ func Decode(data []byte) (Catalog, []Diagnostic) {
 	if err := json.Unmarshal(data, &header); err != nil {
 		return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", "catalog structure is invalid")}
 	}
-	var value Catalog
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	switch header.SchemaVersion {
-	case SchemaVersion:
-		var wire wireCatalogV1
-		if err := decoder.Decode(&wire); err != nil {
-			return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", "catalog structure is invalid")}
-		}
-		value = fromCatalogV1(wire)
-	case SchemaVersion2:
-		var wire wireCatalogV2
-		if err := decoder.Decode(&wire); err != nil {
-			return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", "catalog structure is invalid")}
-		}
-		value = fromCatalogV2(wire)
-	default:
+	if header.SchemaVersion != SchemaVersion {
 		return Catalog{}, Validate(Catalog{SchemaVersion: header.SchemaVersion, Entries: []Entry{}})
 	}
+	var wire wireCatalog
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&wire); err != nil {
+		return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", "catalog structure is invalid")}
+	}
+	value := fromWireCatalog(wire)
 	value = Normalize(value)
 	diagnostics := Validate(value)
 	if len(diagnostics) > 0 {
@@ -443,32 +403,16 @@ func Decode(data []byte) (Catalog, []Diagnostic) {
 	return value, nil
 }
 
-func toCatalogV1(value Catalog) wireCatalogV1 {
-	result := wireCatalogV1{SchemaVersion: SchemaVersion, Entries: make([]wireEntryV1, len(value.Entries))}
+func toWireCatalog(value Catalog) wireCatalog {
+	result := wireCatalog{SchemaVersion: SchemaVersion, Entries: make([]wireEntry, len(value.Entries))}
 	for index, entry := range value.Entries {
-		result.Entries[index] = wireEntryV1{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
+		result.Entries[index] = wireEntry{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, When: entry.When, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
 	}
 	return result
 }
 
-func toCatalogV2(value Catalog) wireCatalogV2 {
-	result := wireCatalogV2{SchemaVersion: SchemaVersion2, Entries: make([]wireEntryV2, len(value.Entries))}
-	for index, entry := range value.Entries {
-		result.Entries[index] = wireEntryV2{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, When: entry.When, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
-	}
-	return result
-}
-
-func fromCatalogV1(value wireCatalogV1) Catalog {
+func fromWireCatalog(value wireCatalog) Catalog {
 	result := Catalog{SchemaVersion: SchemaVersion, Entries: make([]Entry, len(value.Entries))}
-	for index, entry := range value.Entries {
-		result.Entries[index] = Entry{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
-	}
-	return result
-}
-
-func fromCatalogV2(value wireCatalogV2) Catalog {
-	result := Catalog{SchemaVersion: SchemaVersion2, Entries: make([]Entry, len(value.Entries))}
 	for index, entry := range value.Entries {
 		result.Entries[index] = Entry{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, When: entry.When, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
 	}
@@ -513,9 +457,6 @@ func checkRequiredFields(data []byte) error {
 			}
 		}
 		if raw, ok := entry["when"]; ok {
-			if schemaVersion != SchemaVersion2 {
-				return fmt.Errorf("when requires schema_version 2")
-			}
 			var conditions map[string]json.RawMessage
 			if err := json.Unmarshal(raw, &conditions); err != nil {
 				return fmt.Errorf("when must be an object")

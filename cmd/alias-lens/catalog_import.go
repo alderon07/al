@@ -119,7 +119,7 @@ func buildCatalogImportPlan(shell string) (workflowplan.OperationPlan, error) {
 	current, readErr := readRegularFile(path, neutralcatalog.MaxDocumentBytes)
 	kind := workflowplan.ActionReplace
 	backup := true
-	catalog := neutralcatalog.Catalog{SchemaVersion: neutralcatalog.SchemaVersion2, Entries: []neutralcatalog.Entry{}}
+	catalog := neutralcatalog.Catalog{SchemaVersion: neutralcatalog.SchemaVersion, Entries: []neutralcatalog.Entry{}}
 	if errors.Is(readErr, os.ErrNotExist) {
 		current = nil
 		kind = workflowplan.ActionCreate
@@ -130,9 +130,6 @@ func buildCatalogImportPlan(shell string) (workflowplan.OperationPlan, error) {
 		catalog, _ = neutralcatalog.Decode(current)
 		if problems := neutralcatalog.Validate(catalog); len(problems) > 0 {
 			return workflowplan.OperationPlan{}, fmt.Errorf("Alias Lens cannot use the existing catalog because its data format is not valid")
-		}
-		if catalog.SchemaVersion == neutralcatalog.SchemaVersion {
-			return workflowplan.OperationPlan{}, fmt.Errorf("the catalog uses data format 1; enter al catalog migrate --to 2 first")
 		}
 	}
 	byID := make(map[string]neutralcatalog.Entry, len(catalog.Entries)+len(entries))

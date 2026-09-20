@@ -109,7 +109,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ## Prepare the 1.0 contract
 
-- [x] Version `config.json`, migrate legacy files atomically, and keep a private backup.
+- [x] Version `config.json` and reject unsupported pre-release formats without changing them.
 - [x] Document the 1.x command, metadata, JSON, and configuration compatibility rules.
 - [x] Add `al setup --repair` without changing user aliases.
 - [x] Add `al setup --remove` without deleting aliases or Alias Lens data.

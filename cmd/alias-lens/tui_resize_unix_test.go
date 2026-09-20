@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -135,6 +136,65 @@ func TestControlPunctuationPTY(t *testing.T) {
 	}
 }
 
+func TestManagedRepositoryPathPTY(t *testing.T) {
+	home := t.TempDir()
+	command := exec.Command(os.Args[0], "-test.run=^TestManagedRepositoryPathHelper$")
+	command.Env = append(os.Environ(), "ALIAS_LENS_SYNC_PATH_HELPER=1", "HOME="+home, "NO_COLOR=1", "TERM=xterm-256color")
+	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := &synchronizedBuffer{}
+	go func() { _, _ = io.Copy(output, terminal) }()
+	t.Cleanup(func() {
+		_, _ = terminal.Write([]byte{3})
+		_ = terminal.Close()
+		if command.Process != nil {
+			_ = command.Process.Kill()
+		}
+		_ = command.Wait()
+	})
+
+	narrow := waitForPTYText(t, output, 0, resizeFooterMessage(80, 24, pageSync))
+	if !strings.Contains(narrow, "alderon07") || !strings.Contains(narrow, "dotfiles") || strings.Contains(narrow, "alderon07--dotfiles") {
+		t.Fatalf("narrow sync view has the wrong repository path:\n%q", narrow)
+	}
+	offset := output.length()
+	if err := pty.Setsize(terminal, &pty.Winsize{Rows: 36, Cols: 140}); err != nil {
+		t.Fatal(err)
+	}
+	wide := waitForPTYText(t, output, offset, resizeFooterMessage(140, 36, pageSync))
+	if !strings.Contains(wide, "github/alderon07/dotfiles") || strings.Contains(wide, "alderon07--dotfiles") {
+		t.Fatalf("wide sync view has the wrong repository path:\n%q", wide)
+	}
+}
+
+func TestManagedRepositoryPathHelper(t *testing.T) {
+	if os.Getenv("ALIAS_LENS_SYNC_PATH_HELPER") != "1" {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatal(err)
+	}
+	applyTheme(builtInTheme("phosphor"))
+	probe := resizeProbeModel{model: model{
+		width:           80,
+		height:          24,
+		theme:           builtInTheme("phosphor"),
+		shortcutProfile: shortcutLinux,
+		trackedOnly:     true,
+		trackedRepo:     filepath.Join(home, ".local", "share", "alias-lens", "repos", "github", "alderon07", "dotfiles"),
+		autoSyncEnabled: true,
+		syncInterval:    15,
+		primarySync:     trackedFileItem{State: SyncState{Status: "synced", Message: "files match"}},
+	}}
+	_, err = tea.NewProgram(probe, tea.WithAltScreen()).Run()
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestTUIResizeHelper(t *testing.T) {
 	if os.Getenv("ALIAS_LENS_TUI_RESIZE_HELPER") != "1" {
 		return
@@ -190,6 +250,8 @@ func resizeFooterMessage(width, height int, page tuiPage) string {
 		pageName = "help"
 	case pageSettings:
 		pageName = "settings"
+	case pageSync:
+		pageName = "sync"
 	}
 	return "Made by Naqi " + strconv.Itoa(width) + "x" + strconv.Itoa(height) + " " + pageName
 }

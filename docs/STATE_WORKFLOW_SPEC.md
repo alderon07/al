@@ -11,7 +11,7 @@ This specification adds a state model, a common plan contract, machine profiles,
 Where this document narrows an ambiguous point, it does so explicitly:
 
 - `al status` is observational. It never performs transaction recovery.
-- Catalog conditions require schema version 2. Version 1 continues to reject unknown fields.
+- Catalog conditions are part of the only supported catalog format, schema version 2.
 - Local profile selection requires application configuration version 2.
 - The existing `al diff` command keeps its 1.x meaning. Catalog semantic comparison uses `al catalog diff`.
 - Plans do not grant permission to write. A mutating command rebuilds and rechecks its plan before it writes.
@@ -136,7 +136,7 @@ Version 1 fixes these state values:
 | Field | Values |
 | --- | --- |
 | `mode` | `legacy`, `catalog`, `mixed` |
-| `config.state` | `current`, `migration_required`, `invalid`, `unreadable` |
+| `config.state` | `current`, `invalid`, `unreadable` |
 | `catalog.state` | `absent`, `valid`, `invalid`, `unreadable` |
 | `shells[].state` | `not_installed`, `current`, `render_required`, `approval_required`, `integration_drift`, `unreadable`, `blocked` |
 | `sync.state` | `unconfigured`, `clean`, `local_changes`, `remote_changes`, `diverged`, `conflict`, `offline`, `invalid` |
@@ -162,10 +162,8 @@ al plan [--json] COMMAND [ARGUMENTS]
 The first supported planned operations are:
 
 ```text
-al plan catalog migrate --to 2
 al plan catalog enable --shell bash|zsh
 al plan catalog rollback [--shell bash|zsh]
-al plan config migrate
 al plan config profile add NAME
 al plan config profile remove NAME
 al plan completion install bash|zsh
@@ -344,7 +342,7 @@ A profile name matches `^[a-z][a-z0-9_-]{0,31}$`. Configuration stores at most 3
 
 ### Application configuration version 2
 
-Application configuration version 2 adds `profiles` and `shortcut_profile` after `shell` in encoded field order:
+Application configuration version 2 includes `profiles` and `shortcut_profile` after `shell` in encoded field order:
 
 ```json
 {
@@ -356,17 +354,13 @@ Application configuration version 2 adds `profiles` and `shortcut_profile` after
 
 The complete version 2 field order is `version`, `repository`, `alias_file`, `shell`, `profiles`, `shortcut_profile`, `providers`, `auto_sync`, `tracked_files`, and `footer`. Existing field types and validation do not change. An absent or empty `profiles` value means that no profile is active. The writer omits an empty list. `shortcut_profile` is `windows`, `linux`, or `macos`. A saved value always wins. If the field is absent, Alias Lens selects `windows` on native Windows and WSL, `macos` on Darwin, and `linux` on other supported Linux systems. Reading this default does not write configuration.
 
-The version 1 to version 2 migration follows the existing atomic configuration migration contract. It saves the exact version 1 bytes to `config.json.alias-lens.bak`, sets version 2 with no active profiles, preserves every existing setting, and replaces `config.json` only after validation and durable write completion. Existing commands retain the configured migration-on-load contract. `al status` uses a separate nonmutating decoder, reports `migration_required`, and does not trigger the migration. `al config migrate` provides an explicit path for users who want to migrate before another command needs the configuration.
-
-A version 1 configuration that contains `profiles` is invalid. The migration dispatcher inspects the raw version before it decodes version-specific fields, so it cannot accept profile selection under version 1 and silently drop it.
+Alias Lens had no released configuration format before version 2. Pre-1.0 formats are rejected without changing the file. There is no runtime migration command for those development-only formats.
 
 Adding or removing an active profile can change the next rendered state. The command must show a plan that lists the affected entry names and shells before it changes configuration. It does not activate a new generation as part of the configuration write. Status then reports `render_required`, and `al catalog enable --shell SHELL` performs the separate render and activation transaction.
 
 ### Catalog schema version 2
 
-Catalog schema version 1 remains exactly as approved in `docs/acceptance/CATALOG_MODEL_PHASE_2.md`. It continues to reject `when` and every other unknown field.
-
-Schema version 2 adds one optional entry field after `platforms` in canonical field order:
+Catalog schema version 2 is the first supported catalog format. It includes one optional entry field after `platforms` in canonical field order:
 
 ```json
 {
@@ -380,23 +374,14 @@ Schema version 2 adds one optional entry field after `platforms` in canonical fi
 
 Each present list must contain at least one value. Profile lists contain at most 32 valid profile names. `shells` contains only `bash` and `zsh`. Lists deduplicate and sort bytewise. A profile cannot appear in both profile lists. Unknown fields and explicit `null` remain invalid.
 
-Schema version 2 inherits every version 1 type, byte limit, count limit, diagnostic rule, normalization rule, and JSON encoding rule except where this section adds `when`. Canonical object field order is:
+Canonical object field order is:
 
 1. Root: `schema_version`, `entries`.
 2. Entry: `id`, `name`, `kind`, `description`, `category`, `tags`, `platforms`, `when`, `favorite`, `portable`, `native`.
 3. `when`: `profiles_any`, `profiles_none`, `shells`.
-4. Portable and native objects: the version 1 order.
+4. Portable and native objects retain their approved field order.
 
-The decoder reads `schema_version` before it chooses a version-specific type. A version 2 binary follows these preservation rules:
-
-- It decodes and validates a version 1 catalog with the exact version 1 model.
-- A common-field edit to a version 1 catalog encodes valid canonical version 1 again.
-- It cannot attach `when` to a version 1 typed value.
-- Only `al catalog migrate --to 2` changes a version 1 catalog to version 2.
-- It decodes and encodes version 2 through the version 2 model.
-- It rejects a future version without returning partial typed state.
-
-A version 1 binary rejects version 2. Semantic diff can compare version 1 and version 2 after lifting version 1 into a read-only internal view with absent conditions, but it reports the root `schema_version` change. Three-way reconciliation requires the base, local, and remote catalogs to use the same schema version. A mismatch blocks reconciliation and names the migration command. Sync never upgrades or downgrades a catalog.
+The decoder reads `schema_version` before decoding entries. It accepts version 2 and rejects every other version without returning partial typed state or rewriting the file. Three-way reconciliation requires the base, local, and remote catalogs to use the same schema version. Sync never changes a catalog schema version.
 
 Predicates use these rules:
 
@@ -410,16 +395,6 @@ Predicates use these rules:
 Conditions affect resolved state, rendering, search availability, and picker labels. They do not delete catalog entries, change sync membership, or suppress secret scanning. `al scan` and pre-push scanning inspect every entry, including entries excluded on the current machine.
 
 Search and the picker keep excluded entries visible so the user can find and edit them. Available entries rank first. An excluded entry shows `not available` with the failed platform, profile, or shell predicate, and execution is blocked. Machine-readable search can add `available` and `unavailable_reasons` as optional fields under the compatibility policy. Shell selection and `al pick --command` never return an excluded entry.
-
-Alias Lens does not add conditions to schema version 1 in memory and then encode invalid version 1 JSON. New catalogs use schema version 2 only after the version 2 model and migration criteria pass.
-
-The explicit migration command is:
-
-```text
-al catalog migrate --to 2
-```
-
-Migration changes `schema_version` from `1` to `2` and makes no semantic entry change. It uses the mutation lock, transaction journal, private backup, and revision. It does not activate, render, sync, or push. Version 2 readers continue to read version 1 catalogs during the documented compatibility window. A version 2-capable writer preserves version 1 for a version 1 input until the user runs the migration. Adding a condition to a version 1 catalog requires the explicit migration first.
 
 Future condition types require another catalog schema version. There is no generic expression, template, hostname predicate, environment predicate, file predicate, or executable predicate in version 2.
 
@@ -478,7 +453,7 @@ Shell keys sort bytewise. Hash fields contain 64 lowercase hexadecimal character
 }
 ```
 
-Approval records sort by shell and then entry ID. `approved_at` uses RFC 3339 UTC and is audit metadata. It does not affect rendering or the approval key. `implementation_sha256` hashes the same unsigned 64-bit big-endian length-framed sequence format used by generation hashes. Its values are the entry kind, native field name, and exact implementation bytes, in that order. The file does not store implementation text. The approval key is the entry ID, shell, kind, implementation hash, and renderer. A catalog-only schema migration does not invalidate unchanged native approval.
+Approval records sort by shell and then entry ID. `approved_at` uses RFC 3339 UTC and is audit metadata. It does not affect rendering or the approval key. `implementation_sha256` hashes the same unsigned 64-bit big-endian length-framed sequence format used by generation hashes. Its values are the entry kind, native field name, and exact implementation bytes, in that order. The file does not store implementation text. The approval key is the entry ID, shell, kind, implementation hash, and renderer. A catalog format change does not invalidate an unchanged native approval.
 
 `catalog-snapshots/<catalog-sha256>.json` stores exact canonical catalog bytes. Semantic synchronization requires the snapshot named by `base_catalog_sha256`. Installed semantic diff requires the snapshot named by each `source_catalog_sha256`. Alias Lens keeps every snapshot referenced by installed state, sync state, or an incomplete transaction. It removes an older unreferenced snapshot only through a planned private-state cleanup.
 
@@ -592,7 +567,7 @@ User-facing text follows these rules:
 - Say `prepare for Bash` or `prepare for Zsh` instead of `render`.
 - Say `ready for new shells` instead of `activated`.
 - Say `saved version` instead of `generation` unless a hash is required for support.
-- Say `data format` instead of `schema` outside migration help.
+- Say `data format` instead of `schema` in user-facing errors and help.
 - Say `Alias Lens cannot use this file` and give the reason instead of reporting only `invalid`.
 - Name the affected alias, shell, or file when that name is safe to print.
 - State that files were left unchanged after a failed or cancelled operation.
@@ -692,8 +667,7 @@ This work follows `docs/COMPATIBILITY.md`.
 - Existing commands do not gain a required prompt or flag in 1.x.
 - New commands can be added in a minor release.
 - Plain output can add new sections only where the existing command contract permits it. Existing machine-readable fields are not removed or renamed.
-- Catalog version 1 remains strict. Version 2 support uses a separate decoder, validator, normalizer, encoder, fixtures, and comparison matrix.
-- App configuration version 2 migrates version 1 through the existing backed-up atomic path.
+- Catalog and app configuration version 2 are the first supported pre-1.0 formats. Other versions fail without writes.
 - Existing installations stay in legacy mode until explicit catalog import, adoption, and enablement.
 - Enabling one shell does not change another shell's legacy or catalog source.
 - Rollback works offline without reading the current catalog.
@@ -707,7 +681,6 @@ The transaction and rollback design in the shell-neutral architecture applies to
 In addition:
 
 - Profile changes record exact prior configuration bytes and affected resolved-state hashes.
-- Catalog schema migration records exact version 1 bytes and can restore them while version 1 remains supported.
 - Bootstrap rollback restores adopted native definitions before it deactivates the generated replacement.
 - A rollback never contacts a provider or requires a repository.
 - A changed target causes a private conflict copy and a manual recovery plan. Alias Lens does not overwrite the changed target.
@@ -742,7 +715,7 @@ After that gate, deliver this work in these stages:
 1. Foundation: add the pure state resolver, observational status result, operation-plan model, and CLI rendering. Do not add writes.
 2. Catalog activation: use the operation plan for the approved catalog preview, import, enablement, and rollback phases from the shell-neutral architecture.
 3. Semantic sync: add catalog semantic diff and three-way reconciliation. Keep native changes inactive pending approval.
-4. Profiles and shortcuts: add app configuration version 2, catalog schema version 2, explicit catalog migration, profile conditions, and selectable shortcut profiles.
+4. Profiles and shortcuts: define app configuration version 2 and catalog schema version 2, then add profile conditions and selectable shortcut profiles.
 5. Bootstrap: build `al init` on the same planner, writer, repository isolation, native approval, and rollback code.
 6. Completions: move command help metadata into one specification, then add Bash and Zsh completion output, installation, and removal.
 7. Packs: observe one stable release cycle before proposing alias packs.
@@ -807,10 +780,10 @@ Tests use isolated temporary homes and repositories. They set every shell, XDG, 
 
 | Field | Required evidence |
 | --- | --- |
-| Initial state | Catalog versions 1, 2, and future; config versions 1, 2, and future; unknown fields; duplicate keys; `null`; size boundaries; missing backups; and read-only paths. |
-| Operation | Read, plan, migrate, interrupt, recover, and roll back every supported transition. |
-| Expected state | Version 1 still rejects `when`. Version 2 follows the exact schema and canonical order. Catalog migration is explicit and semantic-neutral. Config migration preserves all settings and saves exact old bytes. Future versions stop without writes. |
-| Automated evidence | `internal/catalog.TestVersion2SchemaMatrix`, `TestV1RejectsV2Fields`, canonical v2 golden tests, `cmd/alias-lens.TestConfigV2MigrationMatrix`, and crash tests. |
+| Initial state | Catalog and config versions 1, 2, and future; unknown fields; duplicate keys; `null`; size boundaries; and read-only paths. |
+| Operation | Read every supported and unsupported format through the normal and observational readers. |
+| Expected state | Version 2 follows the exact schema and canonical order. Every other version stops without writes or partial typed state. |
+| Automated evidence | Catalog and configuration version-boundary tests, canonical v2 golden tests, and read-only manifest tests. |
 | Approval | Required before profiles implementation. |
 
 ### SW-007 resolves conditions exactly
@@ -920,7 +893,7 @@ A second-pass review on 2026-09-18 checked this draft against `AGENTS.md`, `TODO
 
 The review found and corrected these blocking ambiguities:
 
-- Catalog and application configuration version 1 could not accept profile fields. The draft now requires explicit version 2 models and version-dispatched decoding.
+- Catalog and application configuration version 2 include profile fields and reject every unsupported pre-release format.
 - A public status command could have triggered journal recovery. The draft now makes `al status` observational and reports `recovery_required`.
 - A public plan fingerprint was not reproducible. The draft removes it and requires every mutation to rebuild its plan under the lock.
 - Status enum changes could have broken exhaustive JSON consumers. Version 1 values are now fixed.
@@ -938,7 +911,7 @@ Before approval, the reviewer must answer these questions in the approval record
 
 - Does any feature cross the product boundary into general dotfile management or code execution?
 - Can any read-only command recover a transaction or make another persistent write?
-- Can any version 1 catalog or configuration accept a version 2 field silently?
+- Can an unsupported catalog or configuration version be accepted or rewritten silently?
 - Can a stale preview authorize a write?
 - Can sync, bootstrap, or a broad confirmation approve native content?
 - Can a missing merge base cause a two-way overwrite?

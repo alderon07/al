@@ -55,13 +55,14 @@ func TestCatalogDiffIsSemanticRedactedAndReadOnly(t *testing.T) {
 }
 
 func TestCatalogDiffPlainUsesFriendlyFields(t *testing.T) {
-	before := neutralcatalog.Catalog{SchemaVersion: 1, Entries: []neutralcatalog.Entry{}}
+	before := neutralcatalog.Catalog{SchemaVersion: 2, Entries: []neutralcatalog.Entry{}}
 	after := neutralcatalog.Catalog{SchemaVersion: 2, Entries: []neutralcatalog.Entry{}}
-	report := neutralcatalog.SemanticDiff(
-		before,
-		after,
-		"repository", "",
-	)
+	report := neutralcatalog.SemanticDiffReport{
+		SchemaVersion: neutralcatalog.SemanticDiffSchemaVersion,
+		Source:        "repository",
+		Changes:       []neutralcatalog.SemanticChange{{Scope: "catalog", Kind: "changed", Path: "schema_version"}},
+		Summary:       neutralcatalog.SemanticSummary{Changed: 1},
+	}
 	output := string(renderCatalogDiffPlain(report, before, after))
 	if !strings.Contains(output, "data format") || strings.Contains(output, "schema_version") {
 		t.Fatalf("plain output = %q", output)

@@ -34,7 +34,7 @@ Protect and recover aliases:
   doctor     Diagnose the binary, shell integration, Git, providers, and sync
   setup      Install, repair, or remove the Bash or Zsh integration
   data       List local data paths or clear usage data and private revisions
-  catalog    Inspect catalog migration safety without changing shell files
+  catalog    Inspect portable catalog safety without changing shell files
 
 Configure Git sync:
   repo       Choose or clone a Git repository and enable automatic sync
@@ -62,7 +62,7 @@ var commandUsage = map[string]string{
 
 Show whether settings, the portable catalog, shell setup, synchronization, and
 recovery state are ready. This command only reads local files. It does not
-create files, migrate settings, repair an interrupted change, or contact a
+create files, repair an interrupted change, or contact a
 provider. Exit status 0 means everything is ready. Status 1 means one or more
 items need attention.
 `,
@@ -74,10 +74,8 @@ Planning can use private temporary files for validation, but removes them before
 returning and does not change managed files.
 
 Available previews:
-  al plan config migrate
   al plan config profile add NAME
   al plan config profile remove NAME
-  al plan catalog migrate --to 2
   al plan completion install bash
   al plan completion remove zsh
 `,
@@ -86,7 +84,6 @@ Available previews:
   al catalog import --from bash|zsh
   al catalog shadow [--shell bash|zsh] [--json]
   al catalog diff [--json|--show-code|--web] [--from repository|installed] [--shell bash|zsh]
-  al catalog migrate --to 2
 
 Preview checks which entries can move into a portable catalog and changes no
 files. Import copies safe entries into an inactive catalog. It keeps your native
@@ -99,8 +96,6 @@ Catalog diff compares entries by their stable identity and reports which details
 changed without printing command or function text. --show-code displays exact
 private text only in an interactive terminal. It leaves both files unchanged.
 
-Catalog migrate saves a private backup, then updates a version 1 catalog to data
-format 2 without changing its entries or preparing shell files.
 `,
 	"pick": `Usage: al pick [--command] [QUERY]
 
@@ -264,7 +259,6 @@ a scoped API token without echo and keeps it only for the current picker.
   al config provider gitlab [HOST]
   al config protocol PROVIDER auto|ssh|https
   al config disable PROVIDER
-  al config migrate
   al config profile list
   al config profile add NAME
   al config profile remove NAME
@@ -274,8 +268,8 @@ a scoped API token without echo and keeps it only for the current picker.
 
 With no arguments, print the effective Alias Lens configuration without tokens.
 The other forms select a shell, enable a provider, choose its Git clone protocol,
-manage local machine profiles, update the settings data format, disable a
-provider, or customize the TUI footer. Profile changes show their plan, save a
+manage local machine profiles, disable a provider, or customize the TUI footer.
+Profile changes show their plan, save a
 private backup, and do not prepare new shell definitions automatically.
 Use {icon} in MESSAGE to place the icon.
 ICON may be heart, spark, brand, alias, command, stats, sync, theme, none, one

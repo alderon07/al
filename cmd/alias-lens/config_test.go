@@ -33,95 +33,30 @@ func TestLoadConfigRejectsCorruptionWithoutChangingFile(t *testing.T) {
 	}
 }
 
-func TestLoadConfigMigratesLegacyFileWithPrivateBackup(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	path := filepath.Join(home, ".config", "alias-lens", "config.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	legacy := []byte("{\n  \"shell\": \"zsh\",\n  \"alias_file\": \".zsh_aliases\"\n}\n")
-	if err := os.WriteFile(path, legacy, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	config, err := loadConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if config.Version != currentConfigVersion || config.Shell != "zsh" || config.AliasFile != ".zsh_aliases" {
-		t.Fatalf("legacy configuration was not migrated: %+v", config)
-	}
-	contents, err := os.ReadFile(path)
-	if err != nil || !strings.Contains(string(contents), fmt.Sprintf(`"version": %d`, currentConfigVersion)) {
-		t.Fatalf("migrated configuration was not saved: %s, %v", contents, err)
-	}
-	backup, err := os.ReadFile(path + ".alias-lens.bak")
-	if err != nil || string(backup) != string(legacy) {
-		t.Fatalf("migration backup = %q, %v", backup, err)
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("migrated configuration mode = %v, want 0600", info.Mode().Perm())
-	}
-	directoryInfo, err := os.Stat(filepath.Dir(path))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if directoryInfo.Mode().Perm() != 0o700 {
-		t.Fatalf("configuration directory mode = %v, want 0700", directoryInfo.Mode().Perm())
-	}
-}
-
-func TestLoadConfigMigratesVersionOneForShortcutProfiles(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	path := filepath.Join(home, ".config", "alias-lens", "config.json")
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	versionOne := []byte("{\n  \"version\": 1,\n  \"alias_file\": \".bash_aliases\",\n  \"shell\": \"bash\"\n}\n")
-	if err := os.WriteFile(path, versionOne, 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	config, err := loadConfig()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if config.Version != 2 || config.ShortcutProfile != "" {
-		t.Fatalf("migrated config = %#v", config)
-	}
-	backup, err := os.ReadFile(path + ".alias-lens.bak")
-	if err != nil || !bytes.Equal(backup, versionOne) {
-		t.Fatalf("version 1 backup = %q, %v", backup, err)
-	}
-}
-
-func TestLoadConfigRejectsVersionOneWithVersionTwoFields(t *testing.T) {
-	for _, field := range []string{`"profiles": ["work"]`, `"shortcut_profile": "macos"`, `"footer": {"message": "x", "icon": "none"}`} {
-		t.Run(field, func(t *testing.T) {
-			home := t.TempDir()
-			t.Setenv("HOME", home)
-			path := filepath.Join(home, ".config", "alias-lens", "config.json")
-			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-				t.Fatal(err)
-			}
-			contents := []byte("{\"version\":1,\"alias_file\":\".bash_aliases\",\"shell\":\"bash\"," + field + "}\n")
-			if err := os.WriteFile(path, contents, 0o600); err != nil {
-				t.Fatal(err)
-			}
-			if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "cannot contain") {
-				t.Fatalf("version 1 field error = %v", err)
-			}
-			after, err := os.ReadFile(path)
-			if err != nil || !bytes.Equal(after, contents) {
-				t.Fatalf("invalid version 1 config changed: %q, %v", after, err)
-			}
-		})
+func TestLoadConfigRejectsMissingAndOldVersionsWithoutChangingFile(t *testing.T) {
+	for _, contents := range [][]byte{
+		[]byte("{\n  \"shell\": \"zsh\",\n  \"alias_file\": \".zsh_aliases\"\n}\n"),
+		[]byte("{\n  \"version\": 1,\n  \"alias_file\": \".bash_aliases\",\n  \"shell\": \"bash\"\n}\n"),
+	} {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		path := filepath.Join(home, ".config", "alias-lens", "config.json")
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, contents, 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := loadConfig(); err == nil || !strings.Contains(err.Error(), "recreate") {
+			t.Fatalf("unsupported configuration error = %v", err)
+		}
+		after, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(after, contents) {
+			t.Fatalf("unsupported configuration changed: %q, %v", after, err)
+		}
+		if _, err := os.Stat(path + ".alias-lens.bak"); !os.IsNotExist(err) {
+			t.Fatalf("unsupported configuration created backup: %v", err)
+		}
 	}
 }
 

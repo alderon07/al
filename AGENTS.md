@@ -5,6 +5,7 @@
 - Code for reliability, maintainability, and operability.
 - Go Best Practices https://go.dev/doc/effective_go
 - Always code with the mindset that we'll expand the current feature in one way or another. So write modular/extensible code.
+- This isn't being used by anyone but me rn. So no need for unnecessary migrations
 
 ## Product rules
 

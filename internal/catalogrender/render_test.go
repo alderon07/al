@@ -9,7 +9,7 @@ import (
 
 func TestRenderSkipsUnapprovedNativeAndUsesApprovedHash(t *testing.T) {
 	nativeText := "git status --short"
-	value := catalog.Catalog{SchemaVersion: catalog.SchemaVersion2, Entries: []catalog.Entry{
+	value := catalog.Catalog{SchemaVersion: catalog.SchemaVersion, Entries: []catalog.Entry{
 		{ID: "00000000000000000000000000000001", Name: "gs", Kind: "command", Native: map[string]catalog.NativeImplementation{"bash": {AliasValue: &nativeText}}},
 		{ID: "00000000000000000000000000000002", Name: "gl", Kind: "command", Portable: &catalog.Portable{Program: "git", Args: []string{"log", "*", "two words"}, PassArguments: true}},
 	}}
@@ -31,7 +31,7 @@ func TestRenderSkipsUnapprovedNativeAndUsesApprovedHash(t *testing.T) {
 }
 
 func TestRenderIsDeterministicAcrossProfileOrder(t *testing.T) {
-	value := catalog.Catalog{SchemaVersion: catalog.SchemaVersion2, Entries: []catalog.Entry{{ID: "00000000000000000000000000000001", Name: "work", Kind: "command", Portable: &catalog.Portable{Program: "git", Args: []string{"status"}, PassArguments: false}, When: &catalog.Conditions{ProfilesAny: []string{"work"}}}}}
+	value := catalog.Catalog{SchemaVersion: catalog.SchemaVersion, Entries: []catalog.Entry{{ID: "00000000000000000000000000000001", Name: "work", Kind: "command", Portable: &catalog.Portable{Program: "git", Args: []string{"status"}, PassArguments: false}, When: &catalog.Conditions{ProfilesAny: []string{"work"}}}}}
 	left, leftDiagnostics := Render(value, RenderContext{Shell: "zsh", Platform: "linux", Profiles: []string{"work", "laptop"}})
 	right, rightDiagnostics := Render(value, RenderContext{Shell: "zsh", Platform: "linux", Profiles: []string{"laptop", "work"}})
 	if len(leftDiagnostics) != 0 || len(rightDiagnostics) != 0 || left.ResolvedSHA256 != right.ResolvedSHA256 || string(left.Body) != string(right.Body) {

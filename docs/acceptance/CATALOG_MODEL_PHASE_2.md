@@ -12,7 +12,7 @@ The implementation belongs in `internal/catalog`. Its public operations accept b
 
 Implementation cannot start until an independent reviewer approves every criterion in this document. The approval commit is the comparison base for the phase 2 diff.
 
-## Version 1 schema
+## Version 2 schema
 
 The root object contains exactly these fields:
 
@@ -46,7 +46,7 @@ An entry must have `portable` or at least one `native` implementation. Explicit 
 | `args` | array of strings | Required, including when empty. At most 256 input values; each is valid UTF-8 without NUL and at most 65,536 bytes. |
 | `pass_arguments` | boolean | Required. |
 
-The program grammar excludes whitespace, `/`, `\`, `=`, `$`, backticks, glob characters, and a leading dash. The version 1 denylist is case-sensitive and contains:
+The program grammar excludes whitespace, `/`, `\`, `=`, `$`, backticks, glob characters, and a leading dash. The version 2 denylist is case-sensitive and contains:
 
 ```text
 alias bg break builtin cd command compdef continue declare dirs disown enable
@@ -156,7 +156,7 @@ Diagnostics sort by original entry index, then this field order: root, schema ve
 
 | Field | Required evidence |
 | --- | --- |
-| Fixtures | A committed `testdata/catalog-v1` corpus covers every field, escaping, Unicode, empty required values, map order, list order, and final-newline behavior. |
+| Fixtures | A committed `testdata/catalog-v2` corpus covers every field, escaping, Unicode, empty required values, map order, list order, and final-newline behavior. |
 | Expected state | Every semantically equivalent permutation produces the same golden bytes. Field order, indentation, escaping, omission, and final line feed follow this document exactly. Decode, normalize, encode, and decode is stable. |
 | Automated evidence | `TestCanonicalCatalogGolden`, `TestCanonicalCatalogPermutations`, and `TestCanonicalCatalogRoundTrip` |
 | Approval | Sol/high approved on 2026-09-17. |

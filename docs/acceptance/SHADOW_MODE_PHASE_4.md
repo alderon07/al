@@ -25,7 +25,7 @@ Phase 4 code cannot start until all of these are true:
 
 ## Read-only selection path
 
-Shadow mode must not call the ordinary configuration loader or alias loader because those paths can migrate configuration or create a missing alias file.
+Shadow mode must not call the ordinary configuration loader or alias loader because those paths can apply defaults or create a missing alias file.
 
 An explicit `--shell` bypasses configuration, selects that adapter directly, and uses its default alias filename beneath the current home. Without the flag, a dedicated read-only decoder applies this complete matrix:
 
@@ -33,17 +33,15 @@ An explicit `--shell` bypasses configuration, selects that adapter directly, and
 | --- | --- |
 | Config directory absent | Select Bash and `~/.bash_aliases`. |
 | `config.json` absent | Select Bash and `~/.bash_aliases`. |
-| Version field absent | Decode as legacy version 0 in memory; an empty shell becomes Bash, `bash` selects Bash, `zsh` selects Zsh, and any other value exits `2` with `unsupported configured shell`. |
-| Version `0` | Same in-memory result as a versionless file. |
-| Version `1` | An empty shell becomes Bash, `bash` selects Bash, `zsh` selects Zsh, and any other value exits `2` with `unsupported configured shell`. |
-| Negative version | Exit `2` with `invalid configuration version`. |
+| Version field absent | Exit `2` with `invalid configuration version`. |
+| Version `0`, `1`, negative, or greater than `2` | Exit `2` with `configuration version unsupported`. |
+| Version `2` | An empty shell becomes Bash, `bash` selects Bash, `zsh` selects Zsh, and any other value exits `2` with `unsupported configured shell`. |
 | Malformed JSON or wrong field type | Exit `2` with `invalid configuration`. |
 | `null` version or shell | Exit `2` with `invalid configuration`. |
 | Duplicate `version` or `shell` key | Exit `2` with `duplicate configuration field`. |
-| Version greater than `1` | Exit `2` with `configuration version unsupported`. |
 | Unreadable file or directory | Exit `2` with `configuration unreadable`. |
 
-The version 1 `alias_file` field is a repository sync path in the current product and is ignored for local shadow selection. No row migrates, creates, or saves configuration.
+The version 2 `alias_file` field is a repository sync path in the current product and is ignored for local shadow selection. No row creates or saves configuration.
 
 The read-only decoder limits `config.json` to 1 MiB. It uses the same nonblocking, close-on-exec, open-once, and descriptor `fstat` rules as the alias source. A regular file or leaf symlink to a regular file is allowed. A broken link, FIFO, socket, directory, device, oversized file, or path replaced with a non-regular file exits `2` without reading content or blocking.
 
@@ -198,7 +196,7 @@ Reports may contain a safe entry name, finding kind, and line number. They never
 | Field | Required evidence |
 | --- | --- |
 | Operation | Run plain and JSON shadow mode across success and failure cases with manifests of the isolated home, config, state, repository, Git index, alias, startup, backup, revision, history, and usage paths. |
-| Expected state | User, application, shell, and repository manifests do not change. The validator may create only its private empty temporary home, which is outside those roots and is removed on normal completion. Missing alias files remain missing. Config version `0`, versionless, malformed, future, unreadable, and absent-directory cases never migrate or save. |
+| Expected state | User, application, shell, and repository manifests do not change. The validator may create only its private empty temporary home, which is outside those roots and is removed on normal completion. Missing alias files remain missing. Config version `0`, versionless, malformed, future, unreadable, and absent-directory cases fail without changing or saving the file. |
 | Automated evidence | `TestShadowReadOnlyManifest`, `TestShadowReadOnlyConfigMatrix`, and `TestShadowMissingAliasDoesNotCreate` |
 | Approval | Sol/high approved on 2026-09-17. |
 

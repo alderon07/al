@@ -8,12 +8,12 @@ import (
 
 func catalogV2() Catalog {
 	value := validCatalog()
-	value.SchemaVersion = SchemaVersion2
+	value.SchemaVersion = SchemaVersion
 	value.Entries[0].When = &Conditions{ProfilesAny: []string{"work", "laptop"}, ProfilesNone: []string{"personal"}, Shells: []string{"zsh", "bash"}}
 	return value
 }
 
-func TestVersion2ConditionsAndVersionBoundary(t *testing.T) {
+func TestConditionsAndVersionBoundary(t *testing.T) {
 	value := catalogV2()
 	encoded, diagnostics := Encode(value)
 	if len(diagnostics) > 0 {
@@ -27,8 +27,8 @@ func TestVersion2ConditionsAndVersionBoundary(t *testing.T) {
 	}
 
 	value.SchemaVersion = 1
-	if diagnostics := Validate(value); len(diagnostics) == 0 || diagnostics[0].Code != "unsupported_when" {
-		t.Fatalf("version 1 accepted conditions: %#v", diagnostics)
+	if diagnostics := Validate(value); len(diagnostics) == 0 || diagnostics[0].Code != "invalid_schema_version" {
+		t.Fatalf("version 1 was accepted: %#v", diagnostics)
 	}
 	input := `{"schema_version":2,"entries":[{"id":"87f4d803c44a4d8792c4824f8e0bc3f1","name":"gs","kind":"command","when":{"profiles_any":[]},"portable":{"program":"git","args":[],"pass_arguments":true}}]}`
 	if _, diagnostics := Decode([]byte(input)); len(diagnostics) == 0 {

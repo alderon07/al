@@ -261,11 +261,11 @@ func TestTrustedNextURLRejectsCredentialRedirects(t *testing.T) {
 	}
 }
 
-func TestLegacyConfigGetsDefaultProviderLayer(t *testing.T) {
+func TestConfigDefaultsAddProviderLayer(t *testing.T) {
 	config := ensureConfigDefaults(AppConfig{Repository: "/tmp/dotfiles", AliasFile: "shell/.bash_aliases"})
 	github, exists := config.Providers["github"]
 	if !exists || !github.Enabled || github.Protocol != "auto" {
-		t.Fatalf("legacy configuration was not migrated in memory: %#v", config)
+		t.Fatalf("configuration defaults = %#v", config)
 	}
 	if config.Shell != "bash" {
 		t.Fatalf("legacy configuration selected %q, want bash", config.Shell)

@@ -52,71 +52,6 @@ func TestProfilePlanDoesNotWriteAndNamesAffectedEntries(t *testing.T) {
 	}
 }
 
-func TestCatalogMigrationPlanPreservesEntries(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	directory := filepath.Join(home, ".config", "alias-lens")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	value := neutralcatalog.Catalog{SchemaVersion: 1, Entries: []neutralcatalog.Entry{{
-		ID: "11111111111111111111111111111111", Name: "gs", Kind: "command",
-		Portable: &neutralcatalog.Portable{Program: "git", Args: []string{"status"}, PassArguments: true},
-	}}}
-	encoded, _ := neutralcatalog.Encode(value)
-	path := filepath.Join(directory, "catalog.json")
-	if err := os.WriteFile(path, encoded, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	preview, err := buildCatalogMigrationPlan()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(preview.Actions) != 2 || preview.Actions[0].TargetRole != "catalog_revision" || preview.Actions[0].Kind != workflowplan.ActionCreate || !bytes.Equal(preview.Actions[0].Target.PlannedBytes, encoded) || !preview.Actions[1].Backup || !preview.Actions[1].Reversible {
-		t.Fatalf("plan = %#v", preview)
-	}
-	migrated, diagnostics := neutralcatalog.Decode(preview.Actions[1].Target.PlannedBytes)
-	if len(diagnostics) > 0 || migrated.SchemaVersion != 2 || len(migrated.Entries) != 1 || migrated.Entries[0].ID != value.Entries[0].ID {
-		t.Fatalf("migrated = %#v, %#v", migrated, diagnostics)
-	}
-	current, _ := os.ReadFile(path)
-	if !bytes.Equal(current, encoded) {
-		t.Fatal("planning changed the catalog")
-	}
-}
-
-func TestCatalogMigrationWritesExactDatedRevision(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	directory := filepath.Join(home, ".config", "alias-lens")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	value := neutralcatalog.Catalog{SchemaVersion: 1, Entries: []neutralcatalog.Entry{{
-		ID: "11111111111111111111111111111111", Name: "gs", Kind: "command",
-		Portable: &neutralcatalog.Portable{Program: "git", Args: []string{"status"}, PassArguments: true},
-	}}}
-	original, _ := neutralcatalog.Encode(value)
-	path := filepath.Join(directory, "catalog.json")
-	if err := os.WriteFile(path, original, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	originalOutput := catalogWorkflowStdout
-	catalogWorkflowStdout = &bytes.Buffer{}
-	t.Cleanup(func() { catalogWorkflowStdout = originalOutput })
-	if code, err := runCatalogMigrationCommand([]string{"--to", "2"}); err != nil || code != 0 {
-		t.Fatalf("migrate code=%d err=%v", code, err)
-	}
-	revisions, err := filepath.Glob(filepath.Join(directory, "catalog.revision-*.json"))
-	if err != nil || len(revisions) != 1 {
-		t.Fatalf("revisions = %#v, %v", revisions, err)
-	}
-	revision, err := os.ReadFile(revisions[0])
-	if err != nil || !bytes.Equal(revision, original) {
-		t.Fatalf("revision differs: %q, %v", revision, err)
-	}
-}
-
 func TestProfileCommandAppliesThroughTransaction(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -205,54 +140,5 @@ func TestApplyPrivatePlanRejectsSameBytesAtNewIdentity(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "changed after the preview") {
 		t.Fatalf("apply error = %v", err)
-	}
-}
-
-func TestProfileChangeMigratesWithExactBackup(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	directory := filepath.Join(home, ".config", "alias-lens")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	legacy := []byte(`{"version":1,"repository":"","alias_file":".bash_aliases","shell":"bash","providers":{},"auto_sync":{"enabled":false,"interval_seconds":15}}`)
-	path := filepath.Join(directory, "config.json")
-	if err := os.WriteFile(path, legacy, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := runConfigProfileCommand([]string{"add", "work"}); err != nil {
-		t.Fatal(err)
-	}
-	backup, err := os.ReadFile(path + ".alias-lens.bak")
-	if err != nil || !bytes.Equal(backup, legacy) {
-		t.Fatalf("migration backup = %q, %v", backup, err)
-	}
-}
-
-func TestConfigMigrateKeepsExactFixedBackup(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	directory := filepath.Join(home, ".config", "alias-lens")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		t.Fatal(err)
-	}
-	legacy := []byte("{\n  \"version\": 1,\n  \"repository\": \"\",\n  \"alias_file\": \".bash_aliases\",\n  \"shell\": \"bash\",\n  \"providers\": {},\n  \"auto_sync\": {\"enabled\": false, \"interval_seconds\": 15}\n}\n")
-	path := filepath.Join(directory, "config.json")
-	if err := os.WriteFile(path, legacy, 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if err := runConfigMigrationCommand(); err != nil {
-		t.Fatal(err)
-	}
-	backup, err := os.ReadFile(path + ".alias-lens.bak")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(backup, legacy) {
-		t.Fatalf("backup differs\nwant: %q\ngot:  %q", legacy, backup)
-	}
-	observed, err := observeConfig()
-	if err != nil || observed.MigrationRequired || observed.Config.Version != 2 {
-		t.Fatalf("observed = %#v, %v", observed, err)
 	}
 }

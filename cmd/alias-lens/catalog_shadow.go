@@ -232,19 +232,15 @@ func shadowShellAdapter(explicit string) (ShellAdapter, error) {
 		}
 		return nil, fmt.Errorf("invalid configuration")
 	}
-	version := 0
-	if value, ok := raw["version"]; ok {
-		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return nil, fmt.Errorf("invalid configuration")
-		}
-		if err := json.Unmarshal(value, &version); err != nil {
-			return nil, fmt.Errorf("invalid configuration")
-		}
-		if version < 0 {
-			return nil, fmt.Errorf("invalid configuration version")
-		}
+	value, ok := raw["version"]
+	if !ok || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+		return nil, fmt.Errorf("invalid configuration version")
 	}
-	if version > currentConfigVersion {
+	var version int
+	if err := json.Unmarshal(value, &version); err != nil {
+		return nil, fmt.Errorf("invalid configuration version")
+	}
+	if version != currentConfigVersion {
 		return nil, fmt.Errorf("configuration version unsupported")
 	}
 	shellName := "bash"
@@ -987,7 +983,7 @@ func validateShadowCandidates(results []shadowResult) {
 		if results[index].entry == nil {
 			continue
 		}
-		candidate := neutralcatalog.Catalog{SchemaVersion: 1, Entries: []neutralcatalog.Entry{*results[index].entry}}
+		candidate := neutralcatalog.Catalog{SchemaVersion: neutralcatalog.SchemaVersion, Entries: []neutralcatalog.Entry{*results[index].entry}}
 		if diagnostics := neutralcatalog.Validate(candidate); len(diagnostics) > 0 {
 			results[index].Status = "invalid"
 			results[index].entry = nil
@@ -1112,8 +1108,8 @@ func compareShadowRoundTrip(shell string, result *shadowResult) {
 	}
 	reparsed[0].entry.ID = result.entry.ID
 	changes, diagnostics := neutralcatalog.Compare(
-		neutralcatalog.Catalog{SchemaVersion: 1, Entries: []neutralcatalog.Entry{*result.entry}},
-		neutralcatalog.Catalog{SchemaVersion: 1, Entries: []neutralcatalog.Entry{*reparsed[0].entry}},
+		neutralcatalog.Catalog{SchemaVersion: neutralcatalog.SchemaVersion, Entries: []neutralcatalog.Entry{*result.entry}},
+		neutralcatalog.Catalog{SchemaVersion: neutralcatalog.SchemaVersion, Entries: []neutralcatalog.Entry{*reparsed[0].entry}},
 	)
 	if len(diagnostics) > 0 {
 		result.Status = "invalid"

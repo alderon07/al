@@ -65,9 +65,8 @@ func inspectWorkflowStatus() workflowstate.Report {
 	inputs := workflowstate.Inputs{
 		Mode: workflowstate.ModeLegacy,
 		Config: workflowstate.ConfigObservation{
-			Present:              true,
-			SchemaVersion:        currentConfigVersion,
-			CurrentSchemaVersion: currentConfigVersion,
+			Present:       true,
+			SchemaVersion: currentConfigVersion,
 		},
 		Sync: workflowstate.SyncObservation{},
 	}
@@ -85,9 +84,6 @@ func inspectWorkflowStatus() workflowstate.Report {
 			version = currentConfigVersion
 		}
 		inputs.Config.SchemaVersion = version
-		if observed.MigrationRequired {
-			inputs.Config.SchemaVersion = version
-		}
 		inputs.Sync.Configured = observed.Config.Repository != ""
 	}
 

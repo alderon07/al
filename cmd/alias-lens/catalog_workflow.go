@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	neutralcatalog "alias-lens/internal/catalog"
-	workflowplan "alias-lens/internal/plan"
 )
 
 const catalogReportLimit = 8 << 20
@@ -20,7 +19,7 @@ var catalogWorkflowStdout io.Writer = os.Stdout
 var catalogWorkflowTerminal = func() bool { return fileIsTerminal(os.Stdout) }
 
 func catalogCommandUsageError() error {
-	return fmt.Errorf("usage: al catalog preview|import|shadow|diff|migrate [OPTIONS]")
+	return fmt.Errorf("usage: al catalog preview|import|shadow|diff [OPTIONS]")
 }
 
 func runCatalogWorkflowCommand(arguments []string) (bool, int, error) {
@@ -31,33 +30,9 @@ func runCatalogWorkflowCommand(arguments []string) (bool, int, error) {
 	case "diff":
 		code, err := runCatalogDiff(arguments[1:])
 		return true, code, err
-	case "migrate":
-		code, err := runCatalogMigrationCommand(arguments[1:])
-		return true, code, err
 	default:
 		return false, 0, nil
 	}
-}
-
-func runCatalogMigrationCommand(arguments []string) (int, error) {
-	if len(arguments) != 2 || arguments[0] != "--to" || arguments[1] != "2" {
-		return 2, fmt.Errorf("usage: al catalog migrate --to 2")
-	}
-	preview, err := buildCatalogMigrationPlan()
-	if err != nil {
-		return 1, err
-	}
-	fmt.Fprint(catalogWorkflowStdout, workflowplan.RenderPlain(preview))
-	if len(preview.Actions) == 0 {
-		fmt.Fprintln(catalogWorkflowStdout, "Nothing needed to change.")
-		return 0, nil
-	}
-	root := filepath.Dir(localCatalogPath())
-	if err := applyPrivatePlan(root, preview, buildCatalogMigrationPlan); err != nil {
-		return 1, err
-	}
-	fmt.Fprintln(catalogWorkflowStdout, "The catalog now uses data format 2. Your entries did not change.")
-	return 0, nil
 }
 
 func runCatalogDiff(arguments []string) (int, error) {

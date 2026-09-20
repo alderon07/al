@@ -212,11 +212,14 @@ func cloneAndConfigureCmd(ctx context.Context, config AppConfig, connected RepoP
 		if err != nil {
 			return repoConfiguredMsg{err: err}
 		}
-		root := filepath.Join(home, ".local", "share", "alias-lens", "repos")
+		root := managedRepositoryRoot(home)
 		if err := os.MkdirAll(root, 0o755); err != nil {
 			return repoConfiguredMsg{err: err}
 		}
-		destination := filepath.Join(root, repo.Provider, strings.ReplaceAll(repo.FullName, "/", "--"))
+		destination, err := managedRepositoryDestination(home, repo)
+		if err != nil {
+			return repoConfiguredMsg{err: err}
+		}
 		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
 			return repoConfiguredMsg{err: err}
 		}

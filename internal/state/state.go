@@ -23,10 +23,9 @@ const (
 type ConfigState string
 
 const (
-	ConfigCurrent           ConfigState = "current"
-	ConfigMigrationRequired ConfigState = "migration_required"
-	ConfigInvalid           ConfigState = "invalid"
-	ConfigUnreadable        ConfigState = "unreadable"
+	ConfigCurrent    ConfigState = "current"
+	ConfigInvalid    ConfigState = "invalid"
+	ConfigUnreadable ConfigState = "unreadable"
 )
 
 type CatalogState string
@@ -91,11 +90,10 @@ type Inputs struct {
 }
 
 type ConfigObservation struct {
-	Present              bool
-	SchemaVersion        int
-	CurrentSchemaVersion int
-	Invalid              bool
-	Unreadable           bool
+	Present       bool
+	SchemaVersion int
+	Invalid       bool
+	Unreadable    bool
 }
 
 type CatalogObservation struct {
@@ -228,12 +226,10 @@ func resolveConfig(value ConfigObservation) ConfigReport {
 	switch {
 	case value.Unreadable:
 		report.State, report.Action = ConfigUnreadable, "al doctor"
-	case value.Invalid || value.CurrentSchemaVersion < 1 || value.SchemaVersion > value.CurrentSchemaVersion:
+	case value.Invalid:
 		report.State, report.Action = ConfigInvalid, "al doctor"
 	case !value.Present:
-		report.State, report.SchemaVersion = ConfigCurrent, value.CurrentSchemaVersion
-	case value.SchemaVersion < value.CurrentSchemaVersion:
-		report.State, report.SchemaVersion, report.Action = ConfigMigrationRequired, value.SchemaVersion, "al config migrate"
+		report.State, report.SchemaVersion = ConfigCurrent, value.SchemaVersion
 	default:
 		report.State, report.SchemaVersion = ConfigCurrent, value.SchemaVersion
 	}
@@ -403,8 +399,6 @@ func friendlyConfig(report ConfigReport) string {
 	switch report.State {
 	case ConfigCurrent:
 		return "ready"
-	case ConfigMigrationRequired:
-		return "needs an update; enter " + report.Action
 	default:
 		return "could not be checked; enter " + report.Action
 	}

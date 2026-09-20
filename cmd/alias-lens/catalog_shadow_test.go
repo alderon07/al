@@ -332,7 +332,7 @@ func TestShadowReadOnlyManifest(t *testing.T) {
 		".bash_aliases":                              "alias ok='echo OK'\n",
 		".bashrc":                                    "# user startup\n",
 		".bash_history":                              "echo private\n",
-		".config/alias-lens/config.json":             `{"version":1,"shell":"bash"}`,
+		".config/alias-lens/config.json":             `{"version":2,"shell":"bash"}`,
 		".local/share/alias-lens/usage.json":         "{}\n",
 		".local/share/alias-lens/revisions/keep.txt": "private revision\n",
 		"dotfiles/.git/index":                        "private index\n",
@@ -405,7 +405,7 @@ func TestShadowReadOnlyConfigSelection(t *testing.T) {
 	if err := os.MkdirAll(configDirectory, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	config := []byte(`{"version":0,"shell":"zsh"}`)
+	config := []byte(`{"version":2,"shell":"zsh"}`)
 	path := filepath.Join(configDirectory, "config.json")
 	if err := os.WriteFile(path, config, 0o600); err != nil {
 		t.Fatal(err)
@@ -422,7 +422,7 @@ func TestShadowReadOnlyConfigSelection(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(config, after) {
-		t.Fatal("shadow migrated config")
+		t.Fatal("shadow changed config")
 	}
 	if _, err := os.Stat(path + ".alias-lens.bak"); !os.IsNotExist(err) {
 		t.Fatal("shadow created config backup")
@@ -433,17 +433,18 @@ func TestShadowReadOnlyConfigMatrix(t *testing.T) {
 	tests := []struct {
 		name, config, shell, errorText string
 	}{
-		{name: "versionless", config: `{"shell":"zsh"}`, shell: "zsh"},
-		{name: "version zero", config: `{"version":0,"shell":"bash"}`, shell: "bash"},
-		{name: "version one", config: `{"version":1,"shell":"zsh"}`, shell: "zsh"},
-		{name: "empty shell", config: `{"version":1,"shell":""}`, shell: "bash"},
-		{name: "negative", config: `{"version":-1}`, errorText: "invalid configuration version"},
+		{name: "current", config: `{"version":2,"shell":"zsh"}`, shell: "zsh"},
+		{name: "empty shell", config: `{"version":2,"shell":""}`, shell: "bash"},
+		{name: "versionless", config: `{"shell":"zsh"}`, errorText: "invalid configuration version"},
+		{name: "version zero", config: `{"version":0,"shell":"bash"}`, errorText: "configuration version unsupported"},
+		{name: "version one", config: `{"version":1,"shell":"zsh"}`, errorText: "configuration version unsupported"},
+		{name: "negative", config: `{"version":-1}`, errorText: "configuration version unsupported"},
 		{name: "future", config: fmt.Sprintf(`{"version":%d}`, currentConfigVersion+1), errorText: "configuration version unsupported"},
 		{name: "null version", config: `{"version":null}`, errorText: "invalid configuration"},
 		{name: "null shell", config: `{"shell":null}`, errorText: "invalid configuration"},
 		{name: "wrong type", config: `{"version":"one"}`, errorText: "invalid configuration"},
-		{name: "duplicate", config: `{"shell":"bash","shell":"zsh"}`, errorText: "duplicate configuration field"},
-		{name: "unsupported shell", config: `{"shell":"fish"}`, errorText: "unsupported configured shell"},
+		{name: "duplicate", config: `{"version":2,"shell":"bash","shell":"zsh"}`, errorText: "duplicate configuration field"},
+		{name: "unsupported shell", config: `{"version":2,"shell":"fish"}`, errorText: "unsupported configured shell"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

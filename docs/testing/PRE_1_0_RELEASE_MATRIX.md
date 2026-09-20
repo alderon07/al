@@ -19,7 +19,7 @@ Verify Ctrl+G with an empty and non-empty prompt. Enter must execute the selecte
 
 For each case, copy the alias file, its mode, the config, the sync state, and the repository status before and after the action.
 
-- Upgrade a versionless configuration and confirm `version: 1`, `0600`, and an exact private backup.
+- Reject a versionless configuration and confirm the file remains byte-for-byte unchanged.
 - Start with malformed JSON and confirm the command fails without changing the file.
 - Start with a truncated alias definition and run `al check` and `al import` preview.
 - Kill the process during alias replacement. The live path must contain the old or complete new bytes, never a prefix.

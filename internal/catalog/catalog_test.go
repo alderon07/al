@@ -13,7 +13,7 @@ import (
 func text(value string) *string { return &value }
 
 func validCatalog() Catalog {
-	return Catalog{SchemaVersion: 1, Entries: []Entry{{
+	return Catalog{SchemaVersion: SchemaVersion, Entries: []Entry{{
 		ID: "87f4d803c44a4d8792c4824f8e0bc3f1", Name: "gs", Kind: "command",
 		Tags: []string{"git", "daily", "git"}, Platforms: []string{"wsl", "linux"}, Favorite: true,
 		Portable: &Portable{Program: "git", Args: []string{"status", "--short"}, PassArguments: true},
@@ -25,7 +25,7 @@ func TestCanonicalCatalogGolden(t *testing.T) {
 	if len(diagnostics) != 0 {
 		t.Fatalf("Encode diagnostics: %#v", diagnostics)
 	}
-	want, err := os.ReadFile("testdata/catalog-v1/canonical.json")
+	want, err := os.ReadFile("testdata/catalog-v2/canonical.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,11 +40,11 @@ func TestCanonicalCatalogGolden(t *testing.T) {
 
 func TestDecodeRejectsUnsafeStructure(t *testing.T) {
 	tests := []string{
-		`{"schema_version":1,"schema_version":1,"entries":[]}`,
-		`{"schema_version":1,"entries":null}`,
-		`{"schema_version":1,"entries":[],"extra":true}`,
-		`{"schema_version":1,"entries":[{"id":"87f4d803c44a4d8792c4824f8e0bc3f1","name":"x","kind":"command","portable":{"program":"git","args":[]}}]}`,
-		`{"schema_version":1,"entries":[]} {}`,
+		`{"schema_version":2,"schema_version":2,"entries":[]}`,
+		`{"schema_version":2,"entries":null}`,
+		`{"schema_version":2,"entries":[],"extra":true}`,
+		`{"schema_version":2,"entries":[{"id":"87f4d803c44a4d8792c4824f8e0bc3f1","name":"x","kind":"command","portable":{"program":"git","args":[]}}]}`,
+		`{"schema_version":2,"entries":[]} {}`,
 	}
 	for _, input := range tests {
 		if _, diagnostics := Decode([]byte(input)); len(diagnostics) == 0 {
@@ -97,7 +97,7 @@ func TestNativeImplementationShapeMatrix(t *testing.T) {
 		{"mismatch", Entry{ID: "00000000000000000000000000000000", Name: "x", Kind: "command", Native: map[string]NativeImplementation{"bash": {FunctionBody: &body}}}, false},
 	}
 	for _, test := range tests {
-		diagnostics := Validate(Catalog{SchemaVersion: 1, Entries: []Entry{test.entry}})
+		diagnostics := Validate(Catalog{SchemaVersion: SchemaVersion, Entries: []Entry{test.entry}})
 		if (len(diagnostics) == 0) != test.valid {
 			t.Errorf("%s diagnostics: %#v", test.name, diagnostics)
 		}
@@ -171,6 +171,6 @@ func TestCompareUsesStableIDs(t *testing.T) {
 }
 
 func FuzzDecode(f *testing.F) {
-	f.Add([]byte(`{"schema_version":1,"entries":[]}`))
+	f.Add([]byte(`{"schema_version":2,"entries":[]}`))
 	f.Fuzz(func(t *testing.T, data []byte) { Decode(data) })
 }

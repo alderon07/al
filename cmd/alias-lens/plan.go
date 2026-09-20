@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -50,12 +49,6 @@ func buildRequestedPlan(arguments []string) (workflowplan.OperationPlan, error) 
 	switch {
 	case len(arguments) == 4 && arguments[0] == "config" && arguments[1] == "profile" && (arguments[2] == "add" || arguments[2] == "remove"):
 		return buildProfilePlan(arguments[2], arguments[3])
-	case len(arguments) == 2 && arguments[0] == "config" && arguments[1] == "migrate":
-		return buildConfigMigrationPlan()
-	case len(arguments) == 3 && arguments[0] == "catalog" && arguments[1] == "migrate" && arguments[2] == "--to=2":
-		return buildCatalogMigrationPlan()
-	case len(arguments) == 4 && arguments[0] == "catalog" && arguments[1] == "migrate" && arguments[2] == "--to" && arguments[3] == "2":
-		return buildCatalogMigrationPlan()
 	case len(arguments) == 3 && arguments[0] == "completion" && (arguments[1] == "install" || arguments[1] == "remove"):
 		return buildCompletionPlan(arguments[1], arguments[2])
 	default:
@@ -130,33 +123,8 @@ func buildProfilePlan(action, name string) (workflowplan.OperationPlan, error) {
 	}
 	inputs := []workflowplan.Input{planInput("config", path, current)}
 	actions := []workflowplan.Action{}
-	sequence := 1
-	if observed.MigrationRequired {
-		backupPath := path + ".alias-lens.bak"
-		backupCurrent, backupErr := readRegularFile(backupPath, 1<<20)
-		backupKind := workflowplan.ActionReplace
-		backupExists := true
-		if errors.Is(backupErr, os.ErrNotExist) {
-			backupCurrent = nil
-			backupKind = workflowplan.ActionCreate
-			backupExists = false
-		} else if backupErr != nil {
-			return workflowplan.OperationPlan{}, backupErr
-		}
-		if backupExists {
-			inputs = append(inputs, planInput("config_backup", backupPath, backupCurrent))
-		}
-		actions = append(actions, workflowplan.Action{
-			Sequence: sequence, Kind: backupKind, TargetRole: "config_backup", DisplayPath: displayPrivatePath(backupPath),
-			Reason: "save the current settings before updating their data format", Risk: workflowplan.RiskLow,
-			PlannedSHA256: hashBytes(current), Backup: backupExists, Reversible: true,
-			Target: plannedTarget(backupPath, backupCurrent, current),
-		})
-		sequence++
-		reason = "update the settings data format and " + reason
-	}
 	actions = append(actions, workflowplan.Action{
-		Sequence: sequence, Kind: kind, TargetRole: "config", DisplayPath: displayPrivatePath(path),
+		Sequence: 1, Kind: kind, TargetRole: "config", DisplayPath: displayPrivatePath(path),
 		Reason: reason, Risk: workflowplan.RiskReview, PlannedSHA256: hashBytes(planned), Backup: backup, Reversible: true,
 		Target: plannedTarget(path, current, planned),
 	})
@@ -211,118 +179,6 @@ func affectedProfileEntries(name string, adding bool) ([]string, error) {
 		result = append(result, fmt.Sprintf("%s (%s)", entryName, strings.Join(affectedShells[entryName], " and ")))
 	}
 	return result, nil
-}
-
-func buildConfigMigrationPlan() (workflowplan.OperationPlan, error) {
-	observed, err := observeConfig()
-	if err != nil {
-		return workflowplan.OperationPlan{}, err
-	}
-	path, err := configPath()
-	if err != nil {
-		return workflowplan.OperationPlan{}, err
-	}
-	if !observed.Present || !observed.MigrationRequired {
-		return workflowplan.Build("config.migrate", nil, nil, nil, []workflowplan.Diagnostic{{Code: "no_change", Message: "Settings already use the current data format."}}), nil
-	}
-	current, err := readRegularFile(path, 1<<20)
-	if err != nil {
-		return workflowplan.OperationPlan{}, err
-	}
-	config := observed.Config
-	config.Version = currentConfigVersion
-	config = ensureConfigDefaults(config)
-	if err := validateAppConfig(config); err != nil {
-		return workflowplan.OperationPlan{}, fmt.Errorf("Alias Lens cannot prepare the settings update: %w", err)
-	}
-	planned, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return workflowplan.OperationPlan{}, err
-	}
-	planned = append(planned, '\n')
-	backupPath := path + ".alias-lens.bak"
-	backupCurrent, backupErr := readRegularFile(backupPath, 1<<20)
-	backupKind := workflowplan.ActionReplace
-	backupExists := true
-	if errors.Is(backupErr, os.ErrNotExist) {
-		backupCurrent = nil
-		backupKind = workflowplan.ActionCreate
-		backupExists = false
-	} else if backupErr != nil {
-		return workflowplan.OperationPlan{}, backupErr
-	}
-	inputs := []workflowplan.Input{planInput("config", path, current)}
-	if backupExists {
-		inputs = append(inputs, planInput("config_backup", backupPath, backupCurrent))
-	}
-	actions := []workflowplan.Action{
-		{
-			Sequence: 1, Kind: backupKind, TargetRole: "config_backup", DisplayPath: displayPrivatePath(backupPath),
-			Reason: "save the exact current settings before updating their data format", Risk: workflowplan.RiskLow,
-			PlannedSHA256: hashBytes(current), Backup: backupExists, Reversible: true,
-			Target: plannedTarget(backupPath, backupCurrent, current),
-		},
-		{
-			Sequence: 2, Kind: workflowplan.ActionReplace, TargetRole: "config", DisplayPath: displayPrivatePath(path),
-			Reason: "update the settings data format without changing your choices", Risk: workflowplan.RiskReview,
-			PlannedSHA256: hashBytes(planned), Backup: true, Reversible: true,
-			Target: plannedTarget(path, current, planned),
-		},
-	}
-	return workflowplan.Build("config.migrate", inputs, actions, nil, nil), nil
-}
-
-func buildCatalogMigrationPlan() (workflowplan.OperationPlan, error) {
-	path := localCatalogPath()
-	current, err := readRegularFile(path, neutralcatalog.MaxDocumentBytes)
-	if err != nil {
-		return workflowplan.OperationPlan{}, fmt.Errorf("read catalog: %w", err)
-	}
-	value, diagnostics := neutralcatalog.Decode(current)
-	if len(diagnostics) > 0 {
-		return workflowplan.OperationPlan{}, fmt.Errorf("Alias Lens cannot use this catalog because its data format is not valid")
-	}
-	if value.SchemaVersion == neutralcatalog.SchemaVersion2 {
-		return workflowplan.Build("catalog.migrate", []workflowplan.Input{planInput("catalog", path, current)}, nil, nil, []workflowplan.Diagnostic{{Code: "no_change", Message: "The catalog already uses data format 2."}}), nil
-	}
-	value.SchemaVersion = neutralcatalog.SchemaVersion2
-	planned, diagnostics := neutralcatalog.Encode(value)
-	if len(diagnostics) > 0 {
-		return workflowplan.OperationPlan{}, fmt.Errorf("Alias Lens could not prepare data format 2")
-	}
-	info, err := os.Stat(path)
-	if err != nil {
-		return workflowplan.OperationPlan{}, err
-	}
-	revisionName := fmt.Sprintf("catalog.revision-%s-%s.json", info.ModTime().UTC().Format("20060102T150405.000000000Z"), hashBytes(current)[:12])
-	revisionPath := filepath.Join(filepath.Dir(path), revisionName)
-	revisionCurrent, revisionErr := readRegularFile(revisionPath, neutralcatalog.MaxDocumentBytes)
-	inputs := []workflowplan.Input{planInput("catalog", path, current)}
-	actions := []workflowplan.Action{}
-	sequence := 1
-	switch {
-	case errors.Is(revisionErr, os.ErrNotExist):
-		actions = append(actions, workflowplan.Action{
-			Sequence: sequence, Kind: workflowplan.ActionCreate, TargetRole: "catalog_revision", DisplayPath: displayPrivatePath(revisionPath),
-			Reason: "save an exact dated catalog revision before updating its data format", Risk: workflowplan.RiskLow,
-			PlannedSHA256: hashBytes(current), Backup: false, Reversible: true,
-			Target: plannedTarget(revisionPath, nil, current),
-		})
-		sequence++
-	case revisionErr != nil:
-		return workflowplan.OperationPlan{}, revisionErr
-	case !bytes.Equal(revisionCurrent, current):
-		return workflowplan.OperationPlan{}, fmt.Errorf("the planned catalog revision name is already used by different data")
-	default:
-		inputs = append(inputs, planInput("catalog_revision", revisionPath, revisionCurrent))
-	}
-	actions = append(actions, workflowplan.Action{
-		Sequence: sequence, Kind: workflowplan.ActionReplace, TargetRole: "catalog", DisplayPath: displayPrivatePath(path),
-		Reason: "update the catalog data format without changing any entries", Risk: workflowplan.RiskReview,
-		PlannedSHA256: hashBytes(planned), Backup: true, Reversible: true,
-		Target: plannedTarget(path, current, planned),
-	})
-	return workflowplan.Build("catalog.migrate", inputs, actions, nil, nil), nil
 }
 
 func planInput(role, path string, contents []byte) workflowplan.Input {

@@ -208,9 +208,6 @@ func runConfigCommand(arguments []string) error {
 	if len(arguments) > 0 && arguments[0] == "profile" {
 		return runConfigProfileCommand(arguments[1:])
 	}
-	if len(arguments) == 1 && arguments[0] == "migrate" {
-		return runConfigMigrationCommand()
-	}
 	config, err := loadConfig()
 	if err != nil {
 		return err
@@ -370,27 +367,6 @@ func runConfigProfileCommand(arguments []string) error {
 	return nil
 }
 
-func runConfigMigrationCommand() error {
-	preview, err := buildConfigMigrationPlan()
-	if err != nil {
-		return err
-	}
-	fmt.Print(workflowplan.RenderPlain(preview))
-	if len(preview.Actions) == 0 {
-		fmt.Println("Nothing needed to change.")
-		return nil
-	}
-	path, err := configPath()
-	if err != nil {
-		return err
-	}
-	if err := applyPrivatePlan(filepath.Dir(path), preview, buildConfigMigrationPlan); err != nil {
-		return err
-	}
-	fmt.Println("Settings now use the current data format. Your choices did not change.")
-	return nil
-}
-
 func activeShellNameForConfig() string {
 	observed, err := observeConfig()
 	if err == nil && (observed.Config.Shell == "bash" || observed.Config.Shell == "zsh") {
@@ -423,59 +399,30 @@ func loadConfig() (AppConfig, error) {
 	if err := decodeUniqueJSON(contents, &fields); err != nil {
 		return config, fmt.Errorf("parse %s: %w", path, err)
 	}
-	rawVersion := 0
-	versionPresent := false
-	if raw, exists := fields["version"]; exists {
-		versionPresent = true
-		if err := json.Unmarshal(raw, &rawVersion); err != nil || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-			return config, fmt.Errorf("parse %s: invalid configuration version", path)
-		}
+	raw, versionPresent := fields["version"]
+	if !versionPresent {
+		return config, fmt.Errorf("parse %s: configuration version is required; recreate the file with al setup", path)
 	}
-	if rawVersion <= 1 {
-		for _, field := range []string{"profiles", "shortcut_profile", "footer"} {
-			if _, exists := fields[field]; exists {
-				return config, fmt.Errorf("parse %s: configuration version %d cannot contain %q; remove that field or set it after migration", path, rawVersion, field)
-			}
+	var version int
+	if err := json.Unmarshal(raw, &version); err != nil || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return config, fmt.Errorf("parse %s: invalid configuration version", path)
+	}
+	if version != currentConfigVersion {
+		if version > currentConfigVersion {
+			return config, fmt.Errorf("parse %s: configuration version %d is newer than this Alias Lens supports; update Alias Lens", path, version)
 		}
+		return config, fmt.Errorf("parse %s: configuration version %d is unsupported; recreate the file with al setup", path, version)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(contents))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&config); err != nil {
 		return config, fmt.Errorf("parse %s: %w", path, err)
 	}
-	if !versionPresent {
-		config.Version = 0
-	}
-	var migrated bool
-	config, migrated, err = migrateConfig(config)
-	if err != nil {
-		return defaultConfig(), fmt.Errorf("parse %s: %w", path, err)
-	}
 	config = ensureConfigDefaults(config)
 	if err := validateAppConfig(config); err != nil {
 		return defaultConfig(), fmt.Errorf("parse %s: %w", path, err)
 	}
-	if migrated {
-		if err := saveConfigFile(path, config, contents); err != nil {
-			return defaultConfig(), fmt.Errorf("migrate %s: %w", path, err)
-		}
-	}
 	return config, nil
-}
-
-func migrateConfig(config AppConfig) (AppConfig, bool, error) {
-	switch config.Version {
-	case 0:
-		config.Version = currentConfigVersion
-		return config, true, nil
-	case 1:
-		config.Version = currentConfigVersion
-		return config, true, nil
-	case currentConfigVersion:
-		return config, false, nil
-	default:
-		return config, false, fmt.Errorf("configuration version %d is newer than this Alias Lens supports; update Alias Lens", config.Version)
-	}
 }
 
 func ensureConfigDefaults(config AppConfig) AppConfig {
@@ -549,10 +496,10 @@ func saveConfig(config AppConfig) error {
 	if err := validateAppConfig(config); err != nil {
 		return err
 	}
-	return saveConfigFile(path, config, nil)
+	return saveConfigFile(path, config)
 }
 
-func saveConfigFile(path string, config AppConfig, backup []byte) error {
+func saveConfigFile(path string, config AppConfig) error {
 	directoryPath := filepath.Dir(path)
 	if err := os.MkdirAll(directoryPath, 0o700); err != nil {
 		return err
@@ -563,11 +510,6 @@ func saveConfigFile(path string, config AppConfig, backup []byte) error {
 	contents, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
 		return err
-	}
-	if len(backup) > 0 {
-		if err := writePrivateBackup(path+".alias-lens.bak", backup); err != nil {
-			return err
-		}
 	}
 	temporary, err := os.CreateTemp(directoryPath, ".config-*.tmp")
 	if err != nil {

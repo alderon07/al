@@ -15,7 +15,7 @@ import (
 func healthyInput() Inputs {
 	return Inputs{
 		Mode:    ModeCatalog,
-		Config:  ConfigObservation{Present: true, SchemaVersion: 2, CurrentSchemaVersion: 2},
+		Config:  ConfigObservation{Present: true, SchemaVersion: 2},
 		Catalog: CatalogObservation{Present: true, SchemaVersion: 2, EntryCount: 42, SHA256: "catalog"},
 		Shells: []ShellObservation{{Name: "bash", Resolved: ResolvedSummary{SHA256: "resolved", EligibleEntries: 40}, Installed: &InstalledObservation{
 			GenerationSHA256: "generation", ResolvedStateSHA256: "resolved", RecordedLoaderSHA256: "loader",

@@ -39,7 +39,7 @@ func TestStatusIsObservational(t *testing.T) {
 	if _, err := os.Stat(configPath + ".alias-lens.bak"); !os.IsNotExist(err) {
 		t.Fatalf("status created a backup: %v", err)
 	}
-	if report.Config.State != workflowstate.ConfigMigrationRequired {
+	if report.Config.State != workflowstate.ConfigInvalid {
 		t.Fatalf("config state = %s", report.Config.State)
 	}
 	if _, err := os.Stat(filepath.Join(configDirectory, "catalog.json")); !os.IsNotExist(err) {
