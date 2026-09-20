@@ -129,12 +129,13 @@ Alias Lens chooses a familiar keyboard style for your computer: Windows on Windo
 
 ```bash
 al shortcuts
+al shortcuts auto
 al shortcuts macos
 al shortcuts windows
 al shortcuts linux
 ```
 
-You can use any style on any computer. The macOS style shows Command shortcuts with terminal-safe fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
+You can use any style on any computer. Run `al shortcuts auto` to remove a saved choice and return to the style for the current computer. The macOS style shows Command shortcuts with terminal-safe fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
 
 On Zsh and Bash 4+, `Ctrl+G` keeps its normal cancel behavior when the prompt contains text. Bash 3.2 does not install the picker binding; run `al` instead. Set `ALIAS_LENS_NOBIND=1` before the shell integration loads if you do not want the key binding.
 

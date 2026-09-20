@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -82,6 +83,18 @@ printf '%%s\n' "${COMPREPLY[@]}"
 	if string(output) != "zsh\n" {
 		t.Fatalf("completion = %q, want zsh", output)
 	}
+}
+
+func TestShortcutCompletionOffersAutomaticSelection(t *testing.T) {
+	for _, rule := range completionRules() {
+		if len(rule.Path) == 1 && rule.Path[0] == "shortcuts" {
+			if !slices.Contains(rule.Values, "auto") {
+				t.Fatalf("shortcut completion values = %q, want auto", rule.Values)
+			}
+			return
+		}
+	}
+	t.Fatal("shortcut completion rule is missing")
 }
 
 func TestCompletionInstallAndRemoveUsePrivatePlannedFile(t *testing.T) {

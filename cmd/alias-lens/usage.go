@@ -348,16 +348,18 @@ Examples:
   al theme
   al theme tokyo-night
 `,
-	"shortcuts": `Usage: al shortcuts [windows|linux|macos|test]
+	"shortcuts": `Usage: al shortcuts [auto|windows|linux|macos|test]
 
 Show the keyboard style Alias Lens uses. Without a saved choice, Alias Lens
 chooses Windows on Windows and WSL, macOS on macOS, and Linux on Linux. You can
-choose any style on any computer. The test option shows the active shortcuts
-without changing your shortcut choice.
+choose any style on any computer. Use auto to remove a saved choice and return
+to the style for the current computer. The test option shows the active
+shortcuts without changing your shortcut choice.
 
 Examples:
   al shortcuts
   al shortcuts macos
+  al shortcuts auto
   al shortcuts test
 `,
 	"completion": `Usage:

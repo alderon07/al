@@ -168,7 +168,7 @@ func completionRules() []completionRule {
 		{Path: []string{"check"}, Values: []string{"--strict"}},
 		{Path: []string{"sync"}, Values: []string{"--push", "--pull"}},
 		{Path: []string{"autosync"}, Values: []string{"enable", "disable", "status"}},
-		{Path: []string{"shortcuts"}, Values: []string{"windows", "linux", "macos", "test"}},
+		{Path: []string{"shortcuts"}, Values: []string{"auto", "windows", "linux", "macos", "test"}},
 		{Path: []string{"theme"}, Values: append([]string{"--check"}, themeOrder...)},
 		{Path: []string{"pick"}, Values: []string{"--command"}, Dynamic: "entries"},
 		{Path: []string{"pick", "--command"}, Dynamic: "entries"},

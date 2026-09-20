@@ -622,13 +622,14 @@ The commands are:
 
 ```text
 al shortcuts
+al shortcuts auto
 al shortcuts windows
 al shortcuts linux
 al shortcuts macos
 al shortcuts test
 ```
 
-`al shortcuts` shows the active style, its source, and its keys. Passing `windows`, `linux`, or `macos` saves that style. A user can choose any profile on any operating system. The first default is Windows on native Windows and WSL, macOS on Darwin, and Linux on other supported Linux systems. Alias Lens detects WSL through a tested platform helper. It does not infer the profile from `$TERM`, terminal brand, shell, or hostname.
+`al shortcuts` shows the active style, its source, and its keys. Passing `windows`, `linux`, or `macos` saves that style. Passing `auto` removes the saved choice and returns to operating-system detection. A user can choose any profile on any operating system. The first default is Windows on native Windows and WSL, macOS on Darwin, and Linux on other supported Linux systems. Alias Lens detects WSL through a tested platform helper. It does not infer the profile from `$TERM`, terminal brand, shell, or hostname.
 
 Each TUI action has one semantic action ID. Pages handle action IDs, not physical keys. The selected profile maps physical keys to those actions. Help text and footers read from the same map, so displayed shortcuts cannot differ from accepted shortcuts.
 

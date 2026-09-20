@@ -162,9 +162,18 @@ func runShortcutsCommand(arguments []string) error {
 		return err
 	}
 	if len(arguments) > 1 {
-		return errors.New("usage: al shortcuts [windows|linux|macos|test]")
+		return errors.New("usage: al shortcuts [auto|windows|linux|macos|test]")
 	}
 	if len(arguments) == 1 && arguments[0] != "test" {
+		if arguments[0] == "auto" {
+			config.ShortcutProfile = ""
+			if err := saveConfig(config); err != nil {
+				return err
+			}
+			profile := defaultShortcutProfile()
+			fmt.Printf("Shortcut style changed to %s, chosen automatically for this computer. Open Alias Lens again to use it.\n", shortcutProfileLabel(profile))
+			return nil
+		}
 		profile, err := parseShortcutProfile(arguments[0])
 		if err != nil {
 			return err
@@ -198,6 +207,8 @@ func runShortcutsCommand(arguments []string) error {
 	}
 	if len(arguments) == 1 {
 		fmt.Println("Your shortcut choice was not changed.")
+	} else if config.ShortcutProfile != "" {
+		fmt.Println("Restore automatic selection with: al shortcuts auto")
 	} else {
 		fmt.Println("Change the style with: al shortcuts windows|linux|macos")
 	}

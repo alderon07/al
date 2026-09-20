@@ -76,6 +76,47 @@ func TestShortcutCommandSavesChoicePrivately(t *testing.T) {
 	}
 }
 
+func TestShortcutCommandRestoresAutomaticSelection(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	config := defaultConfig()
+	config.ShortcutProfile = "macos"
+	if err := saveConfig(config); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runShortcutsCommand([]string{"auto"}); err != nil {
+		t.Fatal(err)
+	}
+	config, err := loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ShortcutProfile != "" {
+		t.Fatalf("shortcut profile = %q, want automatic selection", config.ShortcutProfile)
+	}
+	path := filepath.Join(home, ".config", "alias-lens", "config.json")
+	contents, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(contents), `"shortcut_profile"`) {
+		t.Fatalf("automatic selection remained pinned in config: %s", contents)
+	}
+
+	config.AutoSync.Enabled = false
+	if err := saveConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	config, err = loadConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config.ShortcutProfile != "" {
+		t.Fatalf("later config write restored shortcut profile %q", config.ShortcutProfile)
+	}
+}
+
 func TestShortcutTestKeepsSavedChoice(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
