@@ -62,6 +62,11 @@ const (
 	KeyF1
 	KeyF2
 	KeyF3
+	KeyF4
+	KeyF5
+	KeyF6
+	KeyF7
+	KeyF8
 )
 
 type KeyMsg struct {
@@ -104,6 +109,7 @@ func (message KeyMsg) String() string {
 		KeySpace: " ", KeyUp: "up", KeyDown: "down", KeyRight: "right", KeyLeft: "left",
 		KeyShiftTab: "shift+tab", KeyHome: "home", KeyEnd: "end", KeyPgUp: "pgup",
 		KeyPgDown: "pgdown", KeyDelete: "delete", KeyF1: "f1", KeyF2: "f2", KeyF3: "f3",
+		KeyF4: "f4", KeyF5: "f5", KeyF6: "f6", KeyF7: "f7", KeyF8: "f8",
 		KeyCtrlA: "ctrl+a", KeyCtrlC: "ctrl+c", KeyCtrlD: "ctrl+d", KeyCtrlE: "ctrl+e",
 		KeyCtrlF: "ctrl+f", KeyCtrlG: "ctrl+g", KeyCtrlH: "ctrl+h", KeyCtrlN: "ctrl+n", KeyCtrlR: "ctrl+r",
 		KeyCtrlS: "ctrl+s", KeyCtrlT: "ctrl+t", KeyCtrlU: "ctrl+u", KeyCtrlZ: "ctrl+z",
@@ -243,7 +249,8 @@ func translateKey(key tea2.Key) KeyMsg {
 		tea2.KeyEscape: KeyEsc, tea2.KeySpace: KeySpace, tea2.KeyUp: KeyUp, tea2.KeyDown: KeyDown,
 		tea2.KeyRight: KeyRight, tea2.KeyLeft: KeyLeft, tea2.KeyHome: KeyHome, tea2.KeyEnd: KeyEnd,
 		tea2.KeyPgUp: KeyPgUp, tea2.KeyPgDown: KeyPgDown, tea2.KeyDelete: KeyDelete,
-		tea2.KeyF1: KeyF1, tea2.KeyF2: KeyF2, tea2.KeyF3: KeyF3,
+		tea2.KeyF1: KeyF1, tea2.KeyF2: KeyF2, tea2.KeyF3: KeyF3, tea2.KeyF4: KeyF4,
+		tea2.KeyF5: KeyF5, tea2.KeyF6: KeyF6, tea2.KeyF7: KeyF7, tea2.KeyF8: KeyF8,
 	}
 	if key.Code == tea2.KeyTab {
 		if key.Mod&tea2.ModShift != 0 {

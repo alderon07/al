@@ -40,10 +40,10 @@ func TestPageShortcutsWorkFromEveryPage(t *testing.T) {
 		{"help", tea.KeyMsg{Type: tea.KeyF1}, pageHelp},
 		{"stats", tea.KeyMsg{Type: tea.KeyF2}, pageStats},
 		{"settings", tea.KeyMsg{Type: tea.KeyF3}, pageSettings},
-		{"themes", tea.KeyMsg{Type: tea.KeyCtrlT}, pageThemes},
-		{"revisions", tea.KeyMsg{Type: tea.KeyCtrlZ}, pageRevisions},
-		{"sync", tea.KeyMsg{Type: tea.KeyCtrlF}, pageSync},
-		{"health", tea.KeyMsg{Type: tea.KeyCtrlH}, pageHealth},
+		{"themes", tea.KeyMsg{Type: tea.KeyF4}, pageThemes},
+		{"revisions", tea.KeyMsg{Type: tea.KeyF8}, pageRevisions},
+		{"sync", tea.KeyMsg{Type: tea.KeyF6}, pageSync},
+		{"health", tea.KeyMsg{Type: tea.KeyF7}, pageHealth},
 	}
 
 	for _, source := range sources {
@@ -71,7 +71,7 @@ func TestPageShortcutRestoresUnsavedThemePreview(t *testing.T) {
 	defer applyTheme(defaultTheme())
 
 	m := model{theme: preview, themeBefore: original, themePicker: true}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyF2})
 	got := updated.(model)
 	if got.currentPage() != pageStats || got.theme.Preset != original.Preset {
 		t.Fatalf("theme switch did not restore preview: %#v", got)
@@ -86,7 +86,7 @@ func TestPageShortcutsDoNotInterruptEditingOrConfirmation(t *testing.T) {
 	}
 
 	confirmation := model{revisionOpen: true, revisionConfirm: true}
-	updated, _ = confirmation.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ = confirmation.Update(tea.KeyMsg{Type: tea.KeyF2})
 	if got := updated.(model); !got.revisionOpen || !got.revisionConfirm || got.statsOpen {
 		t.Fatalf("stats shortcut interrupted revision confirmation: %#v", got)
 	}
@@ -94,7 +94,7 @@ func TestPageShortcutsDoNotInterruptEditingOrConfirmation(t *testing.T) {
 
 func TestSelectModeKeepsPageRestrictions(t *testing.T) {
 	m := model{selectMode: true}
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlS})
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyF2})
 	if got := updated.(model); got.statsOpen {
 		t.Fatalf("select mode opened stats: %#v", got)
 	}

@@ -30,6 +30,7 @@ const (
 	shortcutHealth
 	shortcutAdd
 	shortcutEdit
+	shortcutDelete
 	shortcutRefresh
 	shortcutSave
 )
@@ -37,14 +38,22 @@ const (
 type shortcutKey struct {
 	typeCode   tea.KeyType
 	runeCode   rune
+	alt        bool
+	ctrl       bool
+	meta       bool
 	super      bool
 	shift      bool
 	allowShift bool
 }
 
+type shortcutBinding struct {
+	label        string
+	key          shortcutKey
+	terminalSafe bool
+}
+
 type shortcutChoice struct {
-	label string
-	keys  []shortcutKey
+	bindings []shortcutBinding
 }
 
 type shortcutDefinition struct {
@@ -54,51 +63,69 @@ type shortcutDefinition struct {
 	macos   shortcutChoice
 }
 
+func shortcutBindings(bindings ...shortcutBinding) shortcutChoice {
+	return shortcutChoice{bindings: bindings}
+}
+
+func nativeShortcut(label string, key shortcutKey) shortcutBinding {
+	return shortcutBinding{label: label, key: key}
+}
+
+func terminalShortcut(label string, key shortcutKey) shortcutBinding {
+	return shortcutBinding{label: label, key: key, terminalSafe: true}
+}
+
 var shortcutDefinitions = []shortcutDefinition{
 	{action: shortcutHelp,
-		windows: shortcutChoice{label: "F1 / ?", keys: []shortcutKey{{typeCode: tea.KeyF1}, {typeCode: tea.KeyRunes, runeCode: '?', allowShift: true}}},
-		linux:   shortcutChoice{label: "F1 / ?", keys: []shortcutKey{{typeCode: tea.KeyF1}, {typeCode: tea.KeyRunes, runeCode: '?', allowShift: true}}},
-		macos:   shortcutChoice{label: "Cmd+? / F1 / ?", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: '?', super: true, allowShift: true}, {typeCode: tea.KeyF1}, {typeCode: tea.KeyRunes, runeCode: '?', allowShift: true}}}},
+		windows: shortcutBindings(terminalShortcut("F1", shortcutKey{typeCode: tea.KeyF1}), terminalShortcut("?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', allowShift: true})),
+		linux: shortcutBindings(nativeShortcut("Ctrl+?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', ctrl: true, allowShift: true}),
+			terminalShortcut("F1", shortcutKey{typeCode: tea.KeyF1}), terminalShortcut("?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', allowShift: true})),
+		macos: shortcutBindings(nativeShortcut("Cmd+?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', super: true, allowShift: true}),
+			terminalShortcut("F1", shortcutKey{typeCode: tea.KeyF1}), terminalShortcut("?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', allowShift: true}))},
 	{action: shortcutStats,
-		windows: shortcutChoice{label: "F2 / Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyF2}, {typeCode: tea.KeyCtrlS}}},
-		linux:   shortcutChoice{label: "F2 / Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyF2}, {typeCode: tea.KeyCtrlS}}},
-		macos:   shortcutChoice{label: "Cmd+2 / F2", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: '2', super: true}, {typeCode: tea.KeyF2}}}},
+		windows: shortcutBindings(terminalShortcut("F2", shortcutKey{typeCode: tea.KeyF2})),
+		linux:   shortcutBindings(terminalShortcut("F2", shortcutKey{typeCode: tea.KeyF2})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+2", shortcutKey{typeCode: tea.KeyRunes, runeCode: '2', super: true}), terminalShortcut("F2", shortcutKey{typeCode: tea.KeyF2}))},
 	{action: shortcutSettings,
-		windows: shortcutChoice{label: "F3", keys: []shortcutKey{{typeCode: tea.KeyF3}}},
-		linux:   shortcutChoice{label: "F3", keys: []shortcutKey{{typeCode: tea.KeyF3}}},
-		macos:   shortcutChoice{label: "Cmd+, / F3", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: ',', super: true}, {typeCode: tea.KeyF3}}}},
+		windows: shortcutBindings(nativeShortcut("Ctrl+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', ctrl: true}), terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3})),
+		linux:   shortcutBindings(nativeShortcut("Ctrl+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', ctrl: true}), terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', super: true}), terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3}))},
 	{action: shortcutThemes,
-		windows: shortcutChoice{label: "Ctrl+T", keys: []shortcutKey{{typeCode: tea.KeyCtrlT}}},
-		linux:   shortcutChoice{label: "Ctrl+T", keys: []shortcutKey{{typeCode: tea.KeyCtrlT}}},
-		macos:   shortcutChoice{label: "Cmd+T / Ctrl+T", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 't', super: true}, {typeCode: tea.KeyCtrlT}}}},
+		windows: shortcutBindings(terminalShortcut("F4", shortcutKey{typeCode: tea.KeyF4})),
+		linux:   shortcutBindings(terminalShortcut("F4", shortcutKey{typeCode: tea.KeyF4})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+4", shortcutKey{typeCode: tea.KeyRunes, runeCode: '4', super: true}), terminalShortcut("F4", shortcutKey{typeCode: tea.KeyF4}))},
 	{action: shortcutRevisions,
-		windows: shortcutChoice{label: "Ctrl+Z", keys: []shortcutKey{{typeCode: tea.KeyCtrlZ}}},
-		linux:   shortcutChoice{label: "Ctrl+Z", keys: []shortcutKey{{typeCode: tea.KeyCtrlZ}}},
-		macos:   shortcutChoice{label: "Cmd+Z / Ctrl+Z", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'z', super: true}, {typeCode: tea.KeyCtrlZ}}}},
+		windows: shortcutBindings(nativeShortcut("Ctrl+Z", shortcutKey{typeCode: tea.KeyCtrlZ}), terminalShortcut("F8", shortcutKey{typeCode: tea.KeyF8})),
+		linux:   shortcutBindings(nativeShortcut("Ctrl+Z", shortcutKey{typeCode: tea.KeyCtrlZ}), terminalShortcut("F8", shortcutKey{typeCode: tea.KeyF8})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+Z", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'z', super: true}), terminalShortcut("F8", shortcutKey{typeCode: tea.KeyF8}))},
 	{action: shortcutSync,
-		windows: shortcutChoice{label: "Ctrl+F", keys: []shortcutKey{{typeCode: tea.KeyCtrlF}}},
-		linux:   shortcutChoice{label: "Ctrl+F", keys: []shortcutKey{{typeCode: tea.KeyCtrlF}}},
-		macos:   shortcutChoice{label: "Cmd+Shift+S / Ctrl+F", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 's', super: true, shift: true}, {typeCode: tea.KeyCtrlF}}}},
+		windows: shortcutBindings(terminalShortcut("F6", shortcutKey{typeCode: tea.KeyF6})),
+		linux:   shortcutBindings(terminalShortcut("F6", shortcutKey{typeCode: tea.KeyF6})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+6", shortcutKey{typeCode: tea.KeyRunes, runeCode: '6', super: true}), terminalShortcut("F6", shortcutKey{typeCode: tea.KeyF6}))},
 	{action: shortcutHealth,
-		windows: shortcutChoice{label: "Ctrl+H", keys: []shortcutKey{{typeCode: tea.KeyCtrlH}}},
-		linux:   shortcutChoice{label: "Ctrl+H", keys: []shortcutKey{{typeCode: tea.KeyCtrlH}}},
-		macos:   shortcutChoice{label: "Cmd+H / Ctrl+H", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'h', super: true}, {typeCode: tea.KeyCtrlH}}}},
+		windows: shortcutBindings(terminalShortcut("F7", shortcutKey{typeCode: tea.KeyF7})),
+		linux:   shortcutBindings(terminalShortcut("F7", shortcutKey{typeCode: tea.KeyF7})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+7", shortcutKey{typeCode: tea.KeyRunes, runeCode: '7', super: true}), terminalShortcut("F7", shortcutKey{typeCode: tea.KeyF7}))},
 	{action: shortcutAdd,
-		windows: shortcutChoice{label: "Ctrl+A", keys: []shortcutKey{{typeCode: tea.KeyCtrlA}}},
-		linux:   shortcutChoice{label: "Ctrl+A", keys: []shortcutKey{{typeCode: tea.KeyCtrlA}}},
-		macos:   shortcutChoice{label: "Cmd+N / Ctrl+A", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'n', super: true}, {typeCode: tea.KeyCtrlA}}}},
+		windows: shortcutBindings(terminalShortcut("Ctrl+N", shortcutKey{typeCode: tea.KeyCtrlN})),
+		linux:   shortcutBindings(terminalShortcut("Ctrl+N", shortcutKey{typeCode: tea.KeyCtrlN})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+N", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'n', super: true}), terminalShortcut("Ctrl+N", shortcutKey{typeCode: tea.KeyCtrlN}))},
 	{action: shortcutEdit,
-		windows: shortcutChoice{label: "Ctrl+E", keys: []shortcutKey{{typeCode: tea.KeyCtrlE}}},
-		linux:   shortcutChoice{label: "Ctrl+E", keys: []shortcutKey{{typeCode: tea.KeyCtrlE}}},
-		macos:   shortcutChoice{label: "Cmd+E / Ctrl+E", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'e', super: true}, {typeCode: tea.KeyCtrlE}}}},
+		windows: shortcutBindings(terminalShortcut("Ctrl+E", shortcutKey{typeCode: tea.KeyCtrlE})),
+		linux:   shortcutBindings(terminalShortcut("Ctrl+E", shortcutKey{typeCode: tea.KeyCtrlE})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+Shift+E", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'e', super: true, shift: true}), terminalShortcut("Ctrl+E", shortcutKey{typeCode: tea.KeyCtrlE}))},
+	{action: shortcutDelete,
+		windows: shortcutBindings(terminalShortcut("Delete", shortcutKey{typeCode: tea.KeyDelete}), nativeShortcut("Ctrl+D", shortcutKey{typeCode: tea.KeyCtrlD})),
+		linux:   shortcutBindings(terminalShortcut("Delete", shortcutKey{typeCode: tea.KeyDelete}), nativeShortcut("Ctrl+D", shortcutKey{typeCode: tea.KeyCtrlD})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+Backspace", shortcutKey{typeCode: tea.KeyBackspace, super: true}), terminalShortcut("Delete", shortcutKey{typeCode: tea.KeyDelete}))},
 	{action: shortcutRefresh,
-		windows: shortcutChoice{label: "Ctrl+R", keys: []shortcutKey{{typeCode: tea.KeyCtrlR}}},
-		linux:   shortcutChoice{label: "Ctrl+R", keys: []shortcutKey{{typeCode: tea.KeyCtrlR}}},
-		macos:   shortcutChoice{label: "Cmd+R / Ctrl+R", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 'r', super: true}, {typeCode: tea.KeyCtrlR}}}},
+		windows: shortcutBindings(terminalShortcut("F5", shortcutKey{typeCode: tea.KeyF5}), terminalShortcut("Ctrl+R", shortcutKey{typeCode: tea.KeyCtrlR})),
+		linux:   shortcutBindings(terminalShortcut("Ctrl+R", shortcutKey{typeCode: tea.KeyCtrlR}), terminalShortcut("F5", shortcutKey{typeCode: tea.KeyF5})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+R", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'r', super: true}), terminalShortcut("F5", shortcutKey{typeCode: tea.KeyF5}), terminalShortcut("Ctrl+R", shortcutKey{typeCode: tea.KeyCtrlR}))},
 	{action: shortcutSave,
-		windows: shortcutChoice{label: "Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyCtrlS}}},
-		linux:   shortcutChoice{label: "Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyCtrlS}}},
-		macos:   shortcutChoice{label: "Cmd+S / Ctrl+S", keys: []shortcutKey{{typeCode: tea.KeyRunes, runeCode: 's', super: true}, {typeCode: tea.KeyCtrlS}}}},
+		windows: shortcutBindings(terminalShortcut("Ctrl+S", shortcutKey{typeCode: tea.KeyCtrlS})),
+		linux:   shortcutBindings(terminalShortcut("Ctrl+S", shortcutKey{typeCode: tea.KeyCtrlS})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+S", shortcutKey{typeCode: tea.KeyRunes, runeCode: 's', super: true}), terminalShortcut("Ctrl+S", shortcutKey{typeCode: tea.KeyCtrlS}))},
 }
 
 func parseShortcutProfile(value string) (ShortcutProfile, error) {
@@ -205,6 +232,7 @@ func runShortcutsCommand(arguments []string) error {
 	} else {
 		fmt.Println("Your terminal may use Ctrl+Shift+C to copy and Ctrl+Shift+V to paste.")
 	}
+	fmt.Println("F1 through F8 remain available in every shortcut style.")
 	if len(arguments) == 1 {
 		fmt.Println("Your shortcut choice was not changed.")
 	} else if config.ShortcutProfile != "" {
@@ -232,7 +260,7 @@ func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
 	return append(guide,
 		[2]string{shortcutLabel(profile, shortcutAdd), "Add an alias"},
 		[2]string{shortcutLabel(profile, shortcutEdit), "Edit description, command, or name"},
-		[2]string{"Ctrl+D", "Delete an alias after confirmation"},
+		[2]string{shortcutLabel(profile, shortcutDelete), "Delete an alias after confirmation"},
 		[2]string{shortcutLabel(profile, shortcutRevisions), "Browse and restore saved versions"},
 		[2]string{shortcutLabel(profile, shortcutStats), "Open alias usage stats"},
 		[2]string{shortcutLabel(profile, shortcutSettings), "Customize the TUI footer"},
@@ -248,18 +276,28 @@ func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
 func shortcutLabel(profile ShortcutProfile, action shortcutAction) string {
 	for _, definition := range shortcutDefinitions {
 		if definition.action == action {
-			return shortcutChoiceForProfile(definition, profile).label
+			choice := shortcutChoiceForProfile(definition, profile)
+			labels := make([]string, 0, len(choice.bindings))
+			for _, binding := range choice.bindings {
+				labels = append(labels, binding.label)
+			}
+			return strings.Join(labels, " / ")
 		}
 	}
 	return ""
 }
 
 func primaryShortcutLabel(profile ShortcutProfile, action shortcutAction) string {
-	label := shortcutLabel(profile, action)
-	if primary, _, found := strings.Cut(label, " / "); found {
-		return primary
+	for _, definition := range shortcutDefinitions {
+		if definition.action != action {
+			continue
+		}
+		choice := shortcutChoiceForProfile(definition, profile)
+		if len(choice.bindings) > 0 {
+			return choice.bindings[0].label
+		}
 	}
-	return label
+	return ""
 }
 
 func shortcutChoiceForProfile(definition shortcutDefinition, profile ShortcutProfile) shortcutChoice {
@@ -279,7 +317,7 @@ func matchesShortcut(message tea.KeyMsg, profile ShortcutProfile, action shortcu
 }
 
 func resolveShortcut(message tea.KeyMsg, profile ShortcutProfile, allowed ...shortcutAction) (shortcutAction, bool) {
-	if message.Paste || message.Alt || message.Ctrl || message.Meta {
+	if message.Paste {
 		return 0, false
 	}
 	for _, action := range allowed {
@@ -287,8 +325,8 @@ func resolveShortcut(message tea.KeyMsg, profile ShortcutProfile, allowed ...sho
 			if definition.action != action {
 				continue
 			}
-			for _, key := range shortcutChoiceForProfile(definition, profile).keys {
-				if shortcutKeyMatches(message, key) {
+			for _, binding := range shortcutChoiceForProfile(definition, profile).bindings {
+				if shortcutKeyMatches(message, binding.key) {
 					return action, true
 				}
 			}
@@ -298,7 +336,7 @@ func resolveShortcut(message tea.KeyMsg, profile ShortcutProfile, allowed ...sho
 }
 
 func shortcutKeyMatches(message tea.KeyMsg, key shortcutKey) bool {
-	if message.Type != key.typeCode || message.Super != key.super {
+	if message.Type != key.typeCode || message.Alt != key.alt || message.Ctrl != key.ctrl || message.Meta != key.meta || message.Super != key.super {
 		return false
 	}
 	if !key.allowShift && message.Shift != key.shift {

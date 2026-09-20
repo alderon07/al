@@ -630,7 +630,7 @@ func TestTrackedFilesViewExplainsEmptyRegistry(t *testing.T) {
 	}
 }
 
-func TestCtrlFLoadsPrimarySyncStatus(t *testing.T) {
+func TestF6LoadsPrimarySyncStatus(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
@@ -644,7 +644,7 @@ func TestCtrlFLoadsPrimarySyncStatus(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updated, _ := (model{width: 100, height: 30}).Update(tea.KeyMsg{Type: tea.KeyCtrlF})
+	updated, _ := (model{width: 100, height: 30}).Update(tea.KeyMsg{Type: tea.KeyF6})
 	result := updated.(model)
 	if !result.trackedOnly || !result.autoSyncEnabled || result.syncInterval != 30 || result.primarySync.State.Status != "synced" {
 		t.Fatalf("sync status was not loaded: %#v", result)

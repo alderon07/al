@@ -32,6 +32,38 @@ func TestMakerCreditIsPinnedToTheLastPageRow(t *testing.T) {
 	assertMakerCredit(t, lines[len(lines)-1])
 }
 
+func TestFooterControlsAndNavigationHaveOneBlankRowBetweenThem(t *testing.T) {
+	footer := footerWithNavigation("controls", 100, shortcutLinux)
+	lines := strings.Split(footer, "\n")
+	if len(lines) != 3 || lines[0] != "controls" || lines[1] != "" || !strings.Contains(lines[2], " help") {
+		t.Fatalf("footer rows are not separated by one blank row:\n%s", footer)
+	}
+}
+
+func TestAliasAndStatsViewsPinMakerCreditToTheSameRow(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	applyTheme(builtInTheme("phosphor"))
+	applyFooterConfig(defaultFooterConfig())
+	t.Cleanup(func() {
+		applyTheme(defaultTheme())
+		applyFooterConfig(defaultFooterConfig())
+	})
+
+	base := model{width: 120, height: 36, theme: builtInTheme("phosphor"), shortcutProfile: shortcutLinux}
+	aliasView := base.View()
+	base.statsOpen = true
+	statsView := base.View()
+
+	aliasRow := lineContaining(aliasView, "Made by Naqi")
+	statsRow := lineContaining(statsView, "Made by Naqi")
+	if aliasRow < 0 || statsRow < 0 {
+		t.Fatalf("maker credit missing: alias row=%d stats row=%d", aliasRow, statsRow)
+	}
+	if aliasRow != statsRow {
+		t.Fatalf("maker credit rows differ: aliases=%d/%d stats=%d/%d", aliasRow, lipgloss.Height(aliasView), statsRow, lipgloss.Height(statsView))
+	}
+}
+
 func TestPlainAliasListOmitsMakerCredit(t *testing.T) {
 	var output bytes.Buffer
 	printPlainAliasList(&output, []Alias{{Name: "gs", Command: "git status"}}, "")
@@ -100,14 +132,23 @@ func TestNamedFooterIconUsesSymbolInsteadOfBitmap(t *testing.T) {
 func TestHeartFooterPreservesFollowingSpace(t *testing.T) {
 	config := FooterConfig{Message: "Made with {icon} by Naqi", Icon: "heart", Alignment: "center", Tone: "quiet", Rule: "none"}
 	preview := renderFooterPreview(config, 40)
-	if !strings.Contains(preview, "♥︎ by") {
+	if !strings.Contains(preview, "♥︎\u00a0by") {
 		t.Fatalf("preview lost the space after the heart: %q", preview)
 	}
 
 	applyFooterConfig(config)
 	t.Cleanup(func() { applyFooterConfig(defaultFooterConfig()) })
-	if credit := makerCredit(40); !strings.Contains(credit, "♥︎ by") {
+	if credit := makerCredit(40); !strings.Contains(credit, "♥︎\u00a0by") {
 		t.Fatalf("saved footer lost the space after the heart: %q", credit)
+	}
+}
+
+func TestFooterSpacingCompensationOnlyAppliesToHeart(t *testing.T) {
+	if got := renderFooterMessage("Made with {icon} by Naqi", "spark"); got != "Made with ✦ by Naqi" {
+		t.Fatalf("spark message = %q", got)
+	}
+	if got := renderFooterMessage("Made with {icon}by Naqi", "heart"); got != "Made with ♥︎by Naqi" {
+		t.Fatalf("unspaced heart message = %q", got)
 	}
 }
 
@@ -199,4 +240,13 @@ func assertMakerCredit(t *testing.T, view string) {
 	if strings.Contains(view, renderPixelIcon(iconHeart)) {
 		t.Fatalf("default maker credit contains bitmap art:\n%s", view)
 	}
+}
+
+func lineContaining(view, text string) int {
+	for index, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, text) {
+			return index
+		}
+	}
+	return -1
 }

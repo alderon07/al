@@ -451,7 +451,7 @@ Purpose: give the user one safe next action when the active alias file has no en
 
 - Use the alias icon and `Set up your first shortcut.` outside select mode.
 - State the active display path and shell at 60 content cells or wider.
-- Offer `Enter` or `Ctrl+A` to create the first alias when creation is allowed.
+- Offer `Enter` or the active profile's Add shortcut to create the first alias when creation is allowed.
 - Offer reload as a secondary action.
 - In select mode, state that no alias is available and direct the user to open normal Alias Lens.
 - Do not show an empty card, a zero-result message, or suggested heading.

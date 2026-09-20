@@ -40,7 +40,7 @@ Save and Cancel are focusable rows after the settings fields. Enter activates ei
 
 Existing valid custom emoji and bitmap footer icons remain readable and renderable for configuration compatibility. Choosing a named icon in the footer editor replaces that legacy value.
 
-The heart uses Unicode text presentation so terminals measure it as one cell. A space after `{icon}` remains visible in both the live preview and the saved footer.
+The heart uses Unicode text presentation. When the message puts a space after a heart icon, Alias Lens uses a non-breaking terminal cell for that separator. The gap remains visible in both the live preview and the saved footer, including terminals that treat the heart as a wide glyph.
 
 The `accent` tone uses the active theme's primary accent color. Changing or previewing a theme updates the footer preview and the saved footer without changing footer settings.
 

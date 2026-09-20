@@ -15,12 +15,19 @@ func TestTranslateV2Keys(t *testing.T) {
 		{name: "rune", key: tea2.Key{Code: 'a', Text: "a"}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'a'}}},
 		{name: "ctrl", key: tea2.Key{Code: 'g', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyCtrlG}},
 		{name: "unknown ctrl", key: tea2.Key{Code: 'x', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'x'}, Ctrl: true}},
+		{name: "control punctuation", key: tea2.Key{Code: ',', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyRunes, Runes: []rune{','}, Ctrl: true}},
+		{name: "control shifted punctuation", key: tea2.Key{Code: '?', Mod: tea2.ModCtrl | tea2.ModShift}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'?'}, Ctrl: true, Shift: true}},
 		{name: "command", key: tea2.Key{Code: 'n', Mod: tea2.ModSuper}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'n'}, Super: true}},
 		{name: "meta is not command", key: tea2.Key{Code: 'n', Mod: tea2.ModMeta}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'n'}, Meta: true}},
 		{name: "command shift", key: tea2.Key{Code: 's', Mod: tea2.ModSuper | tea2.ModShift}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'s'}, Shift: true, Super: true}},
 		{name: "shift tab", key: tea2.Key{Code: tea2.KeyTab, Mod: tea2.ModShift}, want: KeyMsg{Type: KeyShiftTab}},
 		{name: "function", key: tea2.Key{Code: tea2.KeyF2}, want: KeyMsg{Type: KeyF2}},
 		{name: "settings function", key: tea2.Key{Code: tea2.KeyF3}, want: KeyMsg{Type: KeyF3}},
+		{name: "themes function", key: tea2.Key{Code: tea2.KeyF4}, want: KeyMsg{Type: KeyF4}},
+		{name: "refresh function", key: tea2.Key{Code: tea2.KeyF5}, want: KeyMsg{Type: KeyF5}},
+		{name: "sync function", key: tea2.Key{Code: tea2.KeyF6}, want: KeyMsg{Type: KeyF6}},
+		{name: "health function", key: tea2.Key{Code: tea2.KeyF7}, want: KeyMsg{Type: KeyF7}},
+		{name: "revisions function", key: tea2.Key{Code: tea2.KeyF8}, want: KeyMsg{Type: KeyF8}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

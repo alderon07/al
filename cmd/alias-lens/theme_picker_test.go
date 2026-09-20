@@ -14,7 +14,7 @@ func TestThemePickerPreviewsAndEscRestores(t *testing.T) {
 	applyTheme(original)
 	defer applyTheme(defaultTheme())
 
-	updated, _ := (model{theme: original, width: 100, height: 24}).Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	updated, _ := (model{theme: original, width: 100, height: 24}).Update(tea.KeyMsg{Type: tea.KeyF4})
 	picker := updated.(model)
 	if !picker.themePicker || picker.theme.Preset != "tokyo-night" {
 		t.Fatalf("theme picker did not open on the current theme: %+v", picker)
@@ -42,7 +42,7 @@ func TestThemePickerEnterSavesPreview(t *testing.T) {
 	applyTheme(builtInTheme("tokyo-night"))
 	defer applyTheme(defaultTheme())
 
-	updated, _ := (model{theme: builtInTheme("tokyo-night"), width: 100, height: 24}).Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	updated, _ := (model{theme: builtInTheme("tokyo-night"), width: 100, height: 24}).Update(tea.KeyMsg{Type: tea.KeyF4})
 	updated, _ = updated.(model).Update(tea.KeyMsg{Type: tea.KeyDown})
 	preview := updated.(model)
 	if _, err := os.Stat(filepath.Join(home, ".config", "alias-lens", "theme.json")); !os.IsNotExist(err) {

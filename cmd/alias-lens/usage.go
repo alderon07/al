@@ -341,7 +341,7 @@ copies for comparison and leaves the alias file you use unchanged.
 
 List every built-in dark theme and mark the active one. Pass a preset name to
 save it immediately. --check prints the selected theme's text and control
-contrast ratios. Ctrl+T opens a live-preview theme picker inside the TUI.
+contrast ratios. F4 opens a live-preview theme picker inside the TUI.
 
 Examples:
   al theme

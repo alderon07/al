@@ -109,21 +109,24 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | `↑` and `↓` | Select an alias |
 | `Enter` | Use the selected alias |
 | `Tab` | Return the selected alias to the prompt without running it |
-| `Ctrl+A` | Add an alias |
+| `Ctrl+N` | Add an alias |
 | `Ctrl+E` | Edit the selected alias |
-| `Ctrl+D` | Delete the selected alias after confirmation |
-| `F2` or `Ctrl+S` | Open usage stats |
-| `F3` | Customize the TUI footer |
-| `Ctrl+H` | Show alias health warnings |
-| `Ctrl+F` | Show tracked files and sync status |
+| `Delete` or `Ctrl+D` | Delete the selected alias after confirmation |
+| `F2` | Open usage stats |
+| `Ctrl+,` or `F3` | Customize the TUI footer |
+| `F7` | Show alias health warnings |
+| `F6` | Show tracked files and sync status |
 | `Ctrl+G` | Sync while the TUI is open |
-| `Ctrl+T` | Preview and select a theme |
-| `Ctrl+Z` | Browse and restore revisions |
+| `F4` | Preview and select a theme |
+| `Ctrl+Z` or `F8` | Browse and restore revisions |
+| `Ctrl+R` or `F5` | Reload aliases and settings |
 | `Esc` | Exit |
 
 The page shortcuts work from the alias list, help, stats, footer settings, themes, revisions, sync status, and alias health. Press the current page's shortcut again to return to the alias list.
 
-Some terminals reserve `Ctrl+S` for flow control, so use `F2` if `Ctrl+S` does not reach Alias Lens.
+The table shows the Linux defaults. Windows uses `F5` as the primary refresh key. macOS uses Command shortcuts with the listed function keys and Control keys as terminal-safe fallbacks.
+
+`F1` through `F8` open Help, Stats, Settings, Themes, Refresh, Sync, Health, and Revisions in every profile. These keys keep a chosen profile usable when the terminal does not send its preferred modifier.
 
 Alias Lens chooses a familiar keyboard style for your computer: Windows on Windows and WSL, macOS on macOS, and Linux on Linux. See the active style or choose the one you already know:
 
@@ -219,7 +222,7 @@ Aliases that contain risky commands open a review screen before execution. The s
 
 ## Make it look like your terminal
 
-Open the theme picker with `Ctrl+T`, or choose a theme by name:
+Open the theme picker with `F4`, or choose a theme by name:
 
 ```bash
 al theme

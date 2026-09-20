@@ -17,7 +17,7 @@ func TestSetupTourAppearsOnceAndCanOpenHelp(t *testing.T) {
 	}
 	m := model{tourVisible: true, width: 80, height: 24}
 	view := m.View()
-	for _, want := range []string{"Alias Lens is ready.", "Type", "Enter", "Ctrl+T", "searchable keyboard guide"} {
+	for _, want := range []string{"Alias Lens is ready.", "Type", "Enter", "F4", "searchable keyboard guide"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("tour does not contain %q:\n%s", want, view)
 		}

@@ -244,12 +244,16 @@ func (m statsModel) View() string {
 	}
 	bottom := note + "\n" + foot
 	if m.appHeader != "" {
-		if navigation := pageNavigationHint(inner, m.shortcutProfile); navigation != "" {
-			bottom += "\n" + muted.Render(navigation)
-		}
+		bottom = footerWithNavigation(bottom, inner, m.shortcutProfile)
 	}
 	bottom = footerWithMaker(bottom, inner)
-	spacerHeight := max(1, height-lipgloss.Height(top)-lipgloss.Height(bottom)-2)
+	reservedBottomRow := 1
+	if m.appHeader != "" {
+		// Embedded pages use the main browser's outer frame, which supplies the
+		// final bottom row after Bubble Tea clips the rendered view.
+		reservedBottomRow = 0
+	}
+	spacerHeight := max(1, height-lipgloss.Height(top)-lipgloss.Height(bottom)-reservedBottomRow)
 	content := top + strings.Repeat("\n", spacerHeight) + bottom
 	return preserveStatsBackground(page.Render(content), m.theme.Background)
 }

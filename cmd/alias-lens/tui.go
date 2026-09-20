@@ -299,7 +299,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.revisionOpen && m.revisionConfirm {
 			return m.updateRevisionDrawer(message)
 		}
-		if m.settingsOpen && footerSettingsHandles(message, m.shortcutProfile) {
+		if m.settingsOpen && !matchesShortcut(message, m.shortcutProfile, shortcutSettings) && footerSettingsHandles(message, m.shortcutProfile) {
 			return m.updateFooterSettings(message)
 		}
 		if updated, handled := m.updatePageNavigation(message); handled {
@@ -337,13 +337,15 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.startEditForm(matches)
 			return m, nil
 		}
-		switch message.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
-			return m, tea.Quit
-		case tea.KeyCtrlD:
+		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type == tea.KeyCtrlD || m.query == "") {
 			if len(matches) > 0 {
 				m.deleteName = matches[m.cursor].Name
 			}
+			return m, nil
+		}
+		switch message.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			return m, tea.Quit
 		case tea.KeyCtrlG:
 			message, err := syncRepository(false)
 			if err != nil {
@@ -665,7 +667,7 @@ func (m model) View() string {
 		}
 	}
 	if contentWidth >= 79 && !m.selectMode {
-		footer += "\n" + dimStyle.Render(pageNavigationHint(contentWidth, m.shortcutProfile))
+		footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
 	}
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
@@ -804,10 +806,11 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 		shortcuts = filtered
 	}
 
-	keyWidth := 16
-	if m.shortcutProfile == shortcutMacOS {
-		keyWidth = 23
+	keyWidth := 14
+	for _, shortcut := range shortcuts {
+		keyWidth = max(keyWidth, lipgloss.Width(shortcut[0])+1)
 	}
+	keyWidth = min(keyWidth, 28)
 	if contentWidth < 60 {
 		keyWidth = min(keyWidth, max(14, contentWidth/2))
 	}
@@ -833,9 +836,7 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 		footer = fmt.Sprintf("showing %d of %d  ·  type to filter  ·  esc close", visible, len(shortcuts))
 	}
 	footerView := dimStyle.Render(footer)
-	if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
-		footerView += "\n" + dimStyle.Render(navigation)
-	}
+	footerView = footerWithNavigation(footerView, contentWidth, m.shortcutProfile)
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", rows.String(), "", footerView)
 	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
@@ -849,24 +850,27 @@ func pageNavigationHint(width int, profiles ...ShortcutProfile) string {
 	if len(profiles) > 0 {
 		profile = profiles[0]
 	}
-	if profile == shortcutMacOS {
-		return fmt.Sprintf("%s help  ·  %s stats  ·  %s settings  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
-			compactKeyLabel(primaryShortcutLabel(profile, shortcutHelp)),
-			compactKeyLabel(primaryShortcutLabel(profile, shortcutStats)),
-			compactKeyLabel(primaryShortcutLabel(profile, shortcutSettings)),
-			compactKeyLabel(primaryShortcutLabel(profile, shortcutThemes)),
-			compactKeyLabel(primaryShortcutLabel(profile, shortcutRevisions)),
-			compactKeyLabel(primaryShortcutLabel(profile, shortcutSync)),
-			compactKeyLabel(primaryShortcutLabel(profile, shortcutHealth)))
+	labels := []string{
+		primaryShortcutLabel(profile, shortcutHelp),
+		primaryShortcutLabel(profile, shortcutStats),
+		primaryShortcutLabel(profile, shortcutSettings),
+		primaryShortcutLabel(profile, shortcutThemes),
+		primaryShortcutLabel(profile, shortcutRevisions),
+		primaryShortcutLabel(profile, shortcutSync),
+		primaryShortcutLabel(profile, shortcutHealth),
 	}
-	return fmt.Sprintf("%s help  ·  %s stats  ·  %s settings  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
-		compactKeyLabel(primaryShortcutLabel(profile, shortcutHelp)),
-		compactKeyLabel(primaryShortcutLabel(profile, shortcutStats)),
-		compactKeyLabel(primaryShortcutLabel(profile, shortcutSettings)),
-		compactKeyLabel(primaryShortcutLabel(profile, shortcutThemes)),
-		compactKeyLabel(primaryShortcutLabel(profile, shortcutRevisions)),
-		compactKeyLabel(primaryShortcutLabel(profile, shortcutSync)),
-		compactKeyLabel(primaryShortcutLabel(profile, shortcutHealth)))
+	formatHint := func() string {
+		return fmt.Sprintf("%s help  ·  %s stats  ·  %s settings  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
+			labels[0], labels[1], labels[2], labels[3], labels[4], labels[5], labels[6])
+	}
+	navigation := formatHint()
+	if lipgloss.Width(navigation) > width {
+		for index := range labels {
+			labels[index] = compactKeyLabel(labels[index])
+		}
+		navigation = formatHint()
+	}
+	return navigation
 }
 
 func compactKeyLabel(label string) string {
@@ -975,9 +979,7 @@ func (m model) themePickerView(width, height, contentWidth int, header string) s
 
 	title := pixelIconLabel(iconTheme, "Choose a theme", titleStyle) + "\n" + dimStyle.Render("The preview changes as you move. Save only when it looks right.")
 	footer := dimStyle.Render("↑↓ preview  ·  pgup/pgdn jump  ·  enter ") + cyanStyle("save") + dimStyle.Render("  ·  esc restore")
-	if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
-		footer += "\n" + dimStyle.Render(navigation)
-	}
+	footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
 	if m.status != "" {
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render(truncate(m.status, contentWidth))
 	}
@@ -1129,9 +1131,7 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
-	if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
-		footer += "\n" + dimStyle.Render(navigation)
-	}
+	footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", pixelIconLabel(iconSync, "See what Alias Lens keeps in sync.", titleStyle), "", body.String(), "", footer)
 	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -50,6 +51,52 @@ func TestSavedShortcutProfileWinsOverComputerDefault(t *testing.T) {
 	config.ShortcutProfile = "macos"
 	if got := resolvedShortcutProfile(config); got != shortcutMacOS {
 		t.Fatalf("resolved shortcut profile = %q, want macos", got)
+	}
+}
+
+func TestShortcutProfilesUsePlatformConventions(t *testing.T) {
+	tests := []struct {
+		profile ShortcutProfile
+		action  shortcutAction
+		want    string
+	}{
+		{profile: shortcutWindows, action: shortcutAdd, want: "Ctrl+N"},
+		{profile: shortcutWindows, action: shortcutRefresh, want: "F5 / Ctrl+R"},
+		{profile: shortcutLinux, action: shortcutHelp, want: "Ctrl+? / F1 / ?"},
+		{profile: shortcutLinux, action: shortcutSettings, want: "Ctrl+, / F3"},
+		{profile: shortcutLinux, action: shortcutRefresh, want: "Ctrl+R / F5"},
+		{profile: shortcutMacOS, action: shortcutAdd, want: "Cmd+N / Ctrl+N"},
+		{profile: shortcutMacOS, action: shortcutEdit, want: "Cmd+Shift+E / Ctrl+E"},
+		{profile: shortcutMacOS, action: shortcutThemes, want: "Cmd+4 / F4"},
+	}
+	for _, test := range tests {
+		if got := shortcutLabel(test.profile, test.action); got != test.want {
+			t.Errorf("%s action %d label = %q, want %q", test.profile, test.action, got, test.want)
+		}
+	}
+}
+
+func TestProfilesDoNotRepurposeCommonShortcuts(t *testing.T) {
+	tests := []struct {
+		name    string
+		profile ShortcutProfile
+		action  shortcutAction
+		key     tea.KeyMsg
+	}{
+		{name: "select all", profile: shortcutLinux, action: shortcutAdd, key: tea.KeyMsg{Type: tea.KeyCtrlA}},
+		{name: "find", profile: shortcutWindows, action: shortcutSync, key: tea.KeyMsg{Type: tea.KeyCtrlF}},
+		{name: "replace", profile: shortcutLinux, action: shortcutHealth, key: tea.KeyMsg{Type: tea.KeyCtrlH}},
+		{name: "new tab", profile: shortcutMacOS, action: shortcutThemes, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}, Super: true}},
+		{name: "hide app", profile: shortcutMacOS, action: shortcutHealth, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'h'}, Super: true}},
+		{name: "use selection for find", profile: shortcutMacOS, action: shortcutEdit, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}, Super: true}},
+		{name: "save as", profile: shortcutMacOS, action: shortcutSync, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}, Super: true, Shift: true}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if matchesShortcut(test.key, test.profile, test.action) {
+				t.Fatalf("%s profile repurposed %s", test.profile, test.name)
+			}
+		})
 	}
 }
 
@@ -142,16 +189,16 @@ func TestShortcutTestKeepsSavedChoice(t *testing.T) {
 	}
 }
 
-func TestMacShortcutsUseCommandWithControlFallbacks(t *testing.T) {
+func TestMacShortcutsUseCommandWithPortableFallbacks(t *testing.T) {
 	tests := []struct {
 		name   string
 		key    tea.KeyMsg
 		action shortcutAction
 	}{
 		{name: "command new", key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}, Super: true}, action: shortcutAdd},
-		{name: "control add fallback", key: tea.KeyMsg{Type: tea.KeyCtrlA}, action: shortcutAdd},
-		{name: "command sync", key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}, Super: true, Shift: true}, action: shortcutSync},
-		{name: "control sync fallback", key: tea.KeyMsg{Type: tea.KeyCtrlF}, action: shortcutSync},
+		{name: "control add fallback", key: tea.KeyMsg{Type: tea.KeyCtrlN}, action: shortcutAdd},
+		{name: "command sync", key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'6'}, Super: true}, action: shortcutSync},
+		{name: "function sync fallback", key: tea.KeyMsg{Type: tea.KeyF6}, action: shortcutSync},
 		{name: "command stats", key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}, Super: true}, action: shortcutStats},
 	}
 	for _, test := range tests {
@@ -170,19 +217,65 @@ func TestEveryDisplayedShortcutComesFromAnAcceptedBinding(t *testing.T) {
 	for _, profile := range []ShortcutProfile{shortcutWindows, shortcutLinux, shortcutMacOS} {
 		for _, definition := range shortcutDefinitions {
 			choice := shortcutChoiceForProfile(definition, profile)
-			if choice.label == "" || len(choice.keys) == 0 {
+			if shortcutLabel(profile, definition.action) == "" || len(choice.bindings) == 0 {
 				t.Fatalf("%s action %d has no displayed or accepted key", profile, definition.action)
 			}
-			for _, key := range choice.keys {
-				message := tea.KeyMsg{Type: key.typeCode, Super: key.super, Shift: key.shift}
+			for _, binding := range choice.bindings {
+				key := binding.key
+				message := tea.KeyMsg{Type: key.typeCode, Alt: key.alt, Ctrl: key.ctrl, Meta: key.meta, Super: key.super, Shift: key.shift}
 				if key.typeCode == tea.KeyRunes {
 					message.Runes = []rune{key.runeCode}
 				}
 				if !matchesShortcut(message, profile, definition.action) {
-					t.Fatalf("%s action %d rejected binding %#v", profile, definition.action, key)
+					t.Fatalf("%s action %d rejected binding %#v", profile, definition.action, binding)
 				}
 			}
 		}
+	}
+}
+
+func TestEveryShortcutActionHasTerminalSafeBinding(t *testing.T) {
+	for _, profile := range []ShortcutProfile{shortcutWindows, shortcutLinux, shortcutMacOS} {
+		for _, definition := range shortcutDefinitions {
+			choice := shortcutChoiceForProfile(definition, profile)
+			if !slices.ContainsFunc(choice.bindings, func(binding shortcutBinding) bool { return binding.terminalSafe }) {
+				t.Errorf("%s action %d has no terminal-safe binding", profile, definition.action)
+			}
+		}
+	}
+}
+
+func TestShortcutProfilesDoNotAssignOneKeyToMultipleActions(t *testing.T) {
+	for _, profile := range []ShortcutProfile{shortcutWindows, shortcutLinux, shortcutMacOS} {
+		seen := make(map[shortcutKey]shortcutAction)
+		for _, definition := range shortcutDefinitions {
+			for _, binding := range shortcutChoiceForProfile(definition, profile).bindings {
+				if action, exists := seen[binding.key]; exists {
+					t.Errorf("%s binding %s is assigned to actions %d and %d", profile, binding.label, action, definition.action)
+				}
+				seen[binding.key] = definition.action
+			}
+		}
+	}
+}
+
+func TestDeleteShortcutProtectsSearchText(t *testing.T) {
+	aliases := []Alias{{Name: "gs", Command: "git status"}}
+
+	updated, _ := (model{aliases: aliases, shortcutProfile: shortcutLinux}).Update(tea.KeyMsg{Type: tea.KeyDelete})
+	if got := updated.(model).deleteName; got != "gs" {
+		t.Fatalf("Delete on an empty search selected %q for deletion, want gs", got)
+	}
+
+	updated, _ = (model{aliases: aliases, query: "g", shortcutProfile: shortcutLinux}).Update(tea.KeyMsg{Type: tea.KeyDelete})
+	result := updated.(model)
+	if result.query != "" || result.deleteName != "" {
+		t.Fatalf("Delete with search text produced query %q and deletion %q", result.query, result.deleteName)
+	}
+
+	updated, _ = (model{aliases: aliases, shortcutProfile: shortcutMacOS}).Update(tea.KeyMsg{Type: tea.KeyBackspace, Super: true})
+	if got := updated.(model).deleteName; got != "gs" {
+		t.Fatalf("Cmd+Backspace selected %q for deletion, want gs", got)
 	}
 }
 
@@ -196,15 +289,42 @@ func TestShortcutGuideUsesFriendlyMacLabels(t *testing.T) {
 		text.WriteString("\n")
 	}
 	guide := text.String()
-	for _, want := range []string{"Cmd+N / Ctrl+A", "Add an alias", "Cmd+Shift+S / Ctrl+F", "saved versions"} {
+	for _, want := range []string{"Cmd+N / Ctrl+N", "Add an alias", "Cmd+6 / F6", "saved versions"} {
 		if !strings.Contains(guide, want) {
 			t.Fatalf("macOS shortcut guide is missing %q:\n%s", want, guide)
 		}
 	}
 	view := (model{width: 120, height: 30, helpVisible: true, shortcutProfile: shortcutMacOS}).View()
-	for _, want := range []string{"Cmd+N / Ctrl+A", "Cmd+Shift+S / Ctrl+F", "Cmd+, / F3"} {
+	for _, want := range []string{"Cmd+N / Ctrl+N", "Cmd+Backspace / Delete", "Cmd+6 / F6", "Cmd+, / F3", "Cmd+? / F1 / ? / Esc"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("rendered macOS keyboard guide is missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestWideNavigationUsesReadableModifierNames(t *testing.T) {
+	hint := pageNavigationHint(120, shortcutLinux)
+	for _, want := range []string{"Ctrl+? help", "Ctrl+, settings", "Ctrl+Z versions"} {
+		if !strings.Contains(hint, want) {
+			t.Fatalf("wide navigation hint is missing %q: %s", want, hint)
+		}
+	}
+}
+
+func TestPreferredSettingsShortcutTogglesSettingsPage(t *testing.T) {
+	tests := []struct {
+		profile ShortcutProfile
+		key     tea.KeyMsg
+	}{
+		{profile: shortcutLinux, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}, Ctrl: true}},
+		{profile: shortcutWindows, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}, Ctrl: true}},
+		{profile: shortcutMacOS, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}, Super: true}},
+	}
+	for _, test := range tests {
+		m := model{settingsOpen: true, shortcutProfile: test.profile}
+		updated, _ := m.Update(test.key)
+		if updated.(model).settingsOpen {
+			t.Errorf("%s settings shortcut did not return to aliases", test.profile)
 		}
 	}
 }

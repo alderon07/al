@@ -640,17 +640,18 @@ The first profile version uses these defaults:
 | Run or choose | `Enter` | `Enter` | `Enter` | `Enter` |
 | Go back or cancel | `Esc` | `Esc` | `Esc` | `Esc` |
 | Find | Type to search | Type to search | Type to search | Type to search |
-| Add an alias | `Ctrl+A` | `Ctrl+A` | `Cmd+N` | `Ctrl+A` |
-| Edit an alias | `Ctrl+E` | `Ctrl+E` | `Cmd+E` | `Ctrl+E` |
+| Add an alias | `Ctrl+N` | `Ctrl+N` | `Cmd+N` | `Ctrl+N` |
+| Edit an alias | `Ctrl+E` | `Ctrl+E` | `Cmd+Shift+E` | `Ctrl+E` |
+| Delete an alias | `Delete` | `Delete` | `Cmd+Backspace` | `Delete` |
 | Save | `Ctrl+S` | `Ctrl+S` | `Cmd+S` | `Enter` in a form |
-| Open saved versions | `Ctrl+Z` | `Ctrl+Z` | `Cmd+Z` | `Ctrl+Z` |
-| Refresh | `Ctrl+R` | `Ctrl+R` | `Cmd+R` | `Ctrl+R` |
-| Open sync | `Ctrl+F` | `Ctrl+F` | `Cmd+Shift+S` | `Ctrl+F` |
-| Open themes | `Ctrl+T` | `Ctrl+T` | `Cmd+T` | `Ctrl+T` |
-| Open health | `Ctrl+H` | `Ctrl+H` | `Cmd+H` | `Ctrl+H` |
-| Open stats | `F2` or `Ctrl+S` | `F2` or `Ctrl+S` | `Cmd+2` | `F2` |
-| Open settings | `F3` | `F3` | `Cmd+,` | `F3` |
-| Open help | `F1` or `?` | `F1` or `?` | `Cmd+?`, `F1`, or `?` | `F1` or `?` |
+| Open saved versions | `Ctrl+Z` | `Ctrl+Z` | `Cmd+Z` | `F8` |
+| Refresh | `F5` | `Ctrl+R` | `Cmd+R` | `F5` or `Ctrl+R` |
+| Open sync | `F6` | `F6` | `Cmd+6` | `F6` |
+| Open themes | `F4` | `F4` | `Cmd+4` | `F4` |
+| Open health | `F7` | `F7` | `Cmd+7` | `F7` |
+| Open stats | `F2` | `F2` | `Cmd+2` | `F2` |
+| Open settings | `Ctrl+,` | `Ctrl+,` | `Cmd+,` | `F3` |
+| Open help | `F1` or `?` | `Ctrl+?`, `F1`, or `?` | `Cmd+?`, `F1`, or `?` | `F1` or `?` |
 
 Copy and paste stay owned by the terminal:
 
@@ -660,6 +661,8 @@ Copy and paste stay owned by the terminal:
 - `Ctrl+C` continues to cancel or quit when the terminal sends it to Alias Lens instead of handling copy.
 
 Many terminals consume Command keys before a TUI can receive them. Alias Lens supports `Cmd` keys only when the terminal sends the Super modifier through its keyboard protocol. The keyboard guide always shows the terminal-safe fallback beside a preferred Command key. `al shortcuts test` prints the active guide without changing the saved shortcut choice. Modified keys that are not Alias Lens actions do not become search or form text. The terminal still delivers bracketed paste as text.
+
+Alias Lens uses raw terminal mode while the TUI is open. On Unix, raw mode disables software flow control and terminal-generated signals. `Ctrl+S` saves instead of pausing output, and `Ctrl+Z` opens revisions instead of suspending Alias Lens.
 
 A shortcut cannot replace text entry, block `Esc`, or remove the terminal-safe fallback. Form, confirmation, and text-entry contexts take priority over page-navigation shortcuts. Shortcut changes apply when the next TUI starts.
 

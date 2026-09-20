@@ -3,7 +3,7 @@
 ## Behavior
 
 - `?` opens help from the alias list, stats, themes, revisions, sync status, and the health-filtered alias list.
-- `Ctrl+S`, `Ctrl+T`, `Ctrl+Z`, `Ctrl+F`, and `Ctrl+H` open stats, themes, revisions, sync status, and alias health from any of those pages.
+- The active profile's shortcuts open stats, themes, revisions, sync status, and alias health from any of those pages. `F2`, `F4`, `F8`, `F6`, and `F7` remain available in every profile.
 - Pressing the shortcut for the current page returns to the alias list.
 - Pressing a different page shortcut closes the current page before opening the requested page.
 - Leaving the theme picker through a page shortcut restores the theme that was active before the preview.

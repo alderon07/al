@@ -144,8 +144,8 @@ func (m model) revisionDrawerView(width, height, contentWidth int, header string
 	if m.revisionConfirm && len(m.revisions) > 0 {
 		selected := m.revisions[min(max(0, m.revisionCursor), len(m.revisions)-1)]
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render("Restore " + selected.Time.Local().Format("Jan 2, 15:04") + "?  y confirm  ·  n or esc cancel")
-	} else if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
-		footer += "\n" + dimStyle.Render(navigation)
+	} else {
+		footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body.String(), "", footer)
 	page = pageWithMaker(page, contentWidth, height)

@@ -296,9 +296,8 @@ func renderFooterPreview(config FooterConfig, width int) string {
 	message := config.Message
 	if message == "" {
 		message = "(maker line hidden)"
-	}
-	if icon, err := renderFooterIcon(config.Icon); err == nil {
-		message = strings.Replace(message, footerIconToken, icon, 1)
+	} else {
+		message = renderFooterMessage(message, config.Icon)
 	}
 	alignment := lipgloss.Center
 	if config.Alignment == "left" {
@@ -418,14 +417,7 @@ func makerCredit(width int) string {
 	if activeFooter.Message == "" {
 		return ""
 	}
-	parts := strings.SplitN(activeFooter.Message, footerIconToken, 2)
-	credit := parts[0]
-	if len(parts) == 2 {
-		if icon, err := renderFooterIcon(activeFooter.Icon); err == nil && icon != "" {
-			credit += icon
-		}
-		credit += parts[1]
-	}
+	credit := renderFooterMessage(activeFooter.Message, activeFooter.Icon)
 	alignment := lipgloss.Center
 	if activeFooter.Alignment == "left" {
 		alignment = lipgloss.Left
@@ -439,12 +431,36 @@ func makerCredit(width int) string {
 	return credit
 }
 
+func renderFooterMessage(message, iconName string) string {
+	parts := strings.SplitN(message, footerIconToken, 2)
+	if len(parts) != 2 {
+		return message
+	}
+	icon, err := renderFooterIcon(iconName)
+	if err != nil {
+		return message
+	}
+	suffix := parts[1]
+	if strings.EqualFold(iconName, "heart") && strings.HasPrefix(suffix, " ") {
+		suffix = "\u00a0" + strings.TrimPrefix(suffix, " ")
+	}
+	return parts[0] + icon + suffix
+}
+
 func footerWithMaker(footer string, width int) string {
 	credit := makerCredit(width)
 	if credit == "" {
 		return footer
 	}
 	return footer + "\n" + credit
+}
+
+func footerWithNavigation(footer string, width int, profiles ...ShortcutProfile) string {
+	navigation := pageNavigationHint(width, profiles...)
+	if navigation == "" {
+		return footer
+	}
+	return footer + "\n\n" + dimStyle.Render(navigation)
 }
 
 func pageWithMaker(page string, width, height int) string {
