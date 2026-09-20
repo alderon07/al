@@ -50,8 +50,9 @@ type model struct {
 	themeBefore       Theme
 	settingsOpen      bool
 	settingsField     int
-	settingsForm      [2]string
-	settingsBefore    FooterConfig
+	settingsForm      [6]string
+	settingsCursor    [6]int
+	settingsBefore    appearanceSettings
 	helpVisible       bool
 	helpQuery         string
 	statsOpen         bool
@@ -133,6 +134,7 @@ func runTUI() {
 	}
 	theme, themeErr := loadTheme()
 	applyFooterConfig(config.Footer)
+	applyAppearanceConfig(config.Appearance)
 	status := ""
 	if themeErr != nil {
 		status = themeErr.Error()
@@ -209,6 +211,7 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 	}
 	theme, _ := loadTheme()
 	applyFooterConfig(config.Footer)
+	applyAppearanceConfig(config.Appearance)
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
 	var terminal *os.File
 	var terminalOutput io.Writer = os.Stderr
@@ -296,7 +299,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.revisionOpen && m.revisionConfirm {
 			return m.updateRevisionDrawer(message)
 		}
-		if m.settingsOpen && matchesShortcut(message, m.shortcutProfile, shortcutSave) {
+		if m.settingsOpen && footerSettingsHandles(message, m.shortcutProfile) {
 			return m.updateFooterSettings(message)
 		}
 		if updated, handled := m.updatePageNavigation(message); handled {
@@ -510,15 +513,17 @@ func (m *model) closePages() {
 		applyTheme(m.theme)
 	}
 	if m.settingsOpen {
-		applyFooterConfig(m.settingsBefore)
+		applyAppearanceConfig(m.settingsBefore.Appearance)
+		applyFooterConfig(m.settingsBefore.Footer)
 	}
 	m.helpVisible = false
 	m.helpQuery = ""
 	m.statsOpen = false
 	m.settingsOpen = false
 	m.settingsField = 0
-	m.settingsForm = [2]string{}
-	m.settingsBefore = FooterConfig{}
+	m.settingsForm = [6]string{}
+	m.settingsCursor = [6]int{}
+	m.settingsBefore = appearanceSettings{}
 	m.themePicker = false
 	m.revisionOpen = false
 	m.revisionConfirm = false
@@ -547,11 +552,11 @@ func (m model) View() string {
 		}
 		headerDetails += fmt.Sprintf("  •  %d %s", issues, label)
 	}
-	brand := brandStyle.Render("ALIAS LENS")
-	if contentWidth >= 48 {
-		brand = pixelIconLabel(iconBrand, "ALIAS LENS", brandStyle)
+	brand := ""
+	if label := compactBrandLabel(); label != "" {
+		brand = brandStyle.Render(label) + "  "
 	}
-	header := brand + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render(aliasDisplayPath()) + dimStyle.Render(headerDetails)
+	header := brand + lipgloss.NewStyle().Foreground(cyanColor).Render(aliasDisplayPath()) + dimStyle.Render(headerDetails)
 	if m.executableUpdated {
 		notice := wrapText("Alias Lens was updated. Close this screen, then enter al again.", contentWidth)
 		header += "\n" + lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(notice)
@@ -600,11 +605,11 @@ func (m model) View() string {
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(acidColor).
-		Render(acidStyle(renderPixelIcon(iconSearch)) + " " + searchTextCursor(m.query, m.searchFocused() && !m.cursorHidden))
+		Render(acidStyle(markerPrefix(iconSearch)) + searchTextCursor(m.query, m.searchFocused() && !m.cursorHidden))
 
 	var body strings.Builder
 	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
-		body.WriteString(m.emptyStateView(contentWidth))
+		body.WriteString(m.emptyStateView(contentWidth, height))
 	} else if m.healthOnly {
 		body.WriteString(pixelIconLabel(iconHealth, "ALIAS HEALTH", lipgloss.NewStyle().Bold(true).Foreground(coralColor)))
 		body.WriteByte('\n')
@@ -685,7 +690,7 @@ func (m *model) startAddForm() {
 	m.editingMetadata = EntryMetadata{}
 }
 
-func (m model) emptyStateView(contentWidth int) string {
+func (m model) emptyStateView(contentWidth, height int) string {
 	var body strings.Builder
 	if contentWidth < 60 {
 		if m.selectMode {
@@ -694,6 +699,9 @@ func (m model) emptyStateView(contentWidth int) string {
 		body.WriteString(aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutAdd)) + dimStyle.Render("  Create your first alias"))
 		body.WriteString("\n" + dimStyle.Render(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + dimStyle.Render("  Reload aliases"))
 		return body.String()
+	}
+	if mark := fullBrandMark(); mark != "" && height >= 24 {
+		body.WriteString(mark + "\n")
 	}
 	body.WriteString(pixelIconLabel(iconAlias, "No aliases yet.", titleStyle))
 	body.WriteString("\n" + dimStyle.Render(wrapText("Alias Lens is reading "+aliasDisplayPath()+" for "+activeShellAdapter().DisplayName()+".", contentWidth)))
@@ -773,7 +781,7 @@ func (m model) runConfirmationView(width, height, contentWidth int, header strin
 		Background(panelColor).
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(coralColor).
-		Render(renderPixelIcon(iconCommand) + " " + wrapText(alias.Command, max(24, contentWidth-13)))
+		Render(markerPrefix(iconCommand) + wrapText(alias.Command, max(24, contentWidth-13)))
 	body := pixelIconLabel(iconHealth, "Review before using this alias", titleStyle) +
 		"\n" + dimStyle.Render("Alias ") + name + dimStyle.Render(" may make changes that are hard to undo.") +
 		"\n\n" + command +
@@ -818,7 +826,7 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 		rows.WriteString(dimStyle.Render("No shortcut matched " + fmt.Sprintf("%q", m.helpQuery)))
 	}
 
-	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(renderPixelIcon(iconHelp)) + " " + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
+	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconHelp)) + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
 	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
 	footer := strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutHelp)) + " or esc close  ·  ctrl+c quit"
 	if len(shortcuts) > visible {
@@ -1157,7 +1165,7 @@ func renderTrackedFile(item trackedFileItem, active bool, width int) string {
 	lineOne := aliasStyle.Render(marker+compactHomePath(item.Config.Source)) + "  " + statusBadge
 	lineTwo := dimStyle.Render("No repository configured")
 	if item.Config.RepositoryPath != "" {
-		lineTwo = cyanStyle(renderPixelIcon(iconRepository)+" repo/") + lipgloss.NewStyle().Foreground(inkColor).Render(truncate(filepath.ToSlash(item.Config.RepositoryPath), cardWidth-14))
+		lineTwo = cyanStyle(markerPrefix(iconRepository)+"repo/") + lipgloss.NewStyle().Foreground(inkColor).Render(truncate(filepath.ToSlash(item.Config.RepositoryPath), cardWidth-10))
 	}
 	detail := item.State.Message
 	if item.Error != "" {
@@ -1378,15 +1386,17 @@ func renderAlias(alias Alias, active bool, width int) string {
 		lineOne += "  " + pixelIconLabel(iconFunction, "FUNCTION", lipgloss.NewStyle().Foreground(violetColor))
 	}
 	if alias.Favorite {
-		lineOne += "  " + lipgloss.NewStyle().Foreground(amberColor).Render(renderPixelIcon(iconFavorite))
+		if marker := interfaceMarker(iconFavorite); marker != "" {
+			lineOne += "  " + lipgloss.NewStyle().Foreground(amberColor).Render(marker)
+		}
 	}
 	if len(alias.Tags) > 0 {
 		lineOne += "  " + dimStyle.Render("#"+strings.Join(alias.Tags, " #"))
 	}
 	description := lipgloss.NewStyle().Foreground(inkColor).Render(wrapText(alias.Description, cardWidth-6))
-	lineTwo := lipgloss.NewStyle().Foreground(cyanColor).Render(renderPixelIcon(iconCommand) + " " + truncate(alias.Command, cardWidth-10))
+	lineTwo := lipgloss.NewStyle().Foreground(cyanColor).Render(markerPrefix(iconCommand) + truncate(alias.Command, cardWidth-8))
 	if len(alias.Issues) > 0 {
-		lineTwo += "\n" + lipgloss.NewStyle().Foreground(coralColor).Render(renderPixelIcon(iconHealth)+" "+strings.Join(alias.Issues, " · "))
+		lineTwo += "\n" + lipgloss.NewStyle().Foreground(coralColor).Render(markerPrefix(iconHealth)+strings.Join(alias.Issues, " · "))
 	}
 
 	borderColor := lineColor

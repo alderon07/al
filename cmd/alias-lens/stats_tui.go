@@ -50,6 +50,7 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 		return fmt.Errorf("could not read Alias Lens settings: %w", err)
 	}
 	applyFooterConfig(config.Footer)
+	applyAppearanceConfig(config.Appearance)
 	index := 0
 	viewIndex := 0
 	periods := statsPeriods

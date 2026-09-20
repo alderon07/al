@@ -29,6 +29,7 @@ type AppConfig struct {
 	Providers       map[string]ProviderConfig `json:"providers"`
 	AutoSync        AutoSyncConfig            `json:"auto_sync"`
 	TrackedFiles    []TrackedFileConfig       `json:"tracked_files,omitempty"`
+	Appearance      AppearanceConfig          `json:"appearance"`
 	Footer          FooterConfig              `json:"footer"`
 }
 
@@ -182,6 +183,9 @@ func validateAppConfig(config AppConfig) error {
 	}
 	if err := validateFooterConfig(config.Footer); err != nil {
 		return fmt.Errorf("invalid footer configuration: %w", err)
+	}
+	if err := validateAppearanceConfig(config.Appearance); err != nil {
+		return fmt.Errorf("invalid appearance configuration: %w", err)
 	}
 	seenSources := make(map[string]bool)
 	seenRepositoryPaths := make(map[string]bool)
@@ -496,6 +500,22 @@ func ensureConfigDefaults(config AppConfig) AppConfig {
 	} else if config.Footer.Icon == "" {
 		config.Footer.Icon = defaultFooterConfig().Icon
 	}
+	if config.Footer.Alignment == "" {
+		config.Footer.Alignment = defaultFooterConfig().Alignment
+	}
+	if config.Appearance.Brand == "" && config.Appearance.ArtStyle == "" {
+		config.Appearance = defaultAppearanceConfig()
+	} else {
+		if config.Appearance.Brand == "" {
+			config.Appearance.Brand = defaultAppearanceConfig().Brand
+		}
+		if config.Appearance.ArtStyle == "" {
+			config.Appearance.ArtStyle = defaultAppearanceConfig().ArtStyle
+		}
+		if config.Appearance.MarkerStyle == "" {
+			config.Appearance.MarkerStyle = defaultAppearanceConfig().MarkerStyle
+		}
+	}
 	return config
 }
 
@@ -507,8 +527,9 @@ func defaultConfig() AppConfig {
 		Providers: map[string]ProviderConfig{
 			"github": {Enabled: true, Host: "github.com", Protocol: "auto"},
 		},
-		AutoSync: AutoSyncConfig{IntervalSeconds: 15},
-		Footer:   defaultFooterConfig(),
+		AutoSync:   AutoSyncConfig{IntervalSeconds: 15},
+		Appearance: defaultAppearanceConfig(),
+		Footer:     defaultFooterConfig(),
 	}
 }
 

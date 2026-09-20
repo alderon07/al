@@ -66,6 +66,7 @@ func runRepoPicker(only string) error {
 	theme, _ := loadTheme()
 	applyTheme(theme)
 	applyFooterConfig(config.Footer)
+	applyAppearanceConfig(config.Appearance)
 	program := tea.NewProgram(repoPickerModel{repos: repos, config: config, provider: provider, warnings: warnings, width: 80, height: 24, ctx: ctx}, tea.WithAltScreen())
 	finished, err := program.Run()
 	if err != nil {
@@ -135,15 +136,20 @@ func (m repoPickerModel) View() string {
 	if m.cursor >= len(filtered) {
 		m.cursor = max(0, len(filtered)-1)
 	}
-	brand := brandStyle.Render("ALIAS LENS")
+	brand := ""
+	if label := compactBrandLabel(); label != "" {
+		brand = brandStyle.Render(label)
+	}
 	pickerTitle := titleStyle.Render("Choose a remote repository")
 	if contentWidth >= 52 {
-		brand = pixelIconLabel(iconBrand, "ALIAS LENS", brandStyle)
 		pickerTitle = pixelIconLabel(iconRepository, "Choose a remote repository", titleStyle)
 	}
-	header := brand + "  " + pickerTitle
+	header := pickerTitle
+	if brand != "" {
+		header = brand + "  " + pickerTitle
+	}
 	subtitle := dimStyle.Render(fmt.Sprintf("%d writable repositories across configured providers", len(m.repos)))
-	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(renderPixelIcon(iconSearch)) + " " + searchText(m.query))
+	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconSearch)) + searchText(m.query))
 
 	var list strings.Builder
 	visible := max(1, m.height-12)

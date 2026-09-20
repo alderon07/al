@@ -19,7 +19,7 @@ This specification is complete when it does all of the following:
 
 ## The identity in one sentence
 
-Alias Lens is a compact command instrument: dark terminal chrome, a bright phosphor signal, small pixel marks, and plain language that keeps the user's aliases in focus.
+Alias Lens is a compact command instrument: dark terminal chrome, a bright phosphor signal, focused terminal art, readable symbols, and plain language that keeps the user's aliases in focus.
 
 The interface should feel native to a terminal, not like a web dashboard drawn with box characters. It uses color and character, but it stays quiet enough for commands and alias names to dominate.
 
@@ -32,14 +32,14 @@ These traits are the product's visual signature. A redesign that removes most of
 | Dark working field | The default theme uses a near-black green background with low-contrast panels. | Bright content reads as a terminal signal instead of app chrome. |
 | Phosphor accent | The default accent is `#B8FF6A`. It marks the brand, focus, primary names, and positive status. | This is the strongest recognition cue in the TUI. |
 | Cyan action channel | Cyan marks commands, paths, and the actionable words in control hints. | It separates "what this is" from "what you can do." |
-| Pixel marks | Headings use the 4 by 2 bitmap icon family rendered in one terminal row. | The marks add a small, handmade signature without consuming vertical space. |
+| Focused terminal art | A three-row mark appears only in spacious welcome and empty states. Headings use configurable one-cell symbols or ASCII. | The art keeps a handmade signature without turning dense screens into block fragments. |
 | Left-edge selection | Cards and command blocks use a thick left border. The active border changes to the accent color. | Focus remains visible without filling a whole card with color. |
 | Command-first hierarchy | Alias name, description, then command form the scan order. | The user's content remains more important than the application frame. |
 | Keyboard footer | The current controls remain visible near the bottom. | The interface teaches itself while preserving fast keyboard use. |
 | Human footer | Interactive pages end with the configured maker credit. | The small personal note is part of the product's voice. |
 | Text with every symbol | Icons, colors, and badges always have a nearby text equivalent. | Meaning remains available with limited color or glyph support. |
 
-The terminal-prompt lens logo remains the product mark. The full SVG can use its blue-to-teal gradient outside the TUI. Inside the TUI, `iconBrand` translates the mark into the pixel system and the active theme. Do not place a multicolor raster or sixel logo in the standard TUI header.
+The terminal-prompt lens logo remains the product mark. The full SVG can use its blue-to-teal gradient outside the TUI. Inside the TUI, the full terminal mark gets several rows and appears only when there is room. Standard headers use the configured brand label or compact mark. Do not place a multicolor raster or sixel logo in the standard TUI header.
 
 ## What can change
 
@@ -48,7 +48,7 @@ Evolution is expected. Keep the core traits above and use this change budget.
 | Safe to change | Change with a design review | Do not change as part of routine feature work |
 | --- | --- | --- |
 | Copy length and wording | Card density or vertical rhythm | The Phosphor default as the starting identity |
-| Additional semantic icons | Search-field geometry | The pixel-icon construction |
+| Additional semantic markers | Search-field geometry | The full terminal-mark silhouette |
 | Theme presets | Header information order | The left-edge active-selection pattern |
 | Responsive omissions | Global page anatomy | Keyboard-first operation |
 | Chart forms and empty-state content | Semantic meaning of a color role | The visible brand name |
@@ -192,33 +192,32 @@ Write compact, literal copy. Name the object and the action. Prefer `Could not s
 
 Use `…` only for truncated content or an operation in progress. Use `·` to separate parallel metadata and footer controls. Do not use decorative ASCII banners, gradients made from characters, or emoji in product controls. A user-configured footer emoji is the exception.
 
-## Pixel icon system
+## Terminal art and marker system
 
-Each built-in icon is a 4-column by 2-row bitmap. The renderer combines the two bitmap rows into one terminal row with `█`, `▀`, and `▄`. Every rendered icon therefore occupies exactly four cells.
+The full brand mark is a deliberate three-row composition used only on spacious welcome and empty states. Dense headings and rows use a semantic marker followed by a text label. The user can choose `symbols`, `ascii`, or `none`; the default is `symbols`.
 
-Follow these rules when adding an icon:
+Follow these rules when adding a marker:
 
-- Draw it on the existing 4 by 2 grid.
-- Test its rendered cell width.
+- Provide one ordinary Unicode symbol and one ASCII fallback.
+- Keep the symbol to one terminal cell when practical and test its rendered width.
 - Give it one stable semantic name.
 - Place a text label after it in headings and status content.
-- Use the icon at the current text color unless the icon carries a defined semantic state.
-- Do not put icons in every row. The alias-card command and exceptional metadata are enough.
+- Use the marker at the current text color unless it carries a defined semantic state.
+- Do not put markers in every row. The alias-card command and exceptional metadata are enough.
 - Do not use Nerd Font, private-use, or font-specific glyphs in the default interface.
 
-Icons aid scanning. They never replace words, arrows, or keyboard labels.
+Markers aid scanning. They never replace words, arrows, or keyboard labels. The old 4 by 2 bitmap renderer remains available only for a footer icon explicitly selected by the user.
 
 ### Icon construction specification
 
 | ID | Requirement | Exact rule |
 | --- | --- | --- |
-| `ICON-01` | Source grid | Store two strings of four cells. `#` means filled and `.` means empty. |
-| `ICON-02` | Output grid | Combine the two source rows into one row of four terminal cells. |
-| `ICON-03` | Character map | Both filled becomes `█`; top only becomes `▀`; bottom only becomes `▄`; neither becomes a space. |
-| `ICON-04` | Label spacing | Put exactly one plain space between a heading icon and its text label. |
-| `ICON-05` | Text alternative | A semantic icon must share its line with a label, except a favorite mark whose alias metadata exposes the same state. |
-| `ICON-06` | Compatibility | Built-in icons must use standard block characters. Nerd Font and private-use glyphs are forbidden. |
-| `ICON-07` | Density | A normal heading may contain one icon. A card may contain command, function, favorite, and health icons only when those states exist. |
+| `ICON-01` | Marker choices | Every semantic marker provides a symbol and ASCII form and can be hidden. |
+| `ICON-02` | Label spacing | Put exactly one plain space between a heading marker and its text label. |
+| `ICON-03` | Text alternative | A semantic marker must share its line with a label, except a favorite mark whose alias metadata exposes the same state. |
+| `ICON-04` | Compatibility | Built-in symbols use ordinary Unicode. Nerd Font and private-use glyphs are forbidden. |
+| `ICON-05` | Density | A normal heading may contain one marker. A card may contain command, function, favorite, and health markers only when those states exist. |
+| `ICON-06` | Full art | Use the multirow brand mark only in a spacious welcome or empty state. |
 | `ICON-08` | Custom footer icon | Accept a named icon, `none`, one visible grapheme after `emoji:`, or a valid 4 by 2 bitmap. Reject controls and multiline values. |
 
 ## Components
@@ -227,7 +226,7 @@ The measurements below describe the rendered component, excluding the page's out
 
 ### Brand header
 
-Render the pixel brand mark and `ALIAS LENS` as dark text on the accent background. At widths below 48 content cells, omit the icon but keep the brand block. Follow the brand with the active alias-file path in `Secondary`, then alias and issue counts in `Muted`.
+Render the configured brand label in the accent block. The `compact` choice adds a one-row mark; `text` and `full` use the label alone in standard headers; `none` hides the brand block. Follow the brand with the active alias-file path in `Secondary`, then alias and issue counts in `Muted`.
 
 Keep the header to one line. Truncate low-priority details before the path or brand.
 
@@ -236,8 +235,8 @@ Keep the header to one line. Truncate low-priority details before the path or br
 | Height | Exactly one row. |
 | Brand padding | One cell at the left and right inside the accent background. |
 | Brand label | `ALIAS LENS`, uppercase and bold. |
-| Wide form | Pixel brand, one space, brand label. |
-| Narrow form | Brand label without the pixel icon when content is below 48 cells. |
+| Wide form | Configured compact mark and label, or label alone. |
+| Narrow form | Configured label when visible. |
 | Gap after brand | Two spaces. |
 | Path | Active Bash or Zsh alias display path in `Secondary`. |
 | Details | Two spaces, `•`, two spaces, then each muted count. |
@@ -371,7 +370,7 @@ Place context-specific controls first. Show global navigation on a second line o
 
 Separate controls with two spaces, `·`, and two spaces. Use the platform's configured shortcut labels. Do not claim that a shortcut works if the terminal or active mode cannot deliver it.
 
-Center the maker credit on the last available line. Render its text in `Muted` and its icon in coral. User customization can change the text and icon, but not move the credit above the control footer.
+Place the maker credit on the last available line. Render its text in `Muted` and its icon in coral. User customization can change the text, icon, and left, center, or right alignment, but cannot move the credit above the control footer.
 
 | ID | Requirement | Exact rule |
 | --- | --- | --- |
@@ -382,7 +381,7 @@ Center the maker credit on the last available line. Render its text in `Muted` a
 | `FOOT-05` | Narrow priority | At the narrowest width keep the primary action, `? help`, and `esc` behavior. |
 | `FOOT-06` | Global controls | Show global page navigation on the next row only at 79 content cells or wider and only outside restricted modes. |
 | `FOOT-07` | Status replacement | A transient status may replace local controls for one render, but destructive confirmation text must remain visible until resolved. |
-| `FOOT-08` | Maker position | Place the maker credit below every control and status row, centered within content width. |
+| `FOOT-08` | Maker position | Place the maker credit below every control and status row using the configured alignment. |
 | `FOOT-09` | Maker validation | Limit configured copy to 80 cells, reject controls and line breaks, and allow `{icon}` at most once. |
 | `FOOT-10` | Plain output | Never add the maker credit to noninteractive output. |
 
@@ -509,18 +508,20 @@ Purpose: preview and save a complete theme.
 - Show `showing X-Y of Z` when not all themes fit.
 - Never save on cursor movement or page navigation.
 
-### Footer settings
+### Appearance settings
 
-Purpose: edit the maker message and icon with an immediate, reversible preview.
+Purpose: personalize the brand, markers, and maker credit with an immediate, reversible preview.
 
-- Use the edit icon and `Customize the footer`.
+- Use the edit marker and `Customize appearance`.
 - State that the preview is unsaved until the user chooses Save.
-- Show exactly two dense fields: `Message` and `Icon`.
+- Show `Brand`, `Brand art`, `Markers`, `Message`, `Icon`, and `Alignment`.
+- Change Brand art, Markers, and Alignment with Left and Right choices instead of requiring typed keywords.
+- Give Brand, Message, and Icon a visible insertion cursor and normal text-editing keys.
 - Explain `{icon}` placement below `Message`.
 - List representative icon formats below `Icon`.
 - Update the pinned preview only after the candidate passes validation.
-- On cancel or global page navigation, restore the saved footer.
-- On save, use the private atomic config writer, close the page, and show `Footer saved`.
+- On cancel or global page navigation, restore the saved appearance and footer.
+- On save, use the private atomic config writer, close the page, and show `Appearance saved`.
 
 ### Add and edit form
 

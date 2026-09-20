@@ -107,13 +107,13 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | Key | Action |
 | --- | --- |
 | `↑` and `↓` | Select an alias |
-| `Enter` | Run the selected alias |
+| `Enter` | Use the selected alias |
 | `Tab` | Return the selected alias to the prompt without running it |
 | `Ctrl+A` | Add an alias |
 | `Ctrl+E` | Edit the selected alias |
 | `Ctrl+D` | Delete the selected alias after confirmation |
 | `F2` or `Ctrl+S` | Open usage stats |
-| `F3` | Customize the TUI footer |
+| `F3` | Customize the TUI appearance and footer |
 | `Ctrl+H` | Show alias health warnings |
 | `Ctrl+F` | Show tracked files and sync status |
 | `Ctrl+G` | Sync while the TUI is open |
@@ -228,7 +228,9 @@ al theme --check
 
 Moving through the picker previews each theme. Press `Enter` to save it or `Esc` to keep the previous theme.
 
-Customize the credit at the bottom of the TUI:
+Press `F3` in the TUI to personalize the brand name, brand art, interface markers, footer message, footer icon, and footer alignment. Use Left and Right to choose between full, compact, text-only, or hidden brand art; symbol, ASCII, or no markers; and left, center, or right footer alignment. The default symbol style uses ordinary Unicode characters and does not require a Nerd Font.
+
+You can also change the footer message and icon from the command line:
 
 ```bash
 al config footer-message 'Built with {icon} by Sam'

@@ -68,6 +68,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 ## Make the terminal interface easier to learn
 
 - [x] Add a searchable keyboard guide opened with `?`.
+- [x] Replace unclear bitmap chrome with selectable symbols or ASCII, focused brand art, and an editable appearance screen.
 - [x] Confirm risky aliases before execution and explain why they were flagged.
 - [x] Make alias descriptions editable from the TUI.
 - [x] Browse and restore private revisions with `Ctrl+Z`.

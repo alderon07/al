@@ -42,6 +42,7 @@ const (
 	KeyCtrlR KeyType = 18
 	KeyCtrlS KeyType = 19
 	KeyCtrlT KeyType = 20
+	KeyCtrlU KeyType = 21
 	KeyCtrlZ KeyType = 26
 )
 
@@ -105,7 +106,7 @@ func (message KeyMsg) String() string {
 		KeyPgDown: "pgdown", KeyDelete: "delete", KeyF1: "f1", KeyF2: "f2", KeyF3: "f3",
 		KeyCtrlA: "ctrl+a", KeyCtrlC: "ctrl+c", KeyCtrlD: "ctrl+d", KeyCtrlE: "ctrl+e",
 		KeyCtrlF: "ctrl+f", KeyCtrlG: "ctrl+g", KeyCtrlH: "ctrl+h", KeyCtrlN: "ctrl+n", KeyCtrlR: "ctrl+r",
-		KeyCtrlS: "ctrl+s", KeyCtrlT: "ctrl+t", KeyCtrlZ: "ctrl+z",
+		KeyCtrlS: "ctrl+s", KeyCtrlT: "ctrl+t", KeyCtrlU: "ctrl+u", KeyCtrlZ: "ctrl+z",
 	}
 	return prefix + names[message.Type]
 }
@@ -263,7 +264,7 @@ func translateKey(key tea2.Key) KeyMsg {
 func controlKeyType(code rune) (KeyType, bool) {
 	keys := map[rune]KeyType{
 		'a': KeyCtrlA, 'c': KeyCtrlC, 'd': KeyCtrlD, 'e': KeyCtrlE, 'f': KeyCtrlF,
-		'g': KeyCtrlG, 'h': KeyCtrlH, 'n': KeyCtrlN, 'r': KeyCtrlR, 's': KeyCtrlS, 't': KeyCtrlT,
+		'g': KeyCtrlG, 'h': KeyCtrlH, 'n': KeyCtrlN, 'r': KeyCtrlR, 's': KeyCtrlS, 't': KeyCtrlT, 'u': KeyCtrlU,
 		'z': KeyCtrlZ,
 	}
 	keyType, ok := keys[unicode.ToLower(code)]

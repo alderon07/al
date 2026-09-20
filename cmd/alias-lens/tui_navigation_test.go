@@ -37,7 +37,7 @@ func TestPageShortcutsWorkFromEveryPage(t *testing.T) {
 		key  tea.KeyMsg
 		page tuiPage
 	}{
-		{"help", tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}}, pageHelp},
+		{"help", tea.KeyMsg{Type: tea.KeyF1}, pageHelp},
 		{"stats", tea.KeyMsg{Type: tea.KeyF2}, pageStats},
 		{"settings", tea.KeyMsg{Type: tea.KeyF3}, pageSettings},
 		{"themes", tea.KeyMsg{Type: tea.KeyCtrlT}, pageThemes},
@@ -105,7 +105,7 @@ func TestSelectModeKeepsPageRestrictions(t *testing.T) {
 }
 
 func navigationTestModel(page tuiPage) model {
-	m := model{width: 100, height: 30, theme: builtInTheme("tokyo-night")}
+	m := model{width: 100, height: 30, theme: builtInTheme("tokyo-night"), settingsForm: appearanceForm(defaultAppearanceConfig(), defaultFooterConfig())}
 	switch page {
 	case pageHelp:
 		m.helpVisible = true
@@ -113,7 +113,7 @@ func navigationTestModel(page tuiPage) model {
 		m.statsOpen = true
 	case pageSettings:
 		m.settingsOpen = true
-		m.settingsBefore = defaultFooterConfig()
+		m.settingsBefore = appearanceSettings{Appearance: defaultAppearanceConfig(), Footer: defaultFooterConfig()}
 	case pageThemes:
 		m.themePicker = true
 		m.themeBefore = m.theme

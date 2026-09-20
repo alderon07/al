@@ -130,9 +130,10 @@ func TestFooterConfigCommandsWriteAndResetSettings(t *testing.T) {
 
 func assertMakerCredit(t *testing.T, view string) {
 	t.Helper()
-	for _, part := range []string{"Made with ", renderPixelIcon(iconHeart), " by Naqi"} {
-		if !strings.Contains(view, part) {
-			t.Fatalf("view lacks maker credit part %q:\n%s", part, view)
-		}
+	if !strings.Contains(view, "Made by Naqi") {
+		t.Fatalf("view lacks the default maker credit:\n%s", view)
+	}
+	if strings.Contains(view, renderPixelIcon(iconHeart)) {
+		t.Fatalf("default maker credit contains bitmap art:\n%s", view)
 	}
 }

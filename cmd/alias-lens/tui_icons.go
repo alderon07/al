@@ -9,25 +9,29 @@ import (
 type pixelIcon struct {
 	top    string
 	bottom string
+	symbol string
+	ascii  string
 }
 
+const aliasLensFullMark = "  ▗▄▄▄▖\n ▐▛ ◉ ▜▌\n  ▝▀▀▀▘▖"
+
 var (
-	iconAlias      = pixelIcon{"#..#", ".##."}
-	iconBrand      = pixelIcon{".##.", "####"}
-	iconCommand    = pixelIcon{"#...", ".###"}
-	iconEdit       = pixelIcon{"...#", ".##."}
-	iconFavorite   = pixelIcon{".#.#", "###."}
-	iconFunction   = pixelIcon{"#..#", ".##."}
-	iconHealth     = pixelIcon{".##.", "####"}
-	iconHeart      = pixelIcon{"#..#", ".##."}
-	iconHelp       = pixelIcon{".##.", "..#."}
-	iconHistory    = pixelIcon{"###.", "#.##"}
-	iconRepository = pixelIcon{"##..", "####"}
-	iconSearch     = pixelIcon{".##.", "..##"}
-	iconSpark      = pixelIcon{".#.#", "###."}
-	iconStats      = pixelIcon{"...#", "#.##"}
-	iconSync       = pixelIcon{"##..", "..##"}
-	iconTheme      = pixelIcon{"##..", ".##."}
+	iconAlias      = pixelIcon{"#..#", ".##.", "›", ">"}
+	iconBrand      = pixelIcon{".##.", "####", "◉", "*"}
+	iconCommand    = pixelIcon{"#...", ".###", "$", "$"}
+	iconEdit       = pixelIcon{"...#", ".##.", "✎", "~"}
+	iconFavorite   = pixelIcon{".#.#", "###.", "♥", "*"}
+	iconFunction   = pixelIcon{"#..#", ".##.", "ƒ", "f"}
+	iconHealth     = pixelIcon{".##.", "####", "!", "!"}
+	iconHeart      = pixelIcon{"#..#", ".##.", "♥", "*"}
+	iconHelp       = pixelIcon{".##.", "..#.", "?", "?"}
+	iconHistory    = pixelIcon{"###.", "#.##", "↶", "<"}
+	iconRepository = pixelIcon{"##..", "####", "◇", "#"}
+	iconSearch     = pixelIcon{".##.", "..##", "⌕", "/"}
+	iconSpark      = pixelIcon{".#.#", "###.", "✦", "*"}
+	iconStats      = pixelIcon{"...#", "#.##", "▥", "#"}
+	iconSync       = pixelIcon{"##..", "..##", "↻", "~"}
+	iconTheme      = pixelIcon{"##..", ".##.", "◐", "o"}
 )
 
 func parsePixelIcon(value string) (pixelIcon, bool) {
@@ -85,6 +89,43 @@ func renderPixelIcon(icon pixelIcon) string {
 	return rendered.String()
 }
 
+func interfaceMarker(icon pixelIcon) string {
+	switch activeAppearance.MarkerStyle {
+	case "symbols":
+		return icon.symbol
+	case "ascii":
+		return icon.ascii
+	default:
+		return ""
+	}
+}
+
+func markerPrefix(icon pixelIcon) string {
+	marker := interfaceMarker(icon)
+	if marker == "" {
+		return ""
+	}
+	return marker + " "
+}
+
 func pixelIconLabel(icon pixelIcon, label string, style lipgloss.Style) string {
-	return style.Render(renderPixelIcon(icon) + " " + label)
+	return style.Render(markerPrefix(icon) + label)
+}
+
+func compactBrandLabel() string {
+	switch activeAppearance.ArtStyle {
+	case "none":
+		return ""
+	case "compact":
+		return "▗◉▖ " + activeAppearance.Brand
+	default:
+		return activeAppearance.Brand
+	}
+}
+
+func fullBrandMark() string {
+	if activeAppearance.ArtStyle != "full" {
+		return ""
+	}
+	return lipgloss.NewStyle().Bold(true).Foreground(acidColor).Render(aliasLensFullMark)
 }

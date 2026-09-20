@@ -76,7 +76,11 @@ func (m model) tourView(width, height, contentWidth int, header string) string {
 		aliasStyle.Render(primaryShortcutLabel(m.shortcutProfile, shortcutThemes)) + dimStyle.Render("  Preview and save a dark theme"),
 		aliasStyle.Render(primaryShortcutLabel(m.shortcutProfile, shortcutHelp)) + dimStyle.Render("  Open the searchable keyboard guide"),
 	}
-	body := pixelIconLabel(iconBrand, "Alias Lens is ready.", titleStyle) +
+	body := ""
+	if mark := fullBrandMark(); mark != "" && height >= 24 {
+		body = mark + "\n"
+	}
+	body += pixelIconLabel(iconBrand, "Alias Lens is ready.", titleStyle) +
 		"\n" + dimStyle.Render("Four keys are enough to get started.") +
 		"\n\n" + strings.Join(steps, "\n\n")
 	footer := aliasStyle.Render("enter") + dimStyle.Render(" start  ·  ") + aliasStyle.Render("?") + dimStyle.Render(" full guide  ·  esc dismiss")
