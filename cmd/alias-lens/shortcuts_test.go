@@ -329,6 +329,25 @@ func TestPreferredSettingsShortcutTogglesSettingsPage(t *testing.T) {
 	}
 }
 
+func TestPreferredControlPunctuationOpensPages(t *testing.T) {
+	tests := []struct {
+		name string
+		key  tea.KeyMsg
+		page tuiPage
+	}{
+		{name: "help", key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'?'}, Ctrl: true, Shift: true}, page: pageHelp},
+		{name: "settings", key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}, Ctrl: true}, page: pageSettings},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			page, ok := pageForShortcut(test.key, shortcutLinux)
+			if !ok || page != test.page {
+				t.Fatalf("pageForShortcut(%s) = %d, %t, want %d, true", test.key.String(), page, ok, test.page)
+			}
+		})
+	}
+}
+
 func TestUnassignedCommandKeysDoNotBecomeText(t *testing.T) {
 	key := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}, Super: true}
 	browser, _ := (model{query: "git", shortcutProfile: shortcutMacOS}).Update(key)

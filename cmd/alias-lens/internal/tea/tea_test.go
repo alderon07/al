@@ -16,7 +16,7 @@ func TestTranslateV2Keys(t *testing.T) {
 		{name: "ctrl", key: tea2.Key{Code: 'g', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyCtrlG}},
 		{name: "unknown ctrl", key: tea2.Key{Code: 'x', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'x'}, Ctrl: true}},
 		{name: "control punctuation", key: tea2.Key{Code: ',', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyRunes, Runes: []rune{','}, Ctrl: true}},
-		{name: "control shifted punctuation", key: tea2.Key{Code: '?', Mod: tea2.ModCtrl | tea2.ModShift}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'?'}, Ctrl: true, Shift: true}},
+		{name: "control shifted punctuation", key: tea2.Key{Code: '/', ShiftedCode: '?', Mod: tea2.ModCtrl | tea2.ModShift}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'?'}, Ctrl: true, Shift: true}},
 		{name: "command", key: tea2.Key{Code: 'n', Mod: tea2.ModSuper}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'n'}, Super: true}},
 		{name: "meta is not command", key: tea2.Key{Code: 'n', Mod: tea2.ModMeta}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'n'}, Meta: true}},
 		{name: "command shift", key: tea2.Key{Code: 's', Mod: tea2.ModSuper | tea2.ModShift}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'s'}, Shift: true, Super: true}},

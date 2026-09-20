@@ -286,6 +286,9 @@ func translateKey(key tea2.Key) KeyMsg {
 		return KeyMsg{Type: keyType, Alt: alt, Ctrl: ctrl, Meta: meta, Shift: shift, Super: super}
 	}
 	text := key.Text
+	if text == "" && shift && key.ShiftedCode > 0 {
+		text = string(key.ShiftedCode)
+	}
 	if text == "" && key.Code >= 0 {
 		text = string(key.Code)
 	}

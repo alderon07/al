@@ -7,6 +7,7 @@
 - The macOS profile uses Command shortcuts for new, settings, refresh, save, undo, and help. It does not repurpose a standard Command shortcut for an unrelated action.
 - App-specific pages use `F2` through `F8`. Each page keeps one unmodified function-key binding that works in a legacy terminal.
 - Every action has a terminal-safe binding. A profile remains usable when the user selects it on a different operating system or when the terminal does not send Command or modified punctuation keys.
+- Enhanced terminal reports preserve the shifted printable character, so `Ctrl+?` opens help and `Ctrl+,` opens settings when the terminal reports those modifiers.
 - `Delete` removes the selected alias only when the search field is empty. `Backspace` and `Delete` continue to edit nonempty search text.
 - Forms, confirmations, and text fields handle input before global shortcuts.
 - Pasted text and unassigned modified keys do not invoke an action or enter text.
