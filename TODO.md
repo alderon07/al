@@ -58,6 +58,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 - [x] Add `al doctor` checks for installation, shell loading, Git, repository access, providers, and SSH.
 - [x] Add a first-run setup command that installs the shell integration safely.
+- [x] Verify local installs and tell open TUI sessions when the executable changes.
 
 ## Keep documentation accurate
 

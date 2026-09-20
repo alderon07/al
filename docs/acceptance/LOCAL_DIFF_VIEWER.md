@@ -62,7 +62,7 @@ The viewer is available through `al catalog diff --web` or an equivalent catalog
 
 - `npm audit --omit=dev` reported no known vulnerabilities on 2026-09-19.
 - The production bundle is 2,729,339 bytes after limiting syntax data to the JSON language used by catalog comparisons. The initial all-language bundle was 10,805,362 bytes.
-- A Linux amd64 release build is 18,195,854 bytes, compared with 14,860,286 bytes at `HEAD` before this work: an increase of 3,335,568 bytes (22.4%). This is a release tradeoff to review, not a claim that manual browser evidence is complete.
+- A Linux amd64 release build is 18,205,991 bytes, compared with 14,860,286 bytes at `HEAD` before this work: an increase of 3,345,705 bytes (22.5%). This is a release tradeoff to review, not a claim that manual browser evidence is complete.
 
 ## Deferred behavior
 

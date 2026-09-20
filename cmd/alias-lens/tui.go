@@ -38,57 +38,59 @@ var (
 )
 
 type model struct {
-	aliases         []Alias
-	query           string
-	cursor          int
-	width           int
-	height          int
-	status          string
-	theme           Theme
-	themePicker     bool
-	themeCursor     int
-	themeBefore     Theme
-	settingsOpen    bool
-	settingsField   int
-	settingsForm    [2]string
-	settingsBefore  FooterConfig
-	helpVisible     bool
-	helpQuery       string
-	statsOpen       bool
-	statsData       statsData
-	statsPeriod     int
-	statsViewIndex  int
-	statsSelected   int
-	statsNow        time.Time
-	statsErr        string
-	tourVisible     bool
-	adding          bool
-	field           int
-	form            [5]string
-	editingName     string
-	editingMetadata EntryMetadata
-	deleteName      string
-	runConfirm      *Alias
-	revisionOpen    bool
-	revisionCursor  int
-	revisionConfirm bool
-	revisions       []Revision
-	revisionErr     string
-	healthOnly      bool
-	trackedOnly     bool
-	tracked         []trackedFileItem
-	trackedRepo     string
-	trackedErr      string
-	autoSyncEnabled bool
-	syncInterval    int
-	primarySync     trackedFileItem
-	selectMode      bool
-	executeMode     bool
-	selected        *Alias
-	editSelection   bool
-	cursorHidden    bool
-	terminalBlurred bool
-	shortcutProfile ShortcutProfile
+	aliases           []Alias
+	query             string
+	cursor            int
+	width             int
+	height            int
+	status            string
+	theme             Theme
+	themePicker       bool
+	themeCursor       int
+	themeBefore       Theme
+	settingsOpen      bool
+	settingsField     int
+	settingsForm      [2]string
+	settingsBefore    FooterConfig
+	helpVisible       bool
+	helpQuery         string
+	statsOpen         bool
+	statsData         statsData
+	statsPeriod       int
+	statsViewIndex    int
+	statsSelected     int
+	statsNow          time.Time
+	statsErr          string
+	tourVisible       bool
+	adding            bool
+	field             int
+	form              [5]string
+	editingName       string
+	editingMetadata   EntryMetadata
+	deleteName        string
+	runConfirm        *Alias
+	revisionOpen      bool
+	revisionCursor    int
+	revisionConfirm   bool
+	revisions         []Revision
+	revisionErr       string
+	healthOnly        bool
+	trackedOnly       bool
+	tracked           []trackedFileItem
+	trackedRepo       string
+	trackedErr        string
+	autoSyncEnabled   bool
+	syncInterval      int
+	primarySync       trackedFileItem
+	selectMode        bool
+	executeMode       bool
+	selected          *Alias
+	editSelection     bool
+	cursorHidden      bool
+	terminalBlurred   bool
+	shortcutProfile   ShortcutProfile
+	executableWatch   executableWatch
+	executableUpdated bool
 }
 
 type cursorBlinkMsg struct{}
@@ -155,7 +157,7 @@ func runTUI() {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status, executeMode: true, tourVisible: tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config)}, options...).Run()
+	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status, executeMode: true, tourVisible: tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}, options...).Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Alias Lens could not start:", err)
 		return
@@ -226,7 +228,7 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config)}
+	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}
 	finished, err := tea.NewProgram(initial, options...).Run()
 	if err != nil {
 		return err
@@ -256,6 +258,9 @@ func blinkCursor() tea.Cmd {
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
 	case cursorBlinkMsg:
+		if !m.executableUpdated && m.executableWatch.changed() {
+			m.executableUpdated = true
+		}
 		if m.searchFocused() {
 			m.cursorHidden = !m.cursorHidden
 		} else {
@@ -547,6 +552,10 @@ func (m model) View() string {
 		brand = pixelIconLabel(iconBrand, "ALIAS LENS", brandStyle)
 	}
 	header := brand + "  " + lipgloss.NewStyle().Foreground(cyanColor).Render(aliasDisplayPath()) + dimStyle.Render(headerDetails)
+	if m.executableUpdated {
+		notice := wrapText("Alias Lens was updated. Close this screen, then enter al again.", contentWidth)
+		header += "\n" + lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(notice)
+	}
 	title := pixelIconLabel(iconSearch, "Find the shortcut before you forget it.", titleStyle) + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
 	if m.selectMode {
 		title = pixelIconLabel(iconAlias, "Choose an alias to use in your shell.", titleStyle) + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
