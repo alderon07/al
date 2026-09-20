@@ -503,6 +503,12 @@ func ensureConfigDefaults(config AppConfig) AppConfig {
 	if config.Footer.Alignment == "" {
 		config.Footer.Alignment = defaultFooterConfig().Alignment
 	}
+	if config.Footer.Tone == "" {
+		config.Footer.Tone = defaultFooterConfig().Tone
+	}
+	if config.Footer.Rule == "" {
+		config.Footer.Rule = defaultFooterConfig().Rule
+	}
 	if config.Appearance.Brand == "" && config.Appearance.ArtStyle == "" {
 		config.Appearance = defaultAppearanceConfig()
 	} else {

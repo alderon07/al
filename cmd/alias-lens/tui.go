@@ -50,8 +50,8 @@ type model struct {
 	themeBefore       Theme
 	settingsOpen      bool
 	settingsField     int
-	settingsForm      [6]string
-	settingsCursor    [6]int
+	settingsForm      [settingsFieldCount]string
+	settingsCursor    [settingsFieldCount]int
 	settingsBefore    appearanceSettings
 	helpVisible       bool
 	helpQuery         string
@@ -521,8 +521,8 @@ func (m *model) closePages() {
 	m.statsOpen = false
 	m.settingsOpen = false
 	m.settingsField = 0
-	m.settingsForm = [6]string{}
-	m.settingsCursor = [6]int{}
+	m.settingsForm = [settingsFieldCount]string{}
+	m.settingsCursor = [settingsFieldCount]int{}
 	m.settingsBefore = appearanceSettings{}
 	m.themePicker = false
 	m.revisionOpen = false

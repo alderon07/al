@@ -8,12 +8,18 @@ import (
 )
 
 const (
-	settingsBrand = iota
-	settingsArtStyle
-	settingsMarkerStyle
-	settingsMessage
+	settingsMessage = iota
 	settingsIcon
 	settingsAlignment
+	settingsTone
+	settingsRule
+	settingsFieldCount
+)
+
+const (
+	settingsSave = settingsFieldCount + iota
+	settingsCancel
+	settingsRowCount
 )
 
 type appearanceSettings struct {
@@ -24,13 +30,13 @@ type appearanceSettings struct {
 func (m *model) openFooterSettings() {
 	config, err := loadConfig()
 	if err != nil {
-		m.status = "Could not open appearance settings: " + err.Error()
+		m.status = "Could not open footer settings: " + err.Error()
 		return
 	}
 	m.settingsOpen = true
 	m.settingsField = 0
 	m.settingsBefore = appearanceSettings{Appearance: config.Appearance, Footer: config.Footer}
-	m.settingsForm = [6]string{config.Appearance.Brand, config.Appearance.ArtStyle, config.Appearance.MarkerStyle, config.Footer.Message, config.Footer.Icon, config.Footer.Alignment}
+	m.settingsForm = [settingsFieldCount]string{config.Footer.Message, config.Footer.Icon, config.Footer.Alignment, config.Footer.Tone, config.Footer.Rule}
 	for index, value := range m.settingsForm {
 		m.settingsCursor[index] = footerGraphemeCount(value)
 	}
@@ -64,76 +70,87 @@ func (m model) updateFooterSettings(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		applyFooterConfig(m.settingsBefore.Footer)
 		return m, tea.Quit
 	case tea.KeyEsc:
-		applyAppearanceConfig(m.settingsBefore.Appearance)
-		applyFooterConfig(m.settingsBefore.Footer)
-		m.settingsOpen = false
-		m.settingsBefore = appearanceSettings{}
-		m.settingsForm = [6]string{}
-		m.settingsCursor = [6]int{}
-		m.status = "Appearance unchanged"
-		return m, nil
+		return m.cancelFooterSettings()
 	case tea.KeyTab, tea.KeyDown:
-		m.settingsField = (m.settingsField + 1) % len(m.settingsForm)
+		m.settingsField = (m.settingsField + 1) % settingsRowCount
 	case tea.KeyShiftTab, tea.KeyUp:
-		m.settingsField = (m.settingsField + len(m.settingsForm) - 1) % len(m.settingsForm)
+		m.settingsField = (m.settingsField + settingsRowCount - 1) % settingsRowCount
 	case tea.KeyEnter:
-		if m.settingsField == len(m.settingsForm)-1 {
+		switch m.settingsField {
+		case settingsSave:
 			return m.saveFooterSettings()
+		case settingsCancel:
+			return m.cancelFooterSettings()
+		default:
+			m.settingsField++
 		}
-		m.settingsField++
 	case tea.KeyLeft:
-		if choices := settingsFieldChoices(m.settingsField); len(choices) > 0 {
+		if m.settingsField == settingsSave || m.settingsField == settingsCancel {
+			m.settingsField = settingsSave + (m.settingsField-settingsSave+1)%2
+		} else if choices := settingsFieldChoices(m.settingsField); len(choices) > 0 {
 			m.settingsForm[m.settingsField] = cycleSettingChoice(m.settingsForm[m.settingsField], choices, -1)
-		} else {
+		} else if isSettingsValueField(m.settingsField) {
 			m.settingsCursor[m.settingsField] = max(0, m.settingsCursor[m.settingsField]-1)
 		}
 	case tea.KeyRight:
-		if choices := settingsFieldChoices(m.settingsField); len(choices) > 0 {
+		if m.settingsField == settingsSave || m.settingsField == settingsCancel {
+			m.settingsField = settingsSave + (m.settingsField-settingsSave+1)%2
+		} else if choices := settingsFieldChoices(m.settingsField); len(choices) > 0 {
 			m.settingsForm[m.settingsField] = cycleSettingChoice(m.settingsForm[m.settingsField], choices, 1)
-		} else {
+		} else if isSettingsValueField(m.settingsField) {
 			m.settingsCursor[m.settingsField] = min(footerGraphemeCount(m.settingsForm[m.settingsField]), m.settingsCursor[m.settingsField]+1)
 		}
 	case tea.KeyHome:
+		if !isSettingsValueField(m.settingsField) {
+			return m, nil
+		}
 		if choices := settingsFieldChoices(m.settingsField); len(choices) > 0 {
 			m.settingsForm[m.settingsField] = choices[0]
 		} else {
 			m.settingsCursor[m.settingsField] = 0
 		}
 	case tea.KeyEnd:
+		if !isSettingsValueField(m.settingsField) {
+			return m, nil
+		}
 		if choices := settingsFieldChoices(m.settingsField); len(choices) > 0 {
 			m.settingsForm[m.settingsField] = choices[len(choices)-1]
 		} else {
 			m.settingsCursor[m.settingsField] = footerGraphemeCount(m.settingsForm[m.settingsField])
 		}
 	case tea.KeyCtrlU:
-		if len(settingsFieldChoices(m.settingsField)) > 0 {
+		if !isSettingsValueField(m.settingsField) || len(settingsFieldChoices(m.settingsField)) > 0 {
 			return m, nil
 		}
 		m.settingsForm[m.settingsField] = ""
 		m.settingsCursor[m.settingsField] = 0
 	case tea.KeyBackspace:
-		if len(settingsFieldChoices(m.settingsField)) > 0 {
+		if !isSettingsValueField(m.settingsField) || len(settingsFieldChoices(m.settingsField)) > 0 {
 			return m, nil
 		}
 		m.settingsForm[m.settingsField], m.settingsCursor[m.settingsField] = deleteFooterGrapheme(
 			m.settingsForm[m.settingsField], m.settingsCursor[m.settingsField], true,
 		)
 	case tea.KeyDelete:
-		if len(settingsFieldChoices(m.settingsField)) > 0 {
+		if !isSettingsValueField(m.settingsField) || len(settingsFieldChoices(m.settingsField)) > 0 {
 			return m, nil
 		}
 		m.settingsForm[m.settingsField], m.settingsCursor[m.settingsField] = deleteFooterGrapheme(
 			m.settingsForm[m.settingsField], m.settingsCursor[m.settingsField], false,
 		)
 	case tea.KeySpace:
-		if !acceptsTextInput(message) || len(settingsFieldChoices(m.settingsField)) > 0 {
+		if choices := settingsFieldChoices(m.settingsField); len(choices) > 0 {
+			m.settingsForm[m.settingsField] = cycleSettingChoice(m.settingsForm[m.settingsField], choices, 1)
+			break
+		}
+		if !isSettingsValueField(m.settingsField) || !acceptsTextInput(message) {
 			return m, nil
 		}
 		m.settingsForm[m.settingsField], m.settingsCursor[m.settingsField] = insertFooterText(
 			m.settingsForm[m.settingsField], m.settingsCursor[m.settingsField], " ",
 		)
 	case tea.KeyRunes:
-		if !acceptsTextInput(message) || len(settingsFieldChoices(m.settingsField)) > 0 {
+		if !isSettingsValueField(m.settingsField) || !acceptsTextInput(message) || len(settingsFieldChoices(m.settingsField)) > 0 {
 			return m, nil
 		}
 		m.settingsForm[m.settingsField], m.settingsCursor[m.settingsField] = insertFooterText(
@@ -146,26 +163,35 @@ func (m model) updateFooterSettings(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func isSettingsValueField(field int) bool {
+	return field >= settingsMessage && field < settingsFieldCount
+}
+
 func settingsFieldChoices(field int) []string {
 	switch field {
-	case settingsArtStyle:
-		return []string{"full", "compact", "text", "none"}
-	case settingsMarkerStyle:
-		return []string{"symbols", "ascii", "none"}
+	case settingsIcon:
+		return []string{"none", "heart", "spark", "brand", "alias", "command", "stats", "sync", "theme"}
 	case settingsAlignment:
 		return []string{"left", "center", "right"}
+	case settingsTone:
+		return []string{"quiet", "accent", "bright"}
+	case settingsRule:
+		return []string{"none", "thin", "dots"}
 	default:
 		return nil
 	}
 }
 
 func cycleSettingChoice(current string, choices []string, direction int) string {
-	index := 0
+	index := -1
 	for choiceIndex, choice := range choices {
 		if choice == current {
 			index = choiceIndex
 			break
 		}
+	}
+	if index < 0 {
+		return choices[0]
 	}
 	index = (index + direction + len(choices)) % len(choices)
 	return choices[index]
@@ -189,10 +215,12 @@ func (m model) saveFooterSettings() (tea.Model, tea.Cmd) {
 	appearance, footer := m.appearanceCandidates()
 	if err := validateAppearanceConfig(appearance); err != nil {
 		m.status = err.Error()
+		m.settingsField = invalidAppearanceField(appearance)
 		return m, nil
 	}
 	if err := validateFooterConfig(footer); err != nil {
 		m.status = err.Error()
+		m.settingsField = invalidFooterField(footer)
 		return m, nil
 	}
 	config, err := loadConfig()
@@ -202,22 +230,62 @@ func (m model) saveFooterSettings() (tea.Model, tea.Cmd) {
 		err = saveConfig(config)
 	}
 	if err != nil {
-		m.status = "Could not save appearance settings: " + err.Error()
+		m.status = "Could not save footer settings: " + err.Error()
 		return m, nil
 	}
 	applyAppearanceConfig(appearance)
 	applyFooterConfig(footer)
 	m.settingsOpen = false
 	m.settingsBefore = appearanceSettings{}
-	m.settingsForm = [6]string{}
-	m.settingsCursor = [6]int{}
-	m.status = "Appearance saved"
+	m.settingsForm = [settingsFieldCount]string{}
+	m.settingsCursor = [settingsFieldCount]int{}
+	m.status = "Footer saved"
 	return m, nil
 }
 
+func (m model) cancelFooterSettings() (tea.Model, tea.Cmd) {
+	applyAppearanceConfig(m.settingsBefore.Appearance)
+	applyFooterConfig(m.settingsBefore.Footer)
+	m.settingsOpen = false
+	m.settingsBefore = appearanceSettings{}
+	m.settingsForm = [settingsFieldCount]string{}
+	m.settingsCursor = [settingsFieldCount]int{}
+	m.status = "Footer unchanged"
+	return m, nil
+}
+
+func invalidAppearanceField(config AppearanceConfig) int {
+	return settingsMessage
+}
+
+func invalidFooterField(config FooterConfig) int {
+	messageOnly := config
+	messageOnly.Icon = "none"
+	messageOnly.Alignment = "center"
+	messageOnly.Tone = "quiet"
+	messageOnly.Rule = "none"
+	if err := validateFooterConfig(messageOnly); err != nil {
+		return settingsMessage
+	}
+	if _, err := renderFooterIcon(config.Icon); err != nil {
+		return settingsIcon
+	}
+	if config.Alignment != "" && config.Alignment != "left" && config.Alignment != "center" && config.Alignment != "right" {
+		return settingsAlignment
+	}
+	if config.Tone != "" && config.Tone != "quiet" && config.Tone != "accent" && config.Tone != "bright" {
+		return settingsTone
+	}
+	return settingsRule
+}
+
 func (m model) appearanceCandidates() (AppearanceConfig, FooterConfig) {
-	appearance := AppearanceConfig{Brand: m.settingsForm[settingsBrand], ArtStyle: m.settingsForm[settingsArtStyle], MarkerStyle: m.settingsForm[settingsMarkerStyle]}
-	footer := FooterConfig{Message: m.settingsForm[settingsMessage], Icon: m.settingsForm[settingsIcon], Alignment: m.settingsForm[settingsAlignment]}
+	appearance := m.settingsBefore.Appearance
+	if validateAppearanceConfig(appearance) != nil {
+		appearance = defaultAppearanceConfig()
+	}
+	appearance.Brand = defaultAppearanceConfig().Brand
+	footer := FooterConfig{Message: m.settingsForm[settingsMessage], Icon: m.settingsForm[settingsIcon], Alignment: m.settingsForm[settingsAlignment], Tone: m.settingsForm[settingsTone], Rule: m.settingsForm[settingsRule]}
 	return appearance, footer
 }
 

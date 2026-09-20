@@ -39,7 +39,7 @@ These traits are the product's visual signature. A redesign that removes most of
 | Human footer | Interactive pages end with the configured maker credit. | The small personal note is part of the product's voice. |
 | Text with every symbol | Icons, colors, and badges always have a nearby text equivalent. | Meaning remains available with limited color or glyph support. |
 
-The terminal-prompt lens logo remains the product mark. The full SVG can use its blue-to-teal gradient outside the TUI. Inside the TUI, the full terminal mark gets several rows and appears only when there is room. Standard headers use the configured brand label or compact mark. Do not place a multicolor raster or sixel logo in the standard TUI header.
+The terminal-prompt lens logo remains the product mark. The full SVG can use its blue-to-teal gradient outside the TUI. Inside the TUI, the full terminal mark gets several rows and appears only when there is room. Standard headers use the fixed `ALIAS LENS` label or compact mark. Do not place a multicolor raster or sixel logo in the standard TUI header.
 
 ## What can change
 
@@ -206,7 +206,7 @@ Follow these rules when adding a marker:
 - Do not put markers in every row. The alias-card command and exceptional metadata are enough.
 - Do not use Nerd Font, private-use, or font-specific glyphs in the default interface.
 
-Markers aid scanning. They never replace words, arrows, or keyboard labels. The old 4 by 2 bitmap renderer remains available only for a footer icon explicitly selected by the user.
+Markers aid scanning. They never replace words, arrows, or keyboard labels. The old 4 by 2 bitmap renderer remains available only for existing footer settings. The footer editor does not offer bitmap input.
 
 ### Icon construction specification
 
@@ -218,7 +218,7 @@ Markers aid scanning. They never replace words, arrows, or keyboard labels. The 
 | `ICON-04` | Compatibility | Built-in symbols use ordinary Unicode. Nerd Font and private-use glyphs are forbidden. |
 | `ICON-05` | Density | A normal heading may contain one marker. A card may contain command, function, favorite, and health markers only when those states exist. |
 | `ICON-06` | Full art | Use the multirow brand mark only in a spacious welcome or empty state. |
-| `ICON-08` | Custom footer icon | Accept a named icon, `none`, one visible grapheme after `emoji:`, or a valid 4 by 2 bitmap. Reject controls and multiline values. |
+| `ICON-08` | Custom footer icon | Offer named icons and `none` in the footer editor. Keep existing emoji and 4 by 2 bitmap values readable for compatibility. Reject controls and multiline values. |
 
 ## Components
 
@@ -226,7 +226,7 @@ The measurements below describe the rendered component, excluding the page's out
 
 ### Brand header
 
-Render the configured brand label in the accent block. The `compact` choice adds a one-row mark; `text` and `full` use the label alone in standard headers; `none` hides the brand block. Follow the brand with the active alias-file path in `Secondary`, then alias and issue counts in `Muted`.
+Render `ALIAS LENS` in the accent block. The `compact` choice adds a one-row mark; `text` and `full` use the product name alone in standard headers; `none` hides the brand block. Follow the brand with the active alias-file path in `Secondary`, then alias and issue counts in `Muted`.
 
 Keep the header to one line. Truncate low-priority details before the path or brand.
 
@@ -510,18 +510,18 @@ Purpose: preview and save a complete theme.
 
 ### Appearance settings
 
-Purpose: personalize the brand, markers, and maker credit with an immediate, reversible preview.
+Purpose: compose the maker credit with an immediate, reversible preview.
 
-- Use the edit marker and `Customize appearance`.
+- Use the edit marker and `Compose your footer`.
 - State that the preview is unsaved until the user chooses Save.
-- Show `Brand`, `Brand art`, `Markers`, `Message`, `Icon`, and `Alignment`.
-- Change Brand art, Markers, and Alignment with Left and Right choices instead of requiring typed keywords.
-- Give Brand, Message, and Icon a visible insertion cursor and normal text-editing keys.
+- Show `Message`, `Icon`, `Alignment`, `Tone`, and `Rule`. Keep the `ALIAS LENS` product name and interface fixed.
+- Change Icon, Alignment, Tone, and Rule with Left and Right choices instead of requiring typed keywords.
+- Give Message a visible insertion cursor and normal text-editing keys.
 - Explain `{icon}` placement below `Message`.
-- List representative icon formats below `Icon`.
+- List the named icon choices below `Icon`.
 - Update the pinned preview only after the candidate passes validation.
-- On cancel or global page navigation, restore the saved appearance and footer.
-- On save, use the private atomic config writer, close the page, and show `Appearance saved`.
+- On cancel or global page navigation, restore the saved footer.
+- On save, use the private atomic config writer, close the page, and show `Footer saved`.
 
 ### Add and edit form
 

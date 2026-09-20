@@ -14,6 +14,8 @@ type FooterConfig struct {
 	Message   string `json:"message"`
 	Icon      string `json:"icon"`
 	Alignment string `json:"alignment,omitempty"`
+	Tone      string `json:"tone,omitempty"`
+	Rule      string `json:"rule,omitempty"`
 }
 
 var activeFooter = defaultFooterConfig()
@@ -31,7 +33,7 @@ func defaultAppearanceConfig() AppearanceConfig {
 }
 
 func defaultFooterConfig() FooterConfig {
-	return FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "center"}
+	return FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "center", Tone: "quiet", Rule: "none"}
 }
 
 func validateAppearanceConfig(config AppearanceConfig) error {
@@ -40,17 +42,6 @@ func validateAppearanceConfig(config AppearanceConfig) error {
 	}
 	if config.MarkerStyle != "symbols" && config.MarkerStyle != "ascii" && config.MarkerStyle != "none" {
 		return fmt.Errorf("choose symbols, ascii, or none for Markers")
-	}
-	if config.ArtStyle != "none" && strings.TrimSpace(config.Brand) == "" {
-		return fmt.Errorf("brand must contain visible text unless art style is none")
-	}
-	if lipgloss.Width(config.Brand) > 24 {
-		return fmt.Errorf("keep the brand name at 24 characters wide or fewer")
-	}
-	for _, character := range config.Brand {
-		if unicode.IsControl(character) {
-			return fmt.Errorf("brand cannot contain control characters or newlines")
-		}
 	}
 	return nil
 }
@@ -73,6 +64,12 @@ func validateFooterConfig(config FooterConfig) error {
 	if config.Alignment != "" && config.Alignment != "left" && config.Alignment != "center" && config.Alignment != "right" {
 		return fmt.Errorf("choose left, center, or right for footer alignment")
 	}
+	if config.Tone != "" && config.Tone != "quiet" && config.Tone != "accent" && config.Tone != "bright" {
+		return fmt.Errorf("choose quiet, accent, or bright for footer tone")
+	}
+	if config.Rule != "" && config.Rule != "none" && config.Rule != "thin" && config.Rule != "dots" {
+		return fmt.Errorf("choose none, thin, or dots for the footer rule")
+	}
 	return nil
 }
 
@@ -81,6 +78,7 @@ func applyAppearanceConfig(config AppearanceConfig) {
 		activeAppearance = defaultAppearanceConfig()
 		return
 	}
+	config.Brand = defaultAppearanceConfig().Brand
 	activeAppearance = config
 }
 
@@ -89,72 +87,276 @@ func applyFooterConfig(config FooterConfig) {
 		activeFooter = defaultFooterConfig()
 		return
 	}
+	if config.Tone == "" {
+		config.Tone = defaultFooterConfig().Tone
+	}
+	if config.Rule == "" {
+		config.Rule = defaultFooterConfig().Rule
+	}
 	activeFooter = config
 }
 
 func (m model) footerSettingsView(width, height, contentWidth int, header string) string {
-	labels := [6]string{"Brand", "Brand art", "Markers", "Message", "Icon", "Alignment"}
-	hints := [6]string{
-		"Your short product name, up to 24 characters wide.",
-		"Use Left or Right to choose full, compact, text, or none.",
-		"Use Left or Right to choose symbols, ascii, or none.",
-		"Use {icon} where the maker icon should appear.",
-		"Enter heart, spark, none, emoji:🚀, or #..#/.##.",
-		"Use Left or Right to choose left, center, or right.",
-	}
-	var fields strings.Builder
-	start, end := 0, len(labels)
-	compact := height < 24
+	title := pixelIconLabel(iconEdit, "Compose your footer", titleStyle)
+	subtitle := dimStyle.Render("A small signature for the bottom of Alias Lens.")
+	compact := width < 76 || height < 24
+	var workspace string
 	if compact {
-		start = max(0, m.settingsField-1)
-		end = min(len(labels), start+3)
-		start = max(0, end-3)
+		workspace = m.compactAppearanceEditor(contentWidth)
+	} else {
+		formWidth := max(48, min(62, contentWidth*3/5))
+		previewWidth := max(28, contentWidth-formWidth-2)
+		workspace = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			m.appearanceControlPanel(formWidth),
+			"  ",
+			m.appearancePreviewPanel(previewWidth),
+		)
 	}
-	for index := start; index < end; index++ {
-		marker := "  "
-		style := lipgloss.NewStyle().Width(contentWidth-2).Padding(0, 1).Foreground(mutedColor)
-		if index == m.settingsField {
-			marker = "▶ "
-			style = style.Foreground(inkColor).Background(activeColor)
-		}
-		prefix := fmt.Sprintf("%s%s: ", marker, labels[index])
-		valueWidth := max(4, contentWidth-lipgloss.Width(prefix)-4)
-		value := footerFieldValue(m.settingsForm[index], m.settingsCursor[index], index == m.settingsField, valueWidth)
-		if choices := settingsFieldChoices(index); len(choices) > 0 && index == m.settingsField {
-			value = "← " + m.settingsForm[index] + " →"
-		}
-		fields.WriteString(style.Render(prefix + value))
-		if index == m.settingsField {
-			fields.WriteString("\n" + dimStyle.Render("  "+hints[index]))
-		}
-		fields.WriteByte('\n')
-	}
-	title := pixelIconLabel(iconEdit, "Customize appearance", titleStyle)
-	if !compact {
-		title += "\n" + dimStyle.Render("The header and maker line preview here. Nothing is saved until you choose Save.")
-	}
-	controls := "Tab or Up/Down changes fields. Left/Right moves the cursor. Ctrl+U clears the field."
-	if len(settingsFieldChoices(m.settingsField)) > 0 {
-		controls = "Tab or Up/Down changes fields. Left/Right changes this choice."
-	}
-	actions := "Enter moves or saves. " + shortcutLabel(m.shortcutProfile, shortcutSave) + " saves. Esc cancels."
+	footer := dimStyle.Render(wrapText(appearanceEditorControls(m.settingsField), contentWidth))
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, subtitle, "", workspace, "", footer)
 	if compact {
-		controls = "Tab field · ←→ move · Ctrl+U clear"
-		if len(settingsFieldChoices(m.settingsField)) > 0 {
-			controls = "Tab field · ←→ choose"
-		}
-		actions = "Enter next/save · " + shortcutLabel(m.shortcutProfile, shortcutSave) + " save · Esc cancel"
+		footer = dimStyle.Render(appearanceEditorCompactControls(m.settingsField))
+		page = lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", workspace, "", footer)
 	}
-	footer := dimStyle.Render(wrapText(controls, contentWidth)) + "\n" + dimStyle.Render(wrapText(actions, contentWidth))
-	if m.status != "" {
-		footer = statusStyle.Render(wrapText(m.status, contentWidth)) + "\n" + footer
-	}
-	if navigation := pageNavigationHint(contentWidth, m.shortcutProfile); navigation != "" {
-		footer += "\n" + dimStyle.Render(navigation)
-	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", fields.String(), "", footer)
-	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+}
+
+var appearanceFieldLabels = [settingsFieldCount]string{"Message", "Icon", "Alignment", "Tone", "Rule"}
+
+var appearanceFieldHints = [settingsFieldCount]string{
+	"Use {icon} to place the selected icon.",
+	"Named icons work without a Nerd Font.",
+	"Choose where the maker line sits.",
+	"Quiet recedes, accent adds color, and bright adds contrast.",
+	"Add a thin or dotted divider above the footer.",
+}
+
+func (m model) appearanceControlPanel(width int) string {
+	innerWidth := max(20, width-4)
+	contentWidth := max(18, innerWidth-2)
+	var body strings.Builder
+	groups := []struct {
+		label  string
+		fields []int
+	}{
+		{label: "CONTENT", fields: []int{settingsMessage, settingsIcon}},
+		{label: "PRESENTATION", fields: []int{settingsAlignment, settingsTone, settingsRule}},
+	}
+	for groupIndex, group := range groups {
+		if groupIndex > 0 {
+			body.WriteString("\n")
+		}
+		body.WriteString(lipgloss.NewStyle().Bold(true).Foreground(cyanColor).Render(group.label))
+		body.WriteByte('\n')
+		for _, field := range group.fields {
+			body.WriteString(m.appearanceFieldRow(field, contentWidth))
+			body.WriteByte('\n')
+		}
+	}
+	body.WriteString("\n" + m.appearanceActionBar(contentWidth))
+	return lipgloss.NewStyle().
+		Width(innerWidth).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lineColor).
+		Padding(1).
+		Render(strings.TrimSuffix(body.String(), "\n"))
+}
+
+func (m model) appearanceFieldRow(field, width int) string {
+	focused := m.settingsField == field
+	marker := "  "
+	labelStyle := lipgloss.NewStyle().Foreground(mutedColor)
+	if focused {
+		marker = acidStyle("● ")
+		labelStyle = lipgloss.NewStyle().Bold(true).Foreground(inkColor)
+	}
+	label := labelStyle.Render(appearanceFieldLabels[field])
+	valueWidth := max(8, width-lipgloss.Width(appearanceFieldLabels[field])-5)
+	value := footerFieldValue(m.settingsForm[field], m.settingsCursor[field], focused, valueWidth)
+	if choices := settingsFieldChoices(field); len(choices) > 0 {
+		value = "‹ " + m.settingsForm[field] + " ›"
+		if !containsSettingChoice(m.settingsForm[field], choices) {
+			value = "‹ custom ›"
+		}
+	}
+	row := marker + label + strings.Repeat(" ", max(1, width-lipgloss.Width(marker+label)-lipgloss.Width(value)-1)) + value
+	if !focused {
+		return row
+	}
+	detail := appearanceFieldHints[field]
+	if choices := settingsFieldChoices(field); len(choices) > 0 {
+		detail = settingsChoiceList(m.settingsForm[field], choices)
+	}
+	row += "\n" + dimStyle.Render(wrapText("  "+detail, width))
+	if m.status != "" {
+		row += "\n" + statusStyle.Render(wrapText("  "+m.status, width))
+	}
+	return row
+}
+
+func (m model) appearanceActionBar(width int) string {
+	save := " Save changes "
+	cancel := " Cancel "
+	if m.settingsField == settingsSave {
+		save = lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(acidColor).Render(save)
+	} else {
+		save = dimStyle.Render("[" + save + "]")
+	}
+	if m.settingsField == settingsCancel {
+		cancel = lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(amberColor).Render(cancel)
+	} else {
+		cancel = dimStyle.Render(cancel)
+	}
+	bar := save + "   " + cancel
+	if m.status != "" && m.settingsField >= settingsFieldCount {
+		bar += "\n" + statusStyle.Render(wrapText(m.status, width))
+	}
+	return bar
+}
+
+func (m model) appearancePreviewPanel(width int) string {
+	innerWidth := max(20, width-4)
+	contentWidth := max(18, innerWidth-2)
+	_, footer := m.appearanceCandidates()
+	var preview strings.Builder
+	preview.WriteString(lipgloss.NewStyle().Bold(true).Foreground(cyanColor).Render("LIVE PREVIEW"))
+	preview.WriteString("\n\n")
+	headerDetails := "~/.bash_aliases  •  69 aliases"
+	renderedBrand := brandStyle.Render("ALIAS LENS")
+	detailsWidth := max(4, contentWidth-lipgloss.Width(renderedBrand)-2)
+	headerLine := renderedBrand + "  " + dimStyle.Render(truncate(headerDetails, detailsWidth))
+	preview.WriteString(headerLine)
+	preview.WriteString("\n\n")
+	preview.WriteString(dimStyle.Render("$ deploy  →  deploy staging") + "\n")
+	preview.WriteString(dimStyle.Render("$ logs    →  tail service logs") + "\n")
+	preview.WriteString(dimStyle.Render("$ clean   →  remove build output") + "\n\n")
+	preview.WriteString(renderFooterPreview(footer, contentWidth))
+	return lipgloss.NewStyle().
+		Width(innerWidth).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lineColor).
+		Padding(1).
+		Render(preview.String())
+}
+
+func (m model) compactAppearanceEditor(width int) string {
+	innerWidth := max(20, width-4)
+	contentWidth := max(18, innerWidth-2)
+	position := fmt.Sprintf("%d / %d", m.settingsField+1, settingsRowCount)
+	cardTitle := "ACTION"
+	content := m.appearanceActionBar(contentWidth)
+	if m.settingsField < settingsFieldCount {
+		cardTitle = appearanceFieldGroup(m.settingsField)
+		content = m.appearanceFieldRow(m.settingsField, contentWidth)
+	}
+	card := lipgloss.NewStyle().
+		Width(innerWidth).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lineColor).
+		Padding(0, 1).
+		Render(lipgloss.NewStyle().Bold(true).Foreground(cyanColor).Render(cardTitle) +
+			strings.Repeat(" ", max(1, contentWidth-lipgloss.Width(cardTitle)-lipgloss.Width(position)-1)) +
+			dimStyle.Render(position) + "\n\n" + content)
+	_, footer := m.appearanceCandidates()
+	preview := dimStyle.Render("PREVIEW  ") + renderFooterPreview(footer, max(12, width-9))
+	return card + "\n" + preview
+}
+
+func appearanceFieldGroup(field int) string {
+	switch field {
+	case settingsMessage, settingsIcon:
+		return "CONTENT"
+	default:
+		return "PRESENTATION"
+	}
+}
+
+func appearanceEditorControls(field int) string {
+	if field == settingsSave || field == settingsCancel {
+		return "Tab/↑↓ move  ·  ←→ switch action  ·  Enter choose  ·  Esc cancel"
+	}
+	if len(settingsFieldChoices(field)) > 0 {
+		return "Tab/↑↓ move  ·  ←→ or Space choose  ·  Enter next  ·  Esc cancel"
+	}
+	return "Tab/↑↓ move  ·  ←→ edit  ·  Ctrl+U clear  ·  Enter next  ·  Esc cancel"
+}
+
+func appearanceEditorCompactControls(field int) string {
+	if field == settingsSave || field == settingsCancel {
+		return "Tab/↑↓ move · ←→ switch · Enter choose\nEsc cancel"
+	}
+	if len(settingsFieldChoices(field)) > 0 {
+		return "Tab/↑↓ move · ←→/Space choose\nEnter next · Esc cancel"
+	}
+	return "Tab/↑↓ move · ←→ edit · Enter next\nCtrl+U clear · Esc cancel"
+}
+
+func renderFooterPreview(config FooterConfig, width int) string {
+	message := config.Message
+	if message == "" {
+		message = "(maker line hidden)"
+	}
+	if icon, err := renderFooterIcon(config.Icon); err == nil {
+		message = strings.Replace(message, footerIconToken, icon, 1)
+	}
+	alignment := lipgloss.Center
+	if config.Alignment == "left" {
+		alignment = lipgloss.Left
+	} else if config.Alignment == "right" {
+		alignment = lipgloss.Right
+	}
+	credit := footerToneStyle(config.Tone).Width(max(1, width)).Align(alignment).Render(truncate(message, width))
+	if rule := footerRule(config.Rule, width); rule != "" {
+		return rule + "\n" + credit
+	}
+	return credit
+}
+
+func footerToneStyle(tone string) lipgloss.Style {
+	switch tone {
+	case "accent":
+		return lipgloss.NewStyle().Foreground(coralColor)
+	case "bright":
+		return lipgloss.NewStyle().Bold(true).Foreground(inkColor)
+	default:
+		return dimStyle
+	}
+}
+
+func footerRule(rule string, width int) string {
+	character := ""
+	switch rule {
+	case "thin":
+		character = "─"
+	case "dots":
+		character = "·"
+	}
+	if character == "" {
+		return ""
+	}
+	return dimStyle.Render(strings.Repeat(character, max(1, width)))
+}
+
+func containsSettingChoice(value string, choices []string) bool {
+	for _, choice := range choices {
+		if value == choice {
+			return true
+		}
+	}
+	return false
+}
+
+func settingsChoiceList(current string, choices []string) string {
+	parts := make([]string, 0, len(choices))
+	for _, choice := range choices {
+		if choice == current {
+			parts = append(parts, "["+choice+"]")
+		} else {
+			parts = append(parts, choice)
+		}
+	}
+	return "Choose: " + strings.Join(parts, "  ")
 }
 
 func footerFieldValue(value string, cursor int, focused bool, width int) string {
@@ -202,9 +404,12 @@ func renderFooterIcon(value string) (string, error) {
 		}
 		return glyph, nil
 	}
+	if icon, ok := namedPixelIcon(value); ok {
+		return icon.symbol, nil
+	}
 	icon, ok := parsePixelIcon(value)
 	if !ok {
-		return "", fmt.Errorf("footer icon must be a built-in name, none, emoji:VALUE, or a 4x2 bitmap such as #..#/.##.")
+		return "", fmt.Errorf("choose a named footer icon, none, or one emoji written as emoji:VALUE")
 	}
 	return renderPixelIcon(icon), nil
 }
@@ -214,12 +419,12 @@ func makerCredit(width int) string {
 		return ""
 	}
 	parts := strings.SplitN(activeFooter.Message, footerIconToken, 2)
-	credit := dimStyle.Render(parts[0])
+	credit := parts[0]
 	if len(parts) == 2 {
 		if icon, err := renderFooterIcon(activeFooter.Icon); err == nil && icon != "" {
-			credit += lipgloss.NewStyle().Foreground(coralColor).Render(icon)
+			credit += icon
 		}
-		credit += dimStyle.Render(parts[1])
+		credit += parts[1]
 	}
 	alignment := lipgloss.Center
 	if activeFooter.Alignment == "left" {
@@ -227,7 +432,11 @@ func makerCredit(width int) string {
 	} else if activeFooter.Alignment == "right" {
 		alignment = lipgloss.Right
 	}
-	return lipgloss.NewStyle().Width(max(1, width)).Align(alignment).Render(credit)
+	credit = footerToneStyle(activeFooter.Tone).Width(max(1, width)).Align(alignment).Render(credit)
+	if rule := footerRule(activeFooter.Rule, width); rule != "" {
+		return rule + "\n" + credit
+	}
+	return credit
 }
 
 func footerWithMaker(footer string, width int) string {
@@ -245,6 +454,6 @@ func pageWithMaker(page string, width, height int) string {
 	}
 	innerHeight := max(1, height-1)
 	wrappedPage := lipgloss.NewStyle().Width(max(1, width)).Render(page)
-	gap := max(0, innerHeight-lipgloss.Height(wrappedPage)-1)
+	gap := max(0, innerHeight-lipgloss.Height(wrappedPage)-lipgloss.Height(credit))
 	return page + strings.Repeat("\n", gap) + "\n" + credit
 }

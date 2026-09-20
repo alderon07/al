@@ -279,8 +279,7 @@ provider, or customize the TUI footer. Profile changes show their plan, save a
 private backup, and do not prepare new shell definitions automatically.
 Use {icon} in MESSAGE to place the icon.
 ICON may be heart, spark, brand, alias, command, stats, sync, theme, none, one
-emoji written as emoji:VALUE, or a custom 4x2 bitmap such as #..#/.##. Quote
-messages, emoji values, and custom bitmaps in a shell.
+emoji written as emoji:VALUE. Quote messages and emoji values in a shell.
 GitHub uses the gh CLI. Bitbucket and GitLab read tokens from environment
 variables and never store them in config.json.
 `,

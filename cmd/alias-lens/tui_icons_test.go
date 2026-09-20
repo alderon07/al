@@ -92,9 +92,9 @@ func TestBrandArtStylesRenderFullCompactTextAndNone(t *testing.T) {
 		doesNotWant string
 	}{
 		{style: "full", want: "▐▛ ◉ ▜▌"},
-		{style: "compact", want: "▗◉▖ MY ALIASES", doesNotWant: aliasLensFullMark},
-		{style: "text", want: "MY ALIASES", doesNotWant: aliasLensFullMark},
-		{style: "none", doesNotWant: "MY ALIASES"},
+		{style: "compact", want: "▗◉▖ ALIAS LENS", doesNotWant: aliasLensFullMark},
+		{style: "text", want: "ALIAS LENS", doesNotWant: aliasLensFullMark},
+		{style: "none", doesNotWant: "ALIAS LENS"},
 	}
 	for _, test := range tests {
 		t.Run(test.style, func(t *testing.T) {

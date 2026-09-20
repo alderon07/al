@@ -35,6 +35,24 @@ var (
 )
 
 func parsePixelIcon(value string) (pixelIcon, bool) {
+	if icon, ok := namedPixelIcon(value); ok {
+		return icon, true
+	}
+	rows := strings.Split(value, "/")
+	if len(rows) != 2 || len(rows[0]) != 4 || len(rows[1]) != 4 {
+		return pixelIcon{}, false
+	}
+	for _, row := range rows {
+		for _, cell := range row {
+			if cell != '#' && cell != '.' {
+				return pixelIcon{}, false
+			}
+		}
+	}
+	return pixelIcon{top: rows[0], bottom: rows[1]}, true
+}
+
+func namedPixelIcon(value string) (pixelIcon, bool) {
 	named := map[string]pixelIcon{
 		"alias":      iconAlias,
 		"brand":      iconBrand,
@@ -56,18 +74,7 @@ func parsePixelIcon(value string) (pixelIcon, bool) {
 	if icon, ok := named[strings.ToLower(value)]; ok {
 		return icon, true
 	}
-	rows := strings.Split(value, "/")
-	if len(rows) != 2 || len(rows[0]) != 4 || len(rows[1]) != 4 {
-		return pixelIcon{}, false
-	}
-	for _, row := range rows {
-		for _, cell := range row {
-			if cell != '#' && cell != '.' {
-				return pixelIcon{}, false
-			}
-		}
-	}
-	return pixelIcon{top: rows[0], bottom: rows[1]}, true
+	return pixelIcon{}, false
 }
 
 func renderPixelIcon(icon pixelIcon) string {

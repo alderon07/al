@@ -113,7 +113,7 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | `Ctrl+E` | Edit the selected alias |
 | `Ctrl+D` | Delete the selected alias after confirmation |
 | `F2` or `Ctrl+S` | Open usage stats |
-| `F3` | Customize the TUI appearance and footer |
+| `F3` | Customize the TUI footer |
 | `Ctrl+H` | Show alias health warnings |
 | `Ctrl+F` | Show tracked files and sync status |
 | `Ctrl+G` | Sync while the TUI is open |
@@ -229,7 +229,7 @@ al theme --check
 
 Moving through the picker previews each theme. Press `Enter` to save it or `Esc` to keep the previous theme.
 
-Press `F3` in the TUI to personalize the brand name, brand art, interface markers, footer message, footer icon, and footer alignment. Use Left and Right to choose between full, compact, text-only, or hidden brand art; symbol, ASCII, or no markers; and left, center, or right footer alignment. The default symbol style uses ordinary Unicode characters and does not require a Nerd Font.
+Press `F3` in the TUI to compose the footer. You can edit its message, choose a named icon, set its alignment and tone, and add a thin or dotted rule. The `ALIAS LENS` product name and interface stay fixed. The editor shows every choice for the active row. Use Left, Right, or Space to pick one, then select `Save changes` and press Enter. This path works in terminals that reserve `Ctrl+S` for flow control. Named footer icons use ordinary Unicode characters and do not require a Nerd Font.
 
 You can also change the footer message and icon from the command line:
 
@@ -238,11 +238,10 @@ al config footer-message 'Built with {icon} by Sam'
 al config footer-icon spark
 ```
 
-`{icon}` marks the icon position. Built-in choices include `heart`, `spark`, `brand`, `alias`, `command`, `stats`, `sync`, and `theme`. Use `none` to hide it. Prefix one emoji with `emoji:` to use it as the icon. A custom pixel icon is a quoted 4×2 bitmap with `#` for filled pixels and `.` for empty pixels:
+`{icon}` marks the icon position. Built-in choices include `heart`, `spark`, `brand`, `alias`, `command`, `stats`, `sync`, and `theme`. Use `none` to hide it. Prefix one emoji with `emoji:` to use it as the icon. The footer editor does not offer custom bitmap input because its terminal rendering varies by font and cell geometry. Existing saved bitmap icons remain compatible.
 
 ```bash
 al config footer-icon 'emoji:🚀'
-al config footer-icon '#..#/.##.'
 al config footer-reset
 ```
 

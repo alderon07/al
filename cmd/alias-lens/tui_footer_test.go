@@ -84,6 +84,16 @@ func TestFooterConfigurationRendersOneEmojiGrapheme(t *testing.T) {
 	applyFooterConfig(defaultFooterConfig())
 }
 
+func TestNamedFooterIconUsesSymbolInsteadOfBitmap(t *testing.T) {
+	icon, err := renderFooterIcon("heart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if icon != "♥" || icon == renderPixelIcon(iconHeart) {
+		t.Fatalf("named heart icon = %q, want symbol", icon)
+	}
+}
+
 func TestFooterConfigurationValidation(t *testing.T) {
 	tests := []FooterConfig{
 		{Message: "bad\nmessage", Icon: "heart"},
@@ -93,11 +103,36 @@ func TestFooterConfigurationValidation(t *testing.T) {
 		{Message: "bad {icon}", Icon: "####/..x."},
 		{Message: "bad {icon}", Icon: "emoji:"},
 		{Message: "bad {icon}", Icon: "emoji:🚀🚀"},
+		{Message: "bad tone", Icon: "none", Tone: "loud"},
+		{Message: "bad rule", Icon: "none", Rule: "double"},
 	}
 	for _, config := range tests {
 		if err := validateFooterConfig(config); err == nil {
 			t.Errorf("invalid footer config was accepted: %#v", config)
 		}
+	}
+}
+
+func TestFooterToneAndRuleRender(t *testing.T) {
+	applyFooterConfig(FooterConfig{Message: "Built here", Icon: "none", Alignment: "right", Tone: "bright", Rule: "dots"})
+	t.Cleanup(func() { applyFooterConfig(defaultFooterConfig()) })
+
+	credit := makerCredit(24)
+	if !strings.Contains(credit, strings.Repeat("·", 24)) || !strings.Contains(credit, "Built here") {
+		t.Fatalf("styled footer was not rendered:\n%s", credit)
+	}
+	if lipgloss.Height(credit) != 2 || lipgloss.Width(credit) != 24 {
+		t.Fatalf("styled footer size = %dx%d, want 24x2:\n%s", lipgloss.Width(credit), lipgloss.Height(credit), credit)
+	}
+}
+
+func TestFooterRuleStaysInsidePageHeight(t *testing.T) {
+	applyFooterConfig(FooterConfig{Message: "Built here", Icon: "none", Alignment: "center", Tone: "quiet", Rule: "thin"})
+	t.Cleanup(func() { applyFooterConfig(defaultFooterConfig()) })
+
+	page := pageWithMaker("top", 40, 10)
+	if height := lipgloss.Height(page); height != 9 {
+		t.Fatalf("page with footer rule height = %d, want 9:\n%s", height, page)
 	}
 }
 
