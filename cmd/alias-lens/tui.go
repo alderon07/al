@@ -547,9 +547,8 @@ func (m model) View() string {
 	if message := smallTerminalMessage(m.width, m.height); message != "" {
 		return message
 	}
-	width := max(48, m.width)
-	height := max(18, m.height)
-	contentWidth := max(40, min(width-8, 108))
+	frame := newMainTUIFrame(m.width, m.height)
+	height, contentWidth := frame.height, frame.contentWidth
 	matches := m.currentAliases()
 	cursor := min(m.cursor, max(0, len(matches)-1))
 
@@ -582,32 +581,35 @@ func (m model) View() string {
 			title = pixelIconLabel(iconAlias, "No aliases are available to select.", titleStyle) + "\n" + dimStyle.Render("Open Alias Lens normally to create one.")
 		}
 	}
+	if height < 20 {
+		title = strings.SplitN(title, "\n", 2)[0]
+	}
 	if m.tourVisible {
-		return m.tourView(width, height, contentWidth, header)
+		return m.tourView(frame, header)
 	}
 	if m.adding {
-		return m.addFormView(width, height, contentWidth, header)
+		return m.addFormView(frame, header)
 	}
 	if m.themePicker {
-		return m.themePickerView(width, height, contentWidth, header)
+		return m.themePickerView(frame, header)
 	}
 	if m.settingsOpen {
-		return m.footerSettingsView(width, height, contentWidth, header)
+		return m.footerSettingsView(frame, header)
 	}
 	if m.helpVisible {
-		return m.helpView(width, height, contentWidth, header)
+		return m.helpView(frame, header)
 	}
 	if m.statsOpen {
-		return m.statsView(header)
+		return m.statsView(frame, header)
 	}
 	if m.runConfirm != nil {
-		return m.runConfirmationView(width, height, contentWidth, header)
+		return m.runConfirmationView(frame, header)
 	}
 	if m.revisionOpen {
-		return m.revisionDrawerView(width, height, contentWidth, header)
+		return m.revisionDrawerView(frame, header)
 	}
 	if m.trackedOnly {
-		return m.trackedFilesView(width, height, contentWidth, header)
+		return m.trackedFilesView(frame, header)
 	}
 	search := lipgloss.NewStyle().
 		Width(contentWidth-3).
@@ -615,38 +617,6 @@ func (m model) View() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(acidColor).
 		Render(acidStyle(markerPrefix(iconSearch)) + searchTextCursor(m.query, m.searchFocused() && !m.cursorHidden))
-
-	var body strings.Builder
-	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
-		body.WriteString(m.emptyStateView(contentWidth, height))
-	} else if m.healthOnly {
-		body.WriteString(pixelIconLabel(iconHealth, "ALIAS HEALTH", lipgloss.NewStyle().Bold(true).Foreground(coralColor)))
-		body.WriteByte('\n')
-	} else if strings.TrimSpace(m.query) == "" {
-		body.WriteString(pixelIconLabel(iconSpark, "SUGGESTED FOR YOU", lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
-		body.WriteByte('\n')
-	}
-	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
-		// The empty state above replaces the normal search result list.
-	} else if m.healthOnly && len(matches) == 0 {
-		body.WriteString(statusStyle.Render("No health issues found."))
-	} else if len(matches) == 0 {
-		body.WriteString(titleStyle.Render(fmt.Sprintf("No alias matched %q", m.query)))
-		if close := closestAliases(m.aliases, m.query); len(close) > 0 {
-			body.WriteString("\n" + dimStyle.Render("Did you mean ") + aliasStyle.Render(strings.Join(close, "  ")) + dimStyle.Render(" ?"))
-		}
-	} else {
-		start, end := aliasWindow(matches, cursor, contentWidth, height)
-		for index := start; index < end; index++ {
-			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth))
-			if index < end-1 {
-				body.WriteString("\n\n")
-			}
-		}
-		if strings.TrimSpace(m.query) != "" {
-			body.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(matches))))
-		}
-	}
 
 	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  tab edit at prompt  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  esc quit")
 	if contentWidth < 96 {
@@ -682,13 +652,51 @@ func (m model) View() string {
 	if m.deleteName != "" {
 		footer = lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("Delete " + m.deleteName + "?  y confirm  ·  n cancel")
 	}
+
+	contentHeight := frame.contentHeight()
+	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footer)-frame.measureHeight(makerCredit(contentWidth))-4)
+	var body strings.Builder
+	bodyLeadHeight := 0
+	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
+		body.WriteString(m.emptyStateView(contentWidth, height))
+	} else if m.healthOnly {
+		lead := pixelIconLabel(iconHealth, "ALIAS HEALTH", lipgloss.NewStyle().Bold(true).Foreground(coralColor))
+		body.WriteString(lead)
+		body.WriteByte('\n')
+		bodyLeadHeight = lipgloss.Height(lead)
+	} else if strings.TrimSpace(m.query) == "" {
+		lead := pixelIconLabel(iconSpark, "SUGGESTED FOR YOU", lipgloss.NewStyle().Bold(true).Foreground(amberColor))
+		body.WriteString(lead)
+		body.WriteByte('\n')
+		bodyLeadHeight = lipgloss.Height(lead)
+	}
+	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
+		// The empty state above replaces the normal search result list.
+	} else if m.healthOnly && len(matches) == 0 {
+		body.WriteString(statusStyle.Render("No health issues found."))
+	} else if len(matches) == 0 {
+		body.WriteString(titleStyle.Render(fmt.Sprintf("No alias matched %q", m.query)))
+		if close := closestAliases(m.aliases, m.query); len(close) > 0 {
+			body.WriteString("\n" + dimStyle.Render("Did you mean ") + aliasStyle.Render(strings.Join(close, "  ")) + dimStyle.Render(" ?"))
+		}
+	} else {
+		aliasBudget := max(3, bodyBudget-bodyLeadHeight)
+		if strings.TrimSpace(m.query) != "" {
+			aliasBudget = max(3, aliasBudget-1)
+		}
+		start, end := aliasWindow(matches, cursor, contentWidth, aliasBudget)
+		for index := start; index < end; index++ {
+			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth))
+			if index < end-1 {
+				body.WriteString("\n\n")
+			}
+		}
+		if strings.TrimSpace(m.query) != "" {
+			body.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(matches))))
+		}
+	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", body.String(), "", footer)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().
-		Width(width).
-		Height(height).
-		Padding(1, 3).
-		Render(page)
+	return frame.renderWithMaker(page)
 }
 
 func (m *model) startAddForm() {
@@ -771,7 +779,8 @@ func (m model) updateRunConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Quit
 }
 
-func (m model) runConfirmationView(width, height, contentWidth int, header string) string {
+func (m model) runConfirmationView(frame tuiFrame, header string) string {
+	contentWidth := frame.contentWidth
 	if m.runConfirm == nil {
 		return ""
 	}
@@ -797,11 +806,11 @@ func (m model) runConfirmationView(width, height, contentWidth int, header strin
 		"\n\n" + lipgloss.NewStyle().Foreground(coralColor).Render(wrapText(reason, contentWidth))
 	footer := aliasStyle.Render("y") + dimStyle.Render(" use alias  ·  ") + aliasStyle.Render("n") + dimStyle.Render(" or esc cancel")
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.renderWithMaker(page)
 }
 
-func (m model) helpView(width, height, contentWidth int, header string) string {
+func (m model) helpView(frame tuiFrame, header string) string {
+	contentWidth := frame.contentWidth
 	shortcuts := shortcutGuide(m.shortcutProfile, m.selectMode)
 	if query := strings.TrimSpace(strings.ToLower(m.helpQuery)); query != "" {
 		filtered := shortcuts[:0]
@@ -821,8 +830,13 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 	if contentWidth < 60 {
 		keyWidth = min(keyWidth, max(14, contentWidth/2))
 	}
+	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconHelp)) + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
+	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
+	footerText := strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutHelp)) + " or esc close  ·  ctrl+c quit"
+	footerView := footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
+	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footerView)-frame.measureHeight(makerCredit(contentWidth))-4)
 	var rows strings.Builder
-	visible := min(len(shortcuts), max(3, height-14))
+	visible := min(len(shortcuts), rowBudget)
 	for index, shortcut := range shortcuts[:visible] {
 		keyLabel := truncate(shortcut[0], max(1, keyWidth-1))
 		key := aliasStyle.Render(fmt.Sprintf("%-*s", keyWidth, keyLabel))
@@ -836,17 +850,12 @@ func (m model) helpView(width, height, contentWidth int, header string) string {
 		rows.WriteString(dimStyle.Render("No shortcut matched " + fmt.Sprintf("%q", m.helpQuery)))
 	}
 
-	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconHelp)) + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
-	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
-	footer := strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutHelp)) + " or esc close  ·  ctrl+c quit"
 	if len(shortcuts) > visible {
-		footer = fmt.Sprintf("showing %d of %d  ·  type to filter  ·  esc close", visible, len(shortcuts))
+		footerText = fmt.Sprintf("showing %d of %d  ·  type to filter  ·  esc close", visible, len(shortcuts))
+		footerView = footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
 	}
-	footerView := dimStyle.Render(footer)
-	footerView = footerWithNavigation(footerView, contentWidth, m.shortcutProfile)
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", rows.String(), "", footerView)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.renderWithMaker(page)
 }
 
 func pageNavigationHint(width int, profiles ...ShortcutProfile) string {
@@ -951,10 +960,21 @@ func (m model) themePickerVisibleCount() int {
 	return max(5, m.height-12)
 }
 
-func (m model) themePickerView(width, height, contentWidth int, header string) string {
+func (m model) themePickerView(frame tuiFrame, header string) string {
+	contentWidth := frame.contentWidth
 	themes := availableThemes()
+	title := pixelIconLabel(iconTheme, "Choose a theme", titleStyle) + "\n" + dimStyle.Render("The preview changes as you move. Save only when it looks right.")
+	footer := dimStyle.Render("↑↓ preview  ·  pgup/pgdn jump  ·  enter ") + cyanStyle("save") + dimStyle.Render("  ·  esc restore")
+	footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
+	if m.status != "" {
+		footer = lipgloss.NewStyle().Foreground(coralColor).Render(truncate(m.status, contentWidth))
+	}
+	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(footer)-frame.measureHeight(makerCredit(contentWidth))-3)
 	cursor := min(max(0, m.themeCursor), max(0, len(themes)-1))
-	visible := min(len(themes), m.themePickerVisibleCount())
+	visible := min(len(themes), rowBudget)
+	if len(themes) > visible && visible > 1 {
+		visible--
+	}
 	start := max(0, cursor-visible/2)
 	start = min(start, max(0, len(themes)-visible))
 	end := min(len(themes), start+visible)
@@ -984,15 +1004,8 @@ func (m model) themePickerView(width, height, contentWidth int, header string) s
 		rows.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(themes))))
 	}
 
-	title := pixelIconLabel(iconTheme, "Choose a theme", titleStyle) + "\n" + dimStyle.Render("The preview changes as you move. Save only when it looks right.")
-	footer := dimStyle.Render("↑↓ preview  ·  pgup/pgdn jump  ·  enter ") + cyanStyle("save") + dimStyle.Render("  ·  esc restore")
-	footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
-	if m.status != "" {
-		footer = lipgloss.NewStyle().Foreground(coralColor).Render(truncate(m.status, contentWidth))
-	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", rows.String(), "", footer)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.renderWithMaker(page)
 }
 
 func (m model) refreshTrackedFiles() model {
@@ -1082,7 +1095,8 @@ func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) trackedFilesView(width, height, contentWidth int, header string) string {
+func (m model) trackedFilesView(frame tuiFrame, header string) string {
+	contentWidth := frame.contentWidth
 	var body strings.Builder
 	body.WriteString(pixelIconLabel(iconSync, "SYNC STATUS", lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
 	autoLabel := "AUTO OFF"
@@ -1140,8 +1154,7 @@ func (m model) trackedFilesView(width, height, contentWidth int, header string) 
 	}
 	footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", pixelIconLabel(iconSync, "See what Alias Lens keeps in sync.", titleStyle), "", body.String(), "", footer)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.renderWithMaker(page)
 }
 
 func (m model) trackedVisibleCount() int { return max(1, (m.height-21)/5) }
@@ -1321,7 +1334,8 @@ func (m model) updateDeleteConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd)
 	return m, nil
 }
 
-func (m model) addFormView(width, height, contentWidth int, header string) string {
+func (m model) addFormView(frame tuiFrame, header string) string {
+	contentWidth := frame.contentWidth
 	labels := []string{"ALIAS NAME", "COMMAND", "WHAT IT DOES", "TAGS", "CATEGORY"}
 	hints := []string{"ex: gpf", "ex: git push --force-with-lease", "ex: Safely force-push the current branch", "ex: git,daily", "ex: git"}
 	var form strings.Builder
@@ -1355,8 +1369,7 @@ func (m model) addFormView(width, height, contentWidth int, header string) strin
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render(m.status)
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", form.String(), "", footer)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.renderWithMaker(page)
 }
 
 func (m model) currentAliases() []Alias {
@@ -1420,12 +1433,12 @@ func renderAlias(alias Alias, active bool, width int) string {
 
 func (m model) visibleCount() int { return max(1, (m.height-14)/4) }
 
-func aliasWindow(aliases []Alias, cursor, width, height int) (int, int) {
+func aliasWindow(aliases []Alias, cursor, width, budget int) (int, int) {
 	if len(aliases) == 0 {
 		return 0, 0
 	}
 	cursor = min(max(0, cursor), len(aliases)-1)
-	budget := max(3, height-14)
+	budget = max(3, budget)
 	for start := 0; start <= cursor; start++ {
 		used := 0
 		end := start

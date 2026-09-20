@@ -40,6 +40,7 @@ type statsModel struct {
 	closeHint       string
 	errorText       string
 	shortcutProfile ShortcutProfile
+	frame           *tuiFrame
 }
 
 func runStatsTUI(data statsData, period string, now time.Time) error {
@@ -169,20 +170,16 @@ func (m statsModel) View() string {
 		rankingPeriod = "all"
 	}
 	rows, _ := rankedStatsRows(m.data, rankingPeriod, m.now)
-	width := m.width
-	if width < 48 {
-		width = 48
+	frame := newFullWidthTUIFrame(m.width, m.height, 2)
+	if m.frame != nil {
+		frame = *m.frame
 	}
-	height := m.height
-	if height < 18 {
-		height = 18
-	}
-	inner := width - 4
+	width, inner := frame.width, frame.contentWidth
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Accent)).Bold(true)
 	text := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text))
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Muted))
 	panel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background)).Padding(1, 2).Width(inner)
-	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background)).Padding(1, 2).Width(width).Height(height)
+	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background))
 
 	total := 0
 	for _, row := range rows {
@@ -208,6 +205,28 @@ func (m statsModel) View() string {
 		}
 	}
 
+	closeHint := m.closeHint
+	if closeHint == "" {
+		closeHint = "q close"
+	}
+	filterLabel := "period"
+	if m.viewIndex == 1 {
+		filterLabel = "timeframe"
+	} else if m.viewIndex == 2 {
+		filterLabel = "age filter"
+	}
+	footerText := "tab view   ←/→ " + filterLabel + "   r refresh   " + closeHint
+	if m.viewIndex == 0 && width >= 76 {
+		footerText = "tab view   ←/→ period   ↑/↓ inspect   r refresh   " + closeHint
+	}
+	foot := muted.Render(footerText)
+	note := muted.Render("Counts come only from the active terminal history")
+	bottom := note + "\n" + foot
+	if m.appHeader != "" && inner >= 79 {
+		bottom = footerWithNavigation(bottom, inner, m.shortcutProfile)
+	}
+	bottom = footerWithMaker(bottom, inner)
+
 	bodyContent := ""
 	if m.errorText != "" {
 		var body strings.Builder
@@ -229,40 +248,22 @@ func (m statsModel) View() string {
 		}
 	}
 
-	closeHint := m.closeHint
-	if closeHint == "" {
-		closeHint = "q close"
-	}
-	filterLabel := "period"
-	if m.viewIndex == 1 {
-		filterLabel = "timeframe"
-	} else if m.viewIndex == 2 {
-		filterLabel = "age filter"
-	}
-	footerText := "tab view   ←/→ " + filterLabel + "   r refresh   " + closeHint
-	if m.viewIndex == 0 && width >= 76 {
-		footerText = "tab view   ←/→ period   ↑/↓ inspect   r refresh   " + closeHint
-	}
-	foot := muted.Render(footerText)
-	note := muted.Render("Counts come only from the active terminal history")
 	top := header + "\n\n" + strings.Join(viewTabs, "   ") + "\n" + strings.Join(tabs, " ") + "\n\n" + panel.Render(bodyContent)
 	if m.appHeader != "" {
 		top = m.appHeader + "\n\n" + top
 	}
-	bottom := note + "\n" + foot
-	if m.appHeader != "" {
-		bottom = footerWithNavigation(bottom, inner, m.shortcutProfile)
+	availableTopHeight := max(1, frame.contentHeight()-frame.measureHeight(bottom)-1)
+	if overflow := frame.measureHeight(top) - availableTopHeight; overflow > 0 {
+		bodyHeight := max(1, lipgloss.Height(bodyContent)-overflow)
+		bodyContent = lipgloss.NewStyle().MaxHeight(bodyHeight).Render(bodyContent)
+		top = header + "\n\n" + strings.Join(viewTabs, "   ") + "\n" + strings.Join(tabs, " ") + "\n\n" + panel.Render(bodyContent)
+		if m.appHeader != "" {
+			top = m.appHeader + "\n\n" + top
+		}
 	}
-	bottom = footerWithMaker(bottom, inner)
-	reservedBottomRow := 1
-	if m.appHeader != "" {
-		// Embedded pages use the main browser's outer frame, which supplies the
-		// final bottom row after Bubble Tea clips the rendered view.
-		reservedBottomRow = 0
-	}
-	spacerHeight := max(1, height-lipgloss.Height(top)-lipgloss.Height(bottom)-reservedBottomRow)
+	spacerHeight := max(1, frame.contentHeight()-frame.measureHeight(top)-frame.measureHeight(bottom)+1)
 	content := top + strings.Repeat("\n", spacerHeight) + bottom
-	return page.Render(content)
+	return frame.renderStyled(content, page)
 }
 
 func statsPeriodsForView(viewIndex int) []string {
@@ -372,7 +373,7 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) statsView(header string) string {
+func (m model) statsView(frame tuiFrame, header string) string {
 	return (statsModel{
 		data:            m.statsData,
 		periodIndex:     m.statsPeriod,
@@ -386,5 +387,6 @@ func (m model) statsView(header string) string {
 		closeHint:       primaryShortcutLabel(m.shortcutProfile, shortcutStats) + "/esc return",
 		errorText:       m.statsErr,
 		shortcutProfile: m.shortcutProfile,
+		frame:           &frame,
 	}).View()
 }

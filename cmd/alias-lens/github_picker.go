@@ -131,7 +131,8 @@ func (m repoPickerModel) View() string {
 		return message
 	}
 	width := max(48, m.width)
-	contentWidth := max(40, min(width-8, 100))
+	frame := newMainTUIFrame(width, m.height)
+	contentWidth := frame.contentWidth
 	filtered := filterRemoteRepos(m.repos, m.query)
 	if m.cursor >= len(filtered) {
 		m.cursor = max(0, len(filtered)-1)
@@ -188,9 +189,7 @@ func (m repoPickerModel) View() string {
 		footer = statusStyle.Render("Cloning and configuring repository…")
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, subtitle, "", search, "", list.String(), "", footer)
-	height := max(18, m.height)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.renderWithMaker(page)
 }
 
 func filterRemoteRepos(repos []RemoteRepo, query string) []RemoteRepo {

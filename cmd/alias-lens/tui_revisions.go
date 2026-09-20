@@ -105,7 +105,8 @@ func (m model) revisionVisibleCount() int {
 	return max(1, (m.height-14)/3)
 }
 
-func (m model) revisionDrawerView(width, height, contentWidth int, header string) string {
+func (m model) revisionDrawerView(frame tuiFrame, header string) string {
+	contentWidth := frame.contentWidth
 	var body strings.Builder
 	body.WriteString(pixelIconLabel(iconHistory, "Restore an earlier alias file", titleStyle))
 	body.WriteString("\n" + dimStyle.Render("Alias Lens saves the current file before restoring your choice."))
@@ -148,8 +149,7 @@ func (m model) revisionDrawerView(width, height, contentWidth int, header string
 		footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body.String(), "", footer)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.renderWithMaker(page)
 }
 
 func formatByteSize(size int64) string {

@@ -96,7 +96,8 @@ func applyFooterConfig(config FooterConfig) {
 	activeFooter = config
 }
 
-func (m model) footerSettingsView(width, height, contentWidth int, header string) string {
+func (m model) footerSettingsView(frame tuiFrame, header string) string {
+	width, height, contentWidth := frame.width, frame.height, frame.contentWidth
 	title := pixelIconLabel(iconEdit, "Compose your footer", titleStyle)
 	subtitle := dimStyle.Render("A small signature for the bottom of Alias Lens.")
 	compact := width < 76 || height < 24
@@ -119,7 +120,7 @@ func (m model) footerSettingsView(width, height, contentWidth int, header string
 		footer = dimStyle.Render(appearanceEditorCompactControls(m.settingsField))
 		page = lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", workspace, "", footer)
 	}
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.render(page)
 }
 
 var appearanceFieldLabels = [settingsFieldCount]string{"Message", "Icon", "Alignment", "Tone", "Rule"}
@@ -468,8 +469,7 @@ func pageWithMaker(page string, width, height int) string {
 	if credit == "" {
 		return page
 	}
-	innerHeight := max(1, height-1)
 	wrappedPage := lipgloss.NewStyle().Width(max(1, width)).Render(page)
-	gap := max(0, innerHeight-lipgloss.Height(wrappedPage)-lipgloss.Height(credit))
+	gap := max(0, height-lipgloss.Height(wrappedPage)-lipgloss.Height(credit))
 	return page + strings.Repeat("\n", gap) + "\n" + credit
 }

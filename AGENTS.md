@@ -65,6 +65,10 @@ Keep shell behavior behind `ShellAdapter`. Bash owns `.bash_aliases`, `.bash_his
 - Use temporary directories in tests. Tests must never read or modify real shell alias files or the configured dotfiles repository.
 - Always write acceptance criteria before writing any code.
 
+## Testing
+- PTY testing is mandatory, not optional
+- Always verify a change works with evidence before reporting success
+
 ## Verify a change
 
 Run these commands from the repository root:

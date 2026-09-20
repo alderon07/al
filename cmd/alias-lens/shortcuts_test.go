@@ -294,7 +294,7 @@ func TestShortcutGuideUsesFriendlyMacLabels(t *testing.T) {
 			t.Fatalf("macOS shortcut guide is missing %q:\n%s", want, guide)
 		}
 	}
-	view := (model{width: 120, height: 30, helpVisible: true, shortcutProfile: shortcutMacOS}).View()
+	view := (model{width: 120, height: 36, helpVisible: true, shortcutProfile: shortcutMacOS}).View()
 	for _, want := range []string{"Cmd+N / Ctrl+N", "Cmd+Backspace / Delete", "Cmd+6 / F6", "Cmd+, / F3", "Cmd+? / F1 / ? / Esc"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("rendered macOS keyboard guide is missing %q:\n%s", want, view)

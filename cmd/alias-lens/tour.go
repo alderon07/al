@@ -69,7 +69,8 @@ func (m model) updateTour(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m model) tourView(width, height, contentWidth int, header string) string {
+func (m model) tourView(frame tuiFrame, header string) string {
+	height := frame.height
 	steps := []string{
 		aliasStyle.Render("Type") + dimStyle.Render("      Search aliases, commands, and descriptions"),
 		aliasStyle.Render("Enter") + dimStyle.Render("     Run the selected alias by name"),
@@ -85,6 +86,5 @@ func (m model) tourView(width, height, contentWidth int, header string) string {
 		"\n\n" + strings.Join(steps, "\n\n")
 	footer := aliasStyle.Render("enter") + dimStyle.Render(" start  ·  ") + aliasStyle.Render("?") + dimStyle.Render(" full guide  ·  esc dismiss")
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
-	page = pageWithMaker(page, contentWidth, height)
-	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)
+	return frame.renderWithMaker(page)
 }

@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+
+	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
 
 func TestMakerCreditIsCenteredAtTheRequestedWidth(t *testing.T) {
@@ -25,8 +27,8 @@ func TestMakerCreditIsCenteredAtTheRequestedWidth(t *testing.T) {
 
 func TestMakerCreditIsPinnedToTheLastPageRow(t *testing.T) {
 	page := pageWithMaker("top", 40, 10)
-	if height := lipgloss.Height(page); height != 9 {
-		t.Fatalf("page height = %d, want 9:\n%s", height, page)
+	if height := lipgloss.Height(page); height != 10 {
+		t.Fatalf("page height = %d, want 10:\n%s", height, page)
 	}
 	lines := strings.Split(page, "\n")
 	assertMakerCredit(t, lines[len(lines)-1])
@@ -61,6 +63,106 @@ func TestAliasAndStatsViewsPinMakerCreditToTheSameRow(t *testing.T) {
 	}
 	if aliasRow != statsRow {
 		t.Fatalf("maker credit rows differ: aliases=%d/%d stats=%d/%d", aliasRow, lipgloss.Height(aliasView), statsRow, lipgloss.Height(statsView))
+	}
+}
+
+func TestFooterRemainsInsideViewportAcrossResizes(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	applyTheme(builtInTheme("phosphor"))
+	applyFooterConfig(defaultFooterConfig())
+	t.Cleanup(func() {
+		applyTheme(defaultTheme())
+		applyFooterConfig(defaultFooterConfig())
+	})
+
+	current := model{
+		aliases: []Alias{
+			{Name: "a", Command: "printf a", Description: "first"},
+			{Name: "b", Command: "printf b", Description: "second"},
+			{Name: "c", Command: "printf c", Description: "third"},
+			{Name: "d", Command: "printf d", Description: "fourth"},
+			{Name: "e", Command: "printf e", Description: "fifth"},
+			{Name: "f", Command: "printf f", Description: "sixth"},
+			{Name: "g", Command: "printf g", Description: "seventh"},
+			{Name: "h", Command: "printf h", Description: "eighth"},
+		},
+		theme:           builtInTheme("phosphor"),
+		executeMode:     true,
+		shortcutProfile: shortcutLinux,
+	}
+
+	for _, size := range []struct{ width, height int }{{120, 36}, {80, 24}, {100, 30}, {48, 18}} {
+		updated, _ := current.Update(tea.WindowSizeMsg{Width: size.width, Height: size.height})
+		current = updated.(model)
+		view := current.View()
+		if gotWidth, gotHeight := lipgloss.Width(view), lipgloss.Height(view); gotWidth != size.width || gotHeight != size.height {
+			t.Errorf("%dx%d resize rendered %dx%d", size.width, size.height, gotWidth, gotHeight)
+		}
+		lines := strings.Split(view, "\n")
+		visible := strings.Join(lines[:min(size.height, len(lines))], "\n")
+		if !strings.Contains(visible, "Made by Naqi") {
+			t.Errorf("%dx%d viewport lost maker footer: rendered height=%d\n%s", size.width, size.height, len(lines), visible)
+		}
+		if !strings.Contains(visible, "esc quit") {
+			t.Errorf("%dx%d viewport lost control footer:\n%s", size.width, size.height, visible)
+		}
+	}
+}
+
+func TestMainPagesUseOneWideContentColumn(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	applyTheme(builtInTheme("phosphor"))
+	applyFooterConfig(FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "center", Tone: "quiet", Rule: "thin"})
+	t.Cleanup(func() {
+		applyTheme(defaultTheme())
+		applyFooterConfig(defaultFooterConfig())
+	})
+
+	pages := []struct {
+		name      string
+		model     model
+		makerRule bool
+	}{
+		{"aliases", navigationTestModel(pageAliases), true},
+		{"help", navigationTestModel(pageHelp), true},
+		{"stats", navigationTestModel(pageStats), true},
+		{"settings", navigationTestModel(pageSettings), false},
+		{"themes", navigationTestModel(pageThemes), true},
+		{"revisions", navigationTestModel(pageRevisions), true},
+		{"sync", navigationTestModel(pageSync), true},
+		{"health", navigationTestModel(pageHealth), true},
+	}
+	headerColumn := -1
+	for _, page := range pages {
+		page.model.width = 160
+		page.model.height = 40
+		view := page.model.View()
+		if gotWidth, gotHeight := lipgloss.Width(view), lipgloss.Height(view); gotWidth != 160 || gotHeight != 40 {
+			t.Errorf("%s page rendered %dx%d, want 160x40", page.name, gotWidth, gotHeight)
+		}
+		pageHeaderColumn := -1
+		for _, line := range strings.Split(view, "\n") {
+			if column := strings.Index(line, "ALIAS LENS"); column >= 0 {
+				pageHeaderColumn = column
+				break
+			}
+		}
+		if headerColumn < 0 {
+			headerColumn = pageHeaderColumn
+		}
+		if pageHeaderColumn != headerColumn {
+			t.Errorf("%s page header starts at column %d, want shared column %d", page.name, pageHeaderColumn, headerColumn)
+		}
+		if !page.makerRule {
+			continue
+		}
+		longestRule := 0
+		for _, line := range strings.Split(view, "\n") {
+			longestRule = max(longestRule, strings.Count(line, "─"))
+		}
+		if longestRule != mainTUIMaxContentWidth {
+			t.Errorf("%s page divider width = %d, want %d", page.name, longestRule, mainTUIMaxContentWidth)
+		}
 	}
 }
 
@@ -200,8 +302,8 @@ func TestFooterRuleStaysInsidePageHeight(t *testing.T) {
 	t.Cleanup(func() { applyFooterConfig(defaultFooterConfig()) })
 
 	page := pageWithMaker("top", 40, 10)
-	if height := lipgloss.Height(page); height != 9 {
-		t.Fatalf("page with footer rule height = %d, want 9:\n%s", height, page)
+	if height := lipgloss.Height(page); height != 10 {
+		t.Fatalf("page with footer rule height = %d, want 10:\n%s", height, page)
 	}
 }
 
