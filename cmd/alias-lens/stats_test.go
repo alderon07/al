@@ -49,6 +49,50 @@ func TestStatsDashboardFillsWideTerminal(t *testing.T) {
 	}
 }
 
+func TestStatsDashboardPaintsLastViewportRow(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	previousRenderer := lipgloss.DefaultRenderer()
+	renderer := lipgloss.NewRenderer(os.Stdout)
+	renderer.SetColorProfile(termenv.TrueColor)
+	lipgloss.SetDefaultRenderer(renderer)
+	defer lipgloss.SetDefaultRenderer(previousRenderer)
+
+	background := builtInTheme("xcode")
+	marker := lipgloss.NewStyle().Background(lipgloss.Color(background.Background)).Render("x")
+	backgroundPrefix := marker[:strings.IndexByte(marker, 'x')]
+	for _, embedded := range []bool{false, true} {
+		for _, size := range []struct {
+			width  int
+			height int
+		}{{48, 18}, {80, 24}, {120, 30}} {
+			model := statsModel{
+				data:   statsData{Aliases: []Alias{{Name: "ll"}}},
+				width:  size.width,
+				height: size.height,
+				theme:  background,
+				now:    time.Now(),
+			}
+			if embedded {
+				model.appHeader = "ALIAS LENS"
+			}
+			if got := model.TerminalBackground(); got != background.Background {
+				t.Fatalf("embedded=%t: terminal background = %q, want %q", embedded, got, background.Background)
+			}
+			lines := strings.Split(model.View(), "\n")
+			last := lines[len(lines)-1]
+			if got := lipgloss.Width(last); got != size.width {
+				t.Fatalf("embedded=%t size=%dx%d: last row width = %d", embedded, size.width, size.height, got)
+			}
+			if !strings.Contains(last, backgroundPrefix) {
+				t.Fatalf("embedded=%t size=%dx%d: last row does not paint the page background: %q", embedded, size.width, size.height, last)
+			}
+		}
+	}
+	if got := (model{theme: background, statsOpen: true}).TerminalBackground(); got != background.Background {
+		t.Fatalf("main TUI terminal background = %q, want %q", got, background.Background)
+	}
+}
+
 func TestStatsDashboardShowsExactAliasCoverageMap(t *testing.T) {
 	view := (statsModel{
 		data: statsData{
@@ -270,8 +314,8 @@ func TestStatsDashboardUsesEachThemeCanvasInsteadOfPanel(t *testing.T) {
 		if strings.Contains(view, backgroundPrefix(theme.Panel)) {
 			t.Fatalf("%s stats still paint the panel background", theme.Name)
 		}
-		if count := strings.Count(view, backgroundPrefix(theme.Background)); count < 3 {
-			t.Fatalf("%s canvas background was restored only %d times", theme.Name, count)
+		if count := strings.Count(view, backgroundPrefix(theme.Background)); count == 0 {
+			t.Fatalf("%s stats omitted the canvas background", theme.Name)
 		}
 		if lipgloss.Width(strings.Split(view, "\n")[0]) != 100 {
 			t.Fatalf("%s canvas background fix changed the dashboard width", theme.Name)

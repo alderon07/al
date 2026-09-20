@@ -40,12 +40,16 @@ func TestTranslateV2Keys(t *testing.T) {
 }
 
 func TestProgramOptionsReachV2View(t *testing.T) {
-	model := &testModel{}
+	model := &testModel{background: "#112233"}
 	program := NewProgram(model, WithAltScreen(), WithReportFocus())
 	wrapped := &v2Model{model: program.model, config: program.config}
 	view := wrapped.View()
 	if !view.AltScreen || !view.ReportFocus || view.Content != "test" {
 		t.Fatalf("v2 view options were not preserved: %+v", view)
+	}
+	red, green, blue, alpha := view.BackgroundColor.RGBA()
+	if red != 0x1111 || green != 0x2222 || blue != 0x3333 || alpha != 0xffff {
+		t.Fatalf("v2 view background = %#v", view.BackgroundColor)
 	}
 }
 
@@ -62,8 +66,13 @@ func TestQuitCommandUsesV2QuitMessage(t *testing.T) {
 	}
 }
 
-type testModel struct{}
+type testModel struct {
+	background string
+}
 
 func (*testModel) Init() Cmd                     { return nil }
 func (model *testModel) Update(Msg) (Model, Cmd) { return model, nil }
 func (*testModel) View() string                  { return "test" }
+func (model *testModel) TerminalBackground() string {
+	return model.background
+}

@@ -94,6 +94,13 @@ type model struct {
 	executableUpdated bool
 }
 
+func (m model) TerminalBackground() string {
+	if noColorRequested() {
+		return ""
+	}
+	return m.theme.Background
+}
+
 type cursorBlinkMsg struct{}
 
 const cursorBlinkInterval = 500 * time.Millisecond

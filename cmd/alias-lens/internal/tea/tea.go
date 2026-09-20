@@ -4,7 +4,9 @@
 package tea
 
 import (
+	"image/color"
 	"io"
+	"strconv"
 	"time"
 	"unicode"
 
@@ -18,6 +20,10 @@ type Model interface {
 	Init() Cmd
 	Update(Msg) (Model, Cmd)
 	View() string
+}
+
+type terminalBackgroundModel interface {
+	TerminalBackground() string
 }
 
 type KeyType int
@@ -206,7 +212,25 @@ func (model *v2Model) View() tea2.View {
 	view := tea2.NewView(model.model.View())
 	view.AltScreen = model.config.altScreen
 	view.ReportFocus = model.config.reportFocus
+	if provider, ok := model.model.(terminalBackgroundModel); ok {
+		view.BackgroundColor = parseHexColor(provider.TerminalBackground())
+	}
 	return view
+}
+
+func parseHexColor(value string) color.Color {
+	if len(value) != 7 || value[0] != '#' {
+		return nil
+	}
+	channels := [3]uint8{}
+	for index := range channels {
+		channel, err := strconv.ParseUint(value[1+index*2:3+index*2], 16, 8)
+		if err != nil {
+			return nil
+		}
+		channels[index] = uint8(channel)
+	}
+	return color.RGBA{R: channels[0], G: channels[1], B: channels[2], A: 0xff}
 }
 
 func adaptCommand(command Cmd) tea2.Cmd {

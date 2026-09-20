@@ -70,6 +70,7 @@ A reviewed change can alter one major identity trait when the change solves a me
 | `FRAME-06` | Vertical gaps | Major regions should have one empty row between them. Components must not add multiple decorative empty rows. | Inspect at 80 by 24 and 48 by 18. |
 | `FRAME-07` | Height pressure | The page must reduce the visible list window before removing the focused item or local controls. | Shrink a populated page and assert that selection and controls remain visible. |
 | `FRAME-08` | Resize stability | A resize must preserve the current object, query, entered form text, and modal state. | Update the model with smaller and larger window messages. |
+| `FRAME-09` | Complete canvas | Every interactive page must paint its theme background through the last viewport row. Embedded and standalone stats must not expose a strip of the terminal's default background below the page. | Render stats at 48 by 18, 80 by 24, and 120 by 30. Assert the final row spans the viewport with the page background, then inspect both entry paths in a real terminal. |
 
 ### Work in terminal cells
 

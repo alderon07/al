@@ -79,6 +79,13 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 
 func (m statsModel) Init() tea.Cmd { return nil }
 
+func (m statsModel) TerminalBackground() string {
+	if noColorRequested() {
+		return ""
+	}
+	return m.theme.Background
+}
+
 func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
 	case tea.WindowSizeMsg:
@@ -255,7 +262,7 @@ func (m statsModel) View() string {
 	}
 	spacerHeight := max(1, height-lipgloss.Height(top)-lipgloss.Height(bottom)-reservedBottomRow)
 	content := top + strings.Repeat("\n", spacerHeight) + bottom
-	return preserveStatsBackground(page.Render(content), m.theme.Background)
+	return page.Render(content)
 }
 
 func statsPeriodsForView(viewIndex int) []string {
@@ -273,17 +280,6 @@ func defaultPeriodForStatsView(viewIndex int) int {
 		return 2
 	}
 	return 0
-}
-
-func preserveStatsBackground(rendered, color string) string {
-	const reset = "\x1b[0m"
-	styledMarker := lipgloss.NewStyle().Background(lipgloss.Color(color)).Render("x")
-	markerIndex := strings.IndexByte(styledMarker, 'x')
-	if markerIndex <= 0 || !strings.Contains(rendered, reset) {
-		return rendered
-	}
-	backgroundSequence := styledMarker[:markerIndex]
-	return strings.ReplaceAll(rendered, reset, reset+backgroundSequence) + reset
 }
 
 func (m *model) openStatsView() {
