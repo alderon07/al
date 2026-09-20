@@ -20,10 +20,10 @@ var (
 	iconBrand      = pixelIcon{".##.", "####", "◉", "*"}
 	iconCommand    = pixelIcon{"#...", ".###", "$", "$"}
 	iconEdit       = pixelIcon{"...#", ".##.", "✎", "~"}
-	iconFavorite   = pixelIcon{".#.#", "###.", "♥", "*"}
+	iconFavorite   = pixelIcon{".#.#", "###.", "♥︎", "*"}
 	iconFunction   = pixelIcon{"#..#", ".##.", "ƒ", "f"}
 	iconHealth     = pixelIcon{".##.", "####", "!", "!"}
-	iconHeart      = pixelIcon{"#..#", ".##.", "♥", "*"}
+	iconHeart      = pixelIcon{"#..#", ".##.", "♥︎", "*"}
 	iconHelp       = pixelIcon{".##.", "..#.", "?", "?"}
 	iconHistory    = pixelIcon{"###.", "#.##", "↶", "<"}
 	iconRepository = pixelIcon{"##..", "####", "◇", "#"}

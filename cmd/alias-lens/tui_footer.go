@@ -316,7 +316,7 @@ func renderFooterPreview(config FooterConfig, width int) string {
 func footerToneStyle(tone string) lipgloss.Style {
 	switch tone {
 	case "accent":
-		return lipgloss.NewStyle().Foreground(coralColor)
+		return lipgloss.NewStyle().Foreground(acidColor)
 	case "bright":
 		return lipgloss.NewStyle().Bold(true).Foreground(inkColor)
 	default:

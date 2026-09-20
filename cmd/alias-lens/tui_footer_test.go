@@ -89,8 +89,25 @@ func TestNamedFooterIconUsesSymbolInsteadOfBitmap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if icon != "♥" || icon == renderPixelIcon(iconHeart) {
+	if icon != "♥︎" || icon == renderPixelIcon(iconHeart) {
 		t.Fatalf("named heart icon = %q, want symbol", icon)
+	}
+	if width := lipgloss.Width(icon); width != 1 {
+		t.Fatalf("heart icon width = %d, want 1", width)
+	}
+}
+
+func TestHeartFooterPreservesFollowingSpace(t *testing.T) {
+	config := FooterConfig{Message: "Made with {icon} by Naqi", Icon: "heart", Alignment: "center", Tone: "quiet", Rule: "none"}
+	preview := renderFooterPreview(config, 40)
+	if !strings.Contains(preview, "♥︎ by") {
+		t.Fatalf("preview lost the space after the heart: %q", preview)
+	}
+
+	applyFooterConfig(config)
+	t.Cleanup(func() { applyFooterConfig(defaultFooterConfig()) })
+	if credit := makerCredit(40); !strings.Contains(credit, "♥︎ by") {
+		t.Fatalf("saved footer lost the space after the heart: %q", credit)
 	}
 }
 
@@ -123,6 +140,17 @@ func TestFooterToneAndRuleRender(t *testing.T) {
 	}
 	if lipgloss.Height(credit) != 2 || lipgloss.Width(credit) != 24 {
 		t.Fatalf("styled footer size = %dx%d, want 24x2:\n%s", lipgloss.Width(credit), lipgloss.Height(credit), credit)
+	}
+}
+
+func TestFooterAccentToneFollowsActiveTheme(t *testing.T) {
+	t.Cleanup(func() { applyTheme(defaultTheme()) })
+	for _, name := range []string{"tokyo-night", "dracula"} {
+		theme := builtInTheme(name)
+		applyTheme(theme)
+		if got, want := footerToneStyle("accent").GetForeground(), lipgloss.Color(theme.Accent); got != want {
+			t.Errorf("%s footer accent = %v, want %v", name, got, want)
+		}
 	}
 }
 
