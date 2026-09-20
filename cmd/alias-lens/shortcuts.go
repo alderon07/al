@@ -78,8 +78,8 @@ func terminalShortcut(label string, key shortcutKey) shortcutBinding {
 var shortcutDefinitions = []shortcutDefinition{
 	{action: shortcutHelp,
 		windows: shortcutBindings(terminalShortcut("F1", shortcutKey{typeCode: tea.KeyF1}), terminalShortcut("?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', allowShift: true})),
-		linux: shortcutBindings(nativeShortcut("Ctrl+?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', ctrl: true, allowShift: true}),
-			terminalShortcut("F1", shortcutKey{typeCode: tea.KeyF1}), terminalShortcut("?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', allowShift: true})),
+		linux: shortcutBindings(terminalShortcut("F1", shortcutKey{typeCode: tea.KeyF1}),
+			nativeShortcut("Ctrl+?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', ctrl: true, allowShift: true}), terminalShortcut("?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', allowShift: true})),
 		macos: shortcutBindings(nativeShortcut("Cmd+?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', super: true, allowShift: true}),
 			terminalShortcut("F1", shortcutKey{typeCode: tea.KeyF1}), terminalShortcut("?", shortcutKey{typeCode: tea.KeyRunes, runeCode: '?', allowShift: true}))},
 	{action: shortcutStats,
@@ -87,8 +87,8 @@ var shortcutDefinitions = []shortcutDefinition{
 		linux:   shortcutBindings(terminalShortcut("F2", shortcutKey{typeCode: tea.KeyF2})),
 		macos:   shortcutBindings(nativeShortcut("Cmd+2", shortcutKey{typeCode: tea.KeyRunes, runeCode: '2', super: true}), terminalShortcut("F2", shortcutKey{typeCode: tea.KeyF2}))},
 	{action: shortcutSettings,
-		windows: shortcutBindings(nativeShortcut("Ctrl+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', ctrl: true}), terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3})),
-		linux:   shortcutBindings(nativeShortcut("Ctrl+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', ctrl: true}), terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3})),
+		windows: shortcutBindings(terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3}), nativeShortcut("Ctrl+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', ctrl: true})),
+		linux:   shortcutBindings(terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3}), nativeShortcut("Ctrl+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', ctrl: true})),
 		macos:   shortcutBindings(nativeShortcut("Cmd+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', super: true}), terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3}))},
 	{action: shortcutThemes,
 		windows: shortcutBindings(terminalShortcut("F4", shortcutKey{typeCode: tea.KeyF4})),
@@ -343,6 +343,11 @@ func shortcutKeyMatches(message tea.KeyMsg, key shortcutKey) bool {
 		return false
 	}
 	if key.typeCode != tea.KeyRunes {
+		return true
+	}
+	if key.ctrl && key.runeCode == '?' && len(message.Runes) == 1 && message.Runes[0] == '_' {
+		// Legacy terminals encode Ctrl+/ and Ctrl+? as the ASCII unit separator,
+		// which Bubble Tea reports as Ctrl+_.
 		return true
 	}
 	return len(message.Runes) == 1 && unicodeLower(message.Runes[0]) == unicodeLower(key.runeCode)

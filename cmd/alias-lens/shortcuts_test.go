@@ -62,8 +62,8 @@ func TestShortcutProfilesUsePlatformConventions(t *testing.T) {
 	}{
 		{profile: shortcutWindows, action: shortcutAdd, want: "Ctrl+N"},
 		{profile: shortcutWindows, action: shortcutRefresh, want: "F5 / Ctrl+R"},
-		{profile: shortcutLinux, action: shortcutHelp, want: "Ctrl+? / F1 / ?"},
-		{profile: shortcutLinux, action: shortcutSettings, want: "Ctrl+, / F3"},
+		{profile: shortcutLinux, action: shortcutHelp, want: "F1 / Ctrl+? / ?"},
+		{profile: shortcutLinux, action: shortcutSettings, want: "F3 / Ctrl+,"},
 		{profile: shortcutLinux, action: shortcutRefresh, want: "Ctrl+R / F5"},
 		{profile: shortcutMacOS, action: shortcutAdd, want: "Cmd+N / Ctrl+N"},
 		{profile: shortcutMacOS, action: shortcutEdit, want: "Cmd+Shift+E / Ctrl+E"},
@@ -304,7 +304,7 @@ func TestShortcutGuideUsesFriendlyMacLabels(t *testing.T) {
 
 func TestWideNavigationUsesReadableModifierNames(t *testing.T) {
 	hint := pageNavigationHint(120, shortcutLinux)
-	for _, want := range []string{"Ctrl+? help", "Ctrl+, settings", "Ctrl+Z versions"} {
+	for _, want := range []string{"F1 help", "F3 settings", "Ctrl+Z versions"} {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("wide navigation hint is missing %q: %s", want, hint)
 		}
@@ -345,6 +345,14 @@ func TestPreferredControlPunctuationOpensPages(t *testing.T) {
 				t.Fatalf("pageForShortcut(%s) = %d, %t, want %d, true", test.key.String(), page, ok, test.page)
 			}
 		})
+	}
+}
+
+func TestLegacyControlQuestionEncodingOpensHelp(t *testing.T) {
+	key := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'_'}, Ctrl: true}
+	page, ok := pageForShortcut(key, shortcutLinux)
+	if !ok || page != pageHelp {
+		t.Fatalf("pageForShortcut(%s) = %d, %t, want %d, true", key.String(), page, ok, pageHelp)
 	}
 }
 

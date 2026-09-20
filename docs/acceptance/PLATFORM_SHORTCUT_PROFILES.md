@@ -8,6 +8,13 @@
 - App-specific pages use `F2` through `F8`. Each page keeps one unmodified function-key binding that works in a legacy terminal.
 - Every action has a terminal-safe binding. A profile remains usable when the user selects it on a different operating system or when the terminal does not send Command or modified punctuation keys.
 - Enhanced terminal reports preserve the shifted printable character, so `Ctrl+?` opens help and `Ctrl+,` opens settings when the terminal reports those modifiers.
+- PTY tests send the actual Kitty keyboard and xterm `modifyOtherKeys` byte
+  sequences for `Ctrl+?` and `Ctrl+,` through Bubble Tea. Both encodings open
+  the advertised page instead of entering punctuation into search.
+- Linux and Windows show `F1` and `F3` before modified punctuation because
+  those function keys work in legacy terminals. A legacy `Ctrl+?` byte is
+  normalized from `Ctrl+_`; a legacy comma remains search text because its
+  byte stream contains no Ctrl modifier.
 - `Delete` removes the selected alias only when the search field is empty. `Backspace` and `Delete` continue to edit nonempty search text.
 - Forms, confirmations, and text fields handle input before global shortcuts.
 - Pasted text and unassigned modified keys do not invoke an action or enter text.

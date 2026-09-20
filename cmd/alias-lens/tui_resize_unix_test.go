@@ -90,6 +90,51 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 	}
 }
 
+func TestControlPunctuationPTY(t *testing.T) {
+	tests := []struct {
+		name     string
+		sequence string
+		page     tuiPage
+		expected string
+	}{
+		{name: "kitty ctrl comma", sequence: "\x1b[44;5u", page: pageSettings, expected: "Compose your footer"},
+		{name: "xterm ctrl comma", sequence: "\x1b[27;5;44~", page: pageSettings, expected: "Compose your footer"},
+		{name: "kitty ctrl question", sequence: "\x1b[47:63;6u", page: pageHelp},
+		{name: "xterm ctrl question", sequence: "\x1b[27;6;63~", page: pageHelp},
+		{name: "legacy ctrl question", sequence: "\x1f", page: pageHelp},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			command := exec.Command(os.Args[0], "-test.run=^TestTUIResizeHelper$")
+			command.Env = append(os.Environ(), "ALIAS_LENS_TUI_RESIZE_HELPER=1", "NO_COLOR=1", "TERM=xterm-256color")
+			terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 30, Cols: 100})
+			if err != nil {
+				t.Fatal(err)
+			}
+			output := &synchronizedBuffer{}
+			go func() { _, _ = io.Copy(output, terminal) }()
+			t.Cleanup(func() {
+				_, _ = terminal.Write([]byte{3})
+				_ = terminal.Close()
+				if command.Process != nil {
+					_ = command.Process.Kill()
+				}
+				_ = command.Wait()
+			})
+			waitForPTYText(t, output, 0, resizeFooterMessage(100, 30, pageAliases))
+			offset := output.length()
+			if _, err := terminal.Write([]byte(test.sequence)); err != nil {
+				t.Fatal(err)
+			}
+			expected := test.expected
+			if expected == "" {
+				expected = resizeFooterMessage(100, 30, test.page)
+			}
+			waitForPTYText(t, output, offset, expected)
+		})
+	}
+}
+
 func TestTUIResizeHelper(t *testing.T) {
 	if os.Getenv("ALIAS_LENS_TUI_RESIZE_HELPER") != "1" {
 		return
@@ -143,6 +188,8 @@ func resizeFooterMessage(width, height int, page tuiPage) string {
 		pageName = "stats"
 	case pageHelp:
 		pageName = "help"
+	case pageSettings:
+		pageName = "settings"
 	}
 	return "Made by Naqi " + strconv.Itoa(width) + "x" + strconv.Itoa(height) + " " + pageName
 }
