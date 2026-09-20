@@ -38,7 +38,7 @@ func addAliasToFileWithMetadata(path, name, command, description string, metadat
 		return err
 	}
 
-	contents, err := os.ReadFile(path)
+	contents, err := readFileLimited(path, aliasFileLimit)
 	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -56,6 +56,51 @@ func addAliasToFileWithMetadata(path, name, command, description string, metadat
 	}
 	lines = insertAliasLinesWithMetadata(lines, name, command, description, metadata)
 	updated := []byte(strings.TrimLeft(strings.Join(lines, "\n"), "\n") + "\n")
+	return writeAliasFile(path, contents, updated, mode)
+}
+
+type aliasAddition struct {
+	Name        string
+	Command     string
+	Description string
+	Metadata    EntryMetadata
+}
+
+func addAliasesToFile(path string, additions []aliasAddition) error {
+	contents, mode, lines, err := readAliasFile(path)
+	if err != nil {
+		return err
+	}
+	existing := make(map[string]struct{})
+	for _, line := range lines {
+		name, _, ok := parseAliasDefinition(line)
+		if ok {
+			existing[name] = struct{}{}
+		}
+	}
+	validated := make([]aliasAddition, 0, len(additions))
+	for _, addition := range additions {
+		addition.Name, addition.Command, addition.Description, err = validateAliasInput(addition.Name, addition.Command, addition.Description)
+		if err != nil {
+			return err
+		}
+		addition.Metadata, err = validateEditableMetadata(addition.Metadata)
+		if err != nil {
+			return err
+		}
+		if _, found := existing[addition.Name]; found {
+			return fmt.Errorf("alias %q already exists", addition.Name)
+		}
+		existing[addition.Name] = struct{}{}
+		validated = append(validated, addition)
+	}
+	for _, addition := range validated {
+		lines = insertAliasLinesWithMetadata(lines, addition.Name, addition.Command, addition.Description, addition.Metadata)
+	}
+	updated := []byte(strings.TrimLeft(strings.Join(lines, "\n"), "\n") + "\n")
+	if len(updated) > aliasFileLimit {
+		return fmt.Errorf("alias file would exceed %d bytes", aliasFileLimit)
+	}
 	return writeAliasFile(path, contents, updated, mode)
 }
 
@@ -233,7 +278,7 @@ func aliasesPath() (string, error) {
 }
 
 func readAliasFile(path string) ([]byte, os.FileMode, []string, error) {
-	contents, err := os.ReadFile(path)
+	contents, err := readFileLimited(path, aliasFileLimit)
 	if err != nil {
 		return nil, 0, nil, err
 	}

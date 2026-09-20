@@ -166,8 +166,8 @@ func reconcileTrackedFile(config AppConfig, tracked TrackedFileConfig) error {
 	if err != nil {
 		return err
 	}
-	local, localErr := os.ReadFile(tracked.Source)
-	remote, remoteErr := os.ReadFile(target)
+	local, localErr := readFileLimited(tracked.Source, trackedFileLimit)
+	remote, remoteErr := readFileLimited(target, trackedFileLimit)
 	localMissing, remoteMissing := os.IsNotExist(localErr), os.IsNotExist(remoteErr)
 	if localErr != nil && !localMissing {
 		return localErr
@@ -220,21 +220,15 @@ func pushTrackedFile(config AppConfig, tracked TrackedFileConfig, contents []byt
 	if output, err := gitOutput("-C", config.Repository, "commit", "--only", "-m", message, "--", tracked.RepositoryPath); err != nil {
 		return fmt.Errorf("git commit failed: %s", cleanCommandOutput(output))
 	}
-	if err := scanOutgoingAliasHistory(config.Repository, config.AliasFile); err != nil {
-		return err
-	}
-	if err := scanOutgoingFileHistory(config.Repository, tracked.RepositoryPath, "tracked-file"); err != nil {
-		return err
-	}
-	if output, err := gitOutput("-C", config.Repository, "push"); err != nil {
-		return fmt.Errorf("git push failed: %s; run al watch to retry", cleanCommandOutput(output))
+	if err := pushRepository(config); err != nil {
+		return fmt.Errorf("push tracked file: %w; run al watch to retry", err)
 	}
 	hash := contentHash(contents)
 	return writeSyncStateAt(statePath, SyncState{LocalHash: hash, RemoteHash: hash, Status: "pushed", Message: "committed and pushed local update", UpdatedAt: time.Now()})
 }
 
 func replaceTrackedFile(path string, contents []byte) error {
-	current, err := os.ReadFile(path)
+	current, err := readFileLimited(path, trackedFileLimit)
 	if err != nil {
 		return err
 	}
@@ -325,8 +319,8 @@ func reconcileAliases(config AppConfig) error {
 	if err != nil {
 		return err
 	}
-	local, localErr := os.ReadFile(aliasPath)
-	remote, remoteErr := os.ReadFile(target)
+	local, localErr := readFileLimited(aliasPath, aliasFileLimit)
+	remote, remoteErr := readFileLimited(target, aliasFileLimit)
 	localMissing, remoteMissing := os.IsNotExist(localErr), os.IsNotExist(remoteErr)
 	if localErr != nil && !localMissing {
 		return localErr

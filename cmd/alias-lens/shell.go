@@ -543,8 +543,8 @@ func writeStartupFile(path string, contents, updated []byte) error {
 		return err
 	}
 	if len(contents) > 0 {
-		if err := os.WriteFile(path+".alias-lens.bak", contents, 0o600); err != nil {
-			return err
+		if err := writePrivateBackup(path+".alias-lens.bak", contents); err != nil {
+			return fmt.Errorf("create startup backup: %w", err)
 		}
 	}
 	return os.WriteFile(path, updated, mode)

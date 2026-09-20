@@ -32,9 +32,13 @@ func runSearchCommand(arguments []string) error {
 	for _, alias := range results {
 		metadata := ""
 		if len(alias.Tags) > 0 {
-			metadata = "  #" + strings.Join(alias.Tags, " #")
+			safeTags := make([]string, len(alias.Tags))
+			for index, tag := range alias.Tags {
+				safeTags[index] = terminalSafeText(tag)
+			}
+			metadata = "  #" + strings.Join(safeTags, " #")
 		}
-		fmt.Printf("%s\t%s\t%s%s\n", alias.Name, alias.Command, alias.Description, metadata)
+		fmt.Printf("%s\t%s\t%s%s\n", terminalSafeText(alias.Name), terminalSafeText(alias.Command), terminalSafeText(alias.Description), metadata)
 	}
 	return nil
 }

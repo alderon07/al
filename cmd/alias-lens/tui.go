@@ -791,7 +791,7 @@ func (m model) runConfirmationView(frame tuiFrame, header string) string {
 		reason = "Why: " + strings.Join(reasons, "; ") + "."
 	}
 
-	name := lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(alias.Name)
+	name := lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(terminalSafeText(alias.Name))
 	command := lipgloss.NewStyle().
 		Width(max(32, contentWidth-4)).
 		Padding(1, 2).
@@ -799,7 +799,7 @@ func (m model) runConfirmationView(frame tuiFrame, header string) string {
 		Background(panelColor).
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(coralColor).
-		Render(markerPrefix(iconCommand) + wrapText(alias.Command, max(24, contentWidth-13)))
+		Render(markerPrefix(iconCommand) + wrapText(terminalSafeText(alias.Command), max(24, contentWidth-13)))
 	body := pixelIconLabel(iconHealth, "Review before using this alias", titleStyle) +
 		"\n" + dimStyle.Render("Alias ") + name + dimStyle.Render(" may make changes that are hard to undo.") +
 		"\n\n" + command +
@@ -1393,6 +1393,7 @@ func (m model) searchFocused() bool {
 }
 
 func renderAlias(alias Alias, active bool, width int) string {
+	alias = terminalSafeAlias(alias)
 	cardWidth := max(34, width-3)
 	marker := "  "
 	if active {
@@ -1429,6 +1430,22 @@ func renderAlias(alias Alias, active bool, width int) string {
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(borderColor).
 		Render(lineOne + "\n" + description + "\n" + lineTwo)
+}
+
+func terminalSafeAlias(alias Alias) Alias {
+	alias.Name = terminalSafeText(alias.Name)
+	alias.Command = terminalSafeText(alias.Command)
+	alias.Description = terminalSafeText(alias.Description)
+	alias.Category = terminalSafeText(alias.Category)
+	alias.Tags = append([]string(nil), alias.Tags...)
+	for index := range alias.Tags {
+		alias.Tags[index] = terminalSafeText(alias.Tags[index])
+	}
+	alias.Issues = append([]string(nil), alias.Issues...)
+	for index := range alias.Issues {
+		alias.Issues[index] = terminalSafeText(alias.Issues[index])
+	}
+	return alias
 }
 
 func (m model) visibleCount() int { return max(1, (m.height-14)/4) }
@@ -1803,7 +1820,7 @@ func printPlainAliasList(output io.Writer, aliases []Alias, query string) {
 		if needle != "" && !strings.Contains(strings.ToLower(alias.Name+" "+alias.Command+" "+alias.Description), needle) {
 			continue
 		}
-		fmt.Fprintf(output, "%s\t%s\n", alias.Name, alias.Command)
+		fmt.Fprintf(output, "%s\t%s\n", terminalSafeText(alias.Name), terminalSafeText(alias.Command))
 	}
 	fmt.Fprintln(output, "Use 'al search QUERY' for non-interactive search.")
 }

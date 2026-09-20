@@ -48,7 +48,7 @@ func runImportCommand(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	current, err := os.ReadFile(aliasPath)
+	current, err := readFileLimited(aliasPath, aliasFileLimit)
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func printImportPlan(path string, plan importPlan) {
 func terminalSafeText(value string) string {
 	var output strings.Builder
 	for _, character := range value {
-		if unicode.IsControl(character) {
+		if unicode.IsControl(character) || isBidirectionalFormatting(character) {
 			if character <= 0xff {
 				fmt.Fprintf(&output, `\x%02x`, character)
 			} else {
@@ -231,4 +231,13 @@ func terminalSafeText(value string) string {
 		output.WriteRune(character)
 	}
 	return output.String()
+}
+
+func isBidirectionalFormatting(character rune) bool {
+	switch character {
+	case '\u061c', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069':
+		return true
+	default:
+		return false
+	}
 }

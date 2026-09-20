@@ -2,12 +2,63 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
 
 func managedRepositoryRoot(home string) string {
 	return filepath.Join(home, ".local", "share", "alias-lens", "repos")
+}
+
+func ensureManagedRepositoryDirectory(path string) error {
+	if err := os.MkdirAll(path, 0o700); err != nil {
+		return err
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return fmt.Errorf("managed repository path %s is not a real directory", path)
+	}
+	if !managedRepositoryDirectoryOwnedByUser(info) {
+		return fmt.Errorf("managed repository path %s is not owned by the current user", path)
+	}
+	if err := os.Chmod(path, 0o700); err != nil {
+		return fmt.Errorf("make managed repository path private: %w", err)
+	}
+	info, err = os.Lstat(path)
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm() != 0o700 {
+		return fmt.Errorf("managed repository path %s is not private", path)
+	}
+	return nil
+}
+
+func ensureManagedRepositoryPath(root, target string) error {
+	root = filepath.Clean(root)
+	target = filepath.Clean(target)
+	relative, err := filepath.Rel(root, target)
+	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("managed repository path %s is outside %s", target, root)
+	}
+	if err := ensureManagedRepositoryDirectory(root); err != nil {
+		return err
+	}
+	if relative == "." {
+		return nil
+	}
+	current := root
+	for _, component := range strings.Split(relative, string(filepath.Separator)) {
+		current = filepath.Join(current, component)
+		if err := ensureManagedRepositoryDirectory(current); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func managedRepositoryDestination(home string, repo RemoteRepo) (string, error) {

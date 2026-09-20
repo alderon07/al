@@ -3,7 +3,22 @@ package main
 import (
 	"fmt"
 	"io"
+	"os"
 )
+
+const (
+	aliasFileLimit   = 8 << 20
+	trackedFileLimit = 32 << 20
+)
+
+func readFileLimited(path string, limit int64) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	return readOpenedFile(file, limit)
+}
 
 func readRegularFile(path string, limit int64) ([]byte, error) {
 	file, err := openRegularFile(path)
@@ -11,6 +26,10 @@ func readRegularFile(path string, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	defer file.Close()
+	return readOpenedFile(file, limit)
+}
+
+func readOpenedFile(file *os.File, limit int64) ([]byte, error) {
 	info, err := file.Stat()
 	if err != nil {
 		return nil, err

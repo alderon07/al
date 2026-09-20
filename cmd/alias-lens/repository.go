@@ -173,11 +173,11 @@ func showRepositoryDiffTo(output io.Writer) error {
 	if err != nil {
 		return err
 	}
-	local, err := os.ReadFile(source)
+	local, err := readFileLimited(source, aliasFileLimit)
 	if err != nil {
 		return err
 	}
-	remote, err := os.ReadFile(target)
+	remote, err := readFileLimited(target, aliasFileLimit)
 	if os.IsNotExist(err) {
 		remote = nil
 	} else if err != nil {
@@ -207,7 +207,7 @@ func showRepositoryDiffTo(output io.Writer) error {
 		fmt.Fprintln(output, "REMOTE ONLY", name)
 	}
 	for _, conflict := range conflicts {
-		fmt.Fprintf(output, "CHANGED    %s\n  local:  %s\n  remote: %s\n", conflict.Name, conflict.Local, conflict.Remote)
+		fmt.Fprintf(output, "CHANGED    %s\n  local:  %s\n  remote: %s\n", conflict.Name, terminalSafeText(conflict.Local), terminalSafeText(conflict.Remote))
 	}
 	return nil
 }
@@ -224,7 +224,7 @@ func pullRepository() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	local, err := os.ReadFile(source)
+	local, err := readFileLimited(source, aliasFileLimit)
 	localMissing := os.IsNotExist(err)
 	if err != nil && !localMissing {
 		return "", err
@@ -232,7 +232,7 @@ func pullRepository() (string, error) {
 	if localMissing {
 		local = nil
 	}
-	remote, err := os.ReadFile(target)
+	remote, err := readFileLimited(target, aliasFileLimit)
 	if os.IsNotExist(err) {
 		return "Repository updated; it does not contain an alias file yet", nil
 	}
@@ -253,7 +253,7 @@ func pullRepository() (string, error) {
 			return "", err
 		}
 	}
-	imported := 0
+	var additions []aliasAddition
 	skippedFunctions := 0
 	for _, name := range remoteOnly {
 		command, isAlias := remoteAliases[name]
@@ -261,11 +261,14 @@ func pullRepository() (string, error) {
 			skippedFunctions++
 			continue
 		}
-		if err := addAliasToFile(source, name, command, "Imported from the configured repository"); err != nil {
+		additions = append(additions, aliasAddition{Name: name, Command: command, Description: "Imported from the configured repository"})
+	}
+	if len(additions) > 0 {
+		if err := addAliasesToFile(source, additions); err != nil {
 			return "", err
 		}
-		imported++
 	}
+	imported := len(additions)
 	if imported == 0 && skippedFunctions == 0 {
 		return "Repository pulled; no new aliases were found", nil
 	}
@@ -285,7 +288,7 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 		return "", fmt.Errorf("configured repository is unavailable: %s", strings.TrimSpace(string(output)))
 	}
 
-	contents, err := os.ReadFile(sourcePath)
+	contents, err := readFileLimited(sourcePath, aliasFileLimit)
 	if err != nil {
 		return "", err
 	}
@@ -296,7 +299,10 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 	if err != nil {
 		return "", err
 	}
-	existing, _ := os.ReadFile(target)
+	existing, readErr := readFileLimited(target, aliasFileLimit)
+	if readErr != nil && !os.IsNotExist(readErr) {
+		return "", readErr
+	}
 	changed := !bytes.Equal(contents, existing)
 	if changed {
 		if err := writeRepositoryFile(config.Repository, relative, contents, 0o644); err != nil {
@@ -310,11 +316,8 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 		}
 	}
 	if push {
-		if err := scanOutgoingAliasHistory(config.Repository, relative); err != nil {
-			return "", err
-		}
-		if output, err := gitOutput("-C", config.Repository, "push"); err != nil {
-			return "", fmt.Errorf("git push failed: %s; retry with al sync --push", strings.TrimSpace(string(output)))
+		if err := pushRepository(config); err != nil {
+			return "", fmt.Errorf("push aliases: %w; retry with al sync --push", err)
 		}
 		return "Aliases committed and pushed", nil
 	}
@@ -344,4 +347,128 @@ func scanOutgoingFileHistory(repository, relative, label string) error {
 		}
 	}
 	return nil
+}
+
+type repositoryPushPlan struct {
+	Remote      string
+	Destination string
+	Snapshot    string
+	RemoteBase  string
+}
+
+func pushRepository(config AppConfig) error {
+	plan, err := prepareRepositoryPush(config)
+	if err != nil {
+		return err
+	}
+	refspec := plan.Snapshot + ":" + plan.Destination
+	lease := "--force-with-lease=" + plan.Destination + ":" + plan.RemoteBase
+	if output, err := gitOutput("-C", config.Repository, "push", "--porcelain", lease, "--", plan.Remote, refspec); err != nil {
+		return fmt.Errorf("git push failed: %s", cleanCommandOutput(output))
+	}
+	return nil
+}
+
+func prepareRepositoryPush(config AppConfig) (repositoryPushPlan, error) {
+	branchOutput, err := gitOutput("-C", config.Repository, "symbolic-ref", "--quiet", "--short", "HEAD")
+	if err != nil {
+		return repositoryPushPlan{}, fmt.Errorf("push requires a checked-out branch")
+	}
+	branch := strings.TrimSpace(string(branchOutput))
+	remoteOutput, err := gitOutput("-C", config.Repository, "config", "--get", "branch."+branch+".remote")
+	if err != nil || strings.TrimSpace(string(remoteOutput)) == "" {
+		return repositoryPushPlan{}, fmt.Errorf("branch %s has no upstream remote; publish it manually, then retry", branch)
+	}
+	remote := strings.TrimSpace(string(remoteOutput))
+	mergeOutput, err := gitOutput("-C", config.Repository, "config", "--get", "branch."+branch+".merge")
+	if err != nil {
+		return repositoryPushPlan{}, fmt.Errorf("branch %s has no upstream branch; publish it manually, then retry", branch)
+	}
+	destination := strings.TrimSpace(string(mergeOutput))
+	if !strings.HasPrefix(destination, "refs/heads/") {
+		return repositoryPushPlan{}, fmt.Errorf("branch %s has an unsupported upstream ref", branch)
+	}
+	if output, err := gitOutput("-C", config.Repository, "fetch", "--no-tags", "--force", "--", remote, destination); err != nil {
+		return repositoryPushPlan{}, fmt.Errorf("refresh upstream %s before push: %s", destination, cleanCommandOutput(output))
+	}
+	snapshotOutput, err := gitReviewOutputBounded(1024, config.Repository, "rev-parse", "--verify", "HEAD^{commit}")
+	if err != nil {
+		return repositoryPushPlan{}, fmt.Errorf("resolve current commit: %w", err)
+	}
+	snapshot := strings.TrimSpace(string(snapshotOutput))
+	upstreamOutput, err := gitReviewOutputBounded(1024, config.Repository, "rev-parse", "--verify", "FETCH_HEAD^{commit}")
+	if err != nil {
+		return repositoryPushPlan{}, fmt.Errorf("resolve refreshed upstream for branch %s: %w", branch, err)
+	}
+	upstream := strings.TrimSpace(string(upstreamOutput))
+	if err := validateOutgoingRepositoryHistory(config, upstream, snapshot); err != nil {
+		return repositoryPushPlan{}, err
+	}
+	return repositoryPushPlan{Remote: remote, Destination: destination, Snapshot: snapshot, RemoteBase: upstream}, nil
+}
+
+func validateOutgoingRepositoryHistory(config AppConfig, upstream, snapshot string) error {
+	allowed, err := repositoryPushAllowlist(config)
+	if err != nil {
+		return err
+	}
+	revisionsOutput, err := gitReviewOutputBounded(8<<20, config.Repository, "rev-list", "--reverse", upstream+".."+snapshot)
+	if err != nil {
+		return fmt.Errorf("inspect outgoing commits: %w", err)
+	}
+	for _, revision := range strings.Fields(string(revisionsOutput)) {
+		pathsOutput, err := gitReviewOutputBounded(8<<20, config.Repository, "diff-tree", "--root", "-m", "--no-commit-id", "--name-only", "--no-renames", "-r", "-z", revision)
+		if err != nil {
+			return fmt.Errorf("inspect outgoing commit %s: %w", revision, err)
+		}
+		for _, rawPath := range bytes.Split(pathsOutput, []byte{0}) {
+			if len(rawPath) == 0 {
+				continue
+			}
+			path := string(rawPath)
+			limit, ok := allowed[path]
+			if !ok {
+				return fmt.Errorf("push blocked because outgoing commit %s changes untracked path %s; publish that commit separately, then retry", revision, terminalSafeText(path))
+			}
+			object := revision + ":" + path
+			typeOutput, typeErr := gitReviewOutputBounded(1024, config.Repository, "cat-file", "-t", object)
+			if typeErr != nil {
+				continue
+			}
+			if strings.TrimSpace(string(typeOutput)) != "blob" {
+				return fmt.Errorf("push blocked because %s is not a regular file in outgoing commit %s", terminalSafeText(path), revision)
+			}
+			contents, showErr := gitReviewOutputBounded(limit, config.Repository, "show", object)
+			if showErr != nil {
+				return fmt.Errorf("inspect outgoing file %s: %w", terminalSafeText(path), showErr)
+			}
+			if findings := findSecretFindings(contents); len(findings) > 0 {
+				return fmt.Errorf("push blocked because outgoing commit %s may contain a secret in %s; remove it from local history, then retry", revision, terminalSafeText(path))
+			}
+		}
+	}
+	return nil
+}
+
+func gitReviewOutputBounded(limit int, repository string, arguments ...string) ([]byte, error) {
+	commandArguments := []string{"--no-replace-objects", "-C", repository}
+	commandArguments = append(commandArguments, arguments...)
+	return gitOutputBounded(limit, commandArguments...)
+}
+
+func repositoryPushAllowlist(config AppConfig) (map[string]int, error) {
+	allowed := make(map[string]int)
+	aliasPath, err := cleanRepositoryRelativePath(config.AliasFile, "alias_file")
+	if err != nil {
+		return nil, err
+	}
+	allowed[filepath.ToSlash(aliasPath)] = aliasFileLimit
+	for _, tracked := range config.TrackedFiles {
+		path, err := cleanRepositoryRelativePath(tracked.RepositoryPath, "tracked repository path")
+		if err != nil {
+			return nil, err
+		}
+		allowed[filepath.ToSlash(path)] = trackedFileLimit
+	}
+	return allowed, nil
 }

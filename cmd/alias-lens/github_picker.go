@@ -73,7 +73,7 @@ func runRepoPicker(only string) error {
 		return err
 	}
 	if selected, ok := finished.(repoPickerModel); ok && selected.result != "" {
-		fmt.Println(selected.result)
+		fmt.Println(terminalSafeText(selected.result))
 	}
 	return nil
 }
@@ -171,8 +171,8 @@ func (m repoPickerModel) View() string {
 		if repo.Private {
 			visibility = "private"
 		}
-		providerBadge := lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(colorForCategory(repo.Provider)).Padding(0, 1).Render(strings.ToUpper(repo.ProviderTag))
-		line := style.Render(marker+repo.FullName) + "  " + providerBadge + "  " + dimStyle.Render(visibility)
+		providerBadge := lipgloss.NewStyle().Bold(true).Foreground(pageColor).Background(colorForCategory(repo.Provider)).Padding(0, 1).Render(strings.ToUpper(terminalSafeText(repo.ProviderTag)))
+		line := style.Render(marker+terminalSafeText(repo.FullName)) + "  " + providerBadge + "  " + dimStyle.Render(visibility)
 		list.WriteString(line)
 		if index < end-1 {
 			list.WriteByte('\n')
@@ -183,7 +183,7 @@ func (m repoPickerModel) View() string {
 	}
 	footer := dimStyle.Render("type to filter  ·  ↑↓ move  ·  enter clone/select  ·  esc cancel")
 	if len(m.warnings) > 0 {
-		footer += "\n" + dimStyle.Render("Unavailable: "+strings.Join(m.warnings, " · "))
+		footer += "\n" + dimStyle.Render("Unavailable: "+terminalSafeText(strings.Join(m.warnings, " · ")))
 	}
 	if m.busy {
 		footer = statusStyle.Render("Cloning and configuring repository…")
@@ -213,14 +213,14 @@ func cloneAndConfigureCmd(ctx context.Context, config AppConfig, connected RepoP
 			return repoConfiguredMsg{err: err}
 		}
 		root := managedRepositoryRoot(home)
-		if err := os.MkdirAll(root, 0o755); err != nil {
+		if err := ensureManagedRepositoryDirectory(root); err != nil {
 			return repoConfiguredMsg{err: err}
 		}
 		destination, err := managedRepositoryDestination(home, repo)
 		if err != nil {
 			return repoConfiguredMsg{err: err}
 		}
-		if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+		if err := ensureManagedRepositoryPath(root, destination); err != nil {
 			return repoConfiguredMsg{err: err}
 		}
 		if _, err := os.Stat(filepath.Join(destination, ".git")); os.IsNotExist(err) {

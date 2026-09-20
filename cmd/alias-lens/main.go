@@ -532,12 +532,12 @@ func loadAliases() ([]Alias, error) {
 	if err != nil {
 		return nil, fmt.Errorf("find alias file: %w", err)
 	}
-	contents, err := os.ReadFile(path)
+	contents, err := readFileLimited(path, aliasFileLimit)
 	if os.IsNotExist(err) {
 		if createErr := ensureAliasFileExists(path); createErr != nil {
 			return nil, createErr
 		}
-		contents, err = os.ReadFile(path)
+		contents, err = readFileLimited(path, aliasFileLimit)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("read %s: %w", path, err)

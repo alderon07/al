@@ -265,22 +265,30 @@ func resizeProbeRule(page tuiPage) string {
 
 func assertPTYContentWidth(t *testing.T, redraw string, rule rune, expected int, label string) {
 	t.Helper()
-	if longest := longestRuneRun(redraw, rule); longest != expected {
-		t.Fatalf("%s divider width = %d, want %d:\n%q", label, longest, expected, redraw)
+	runs := runeRunLengths(redraw, rule)
+	for _, length := range runs {
+		if length == expected {
+			return
+		}
 	}
+	t.Fatalf("%s divider widths = %v, want one with width %d:\n%q", label, runs, expected, redraw)
 }
 
-func longestRuneRun(value string, target rune) int {
-	longest, current := 0, 0
+func runeRunLengths(value string, target rune) []int {
+	var lengths []int
+	current := 0
 	for _, character := range value {
 		if character == target {
 			current++
-			longest = max(longest, current)
-		} else {
+		} else if current > 0 {
+			lengths = append(lengths, current)
 			current = 0
 		}
 	}
-	return longest
+	if current > 0 {
+		lengths = append(lengths, current)
+	}
+	return lengths
 }
 
 func waitForPTYText(t *testing.T, output *synchronizedBuffer, offset int, expected string) string {
