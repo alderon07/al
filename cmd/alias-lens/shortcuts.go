@@ -205,9 +205,9 @@ func runShortcutsCommand(arguments []string) error {
 }
 
 func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
-	enterAction := "Run the selected alias"
+	enterAction := "Use the selected alias"
 	if selectMode {
-		enterAction = "Select without running"
+		enterAction = "Select without using it"
 	}
 	guide := [][2]string{
 		{"Type", "Search names, commands, and descriptions"},

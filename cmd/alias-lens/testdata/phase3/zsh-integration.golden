@@ -1,5 +1,8 @@
 # Alias Lens Zsh integration
 unalias al 2>/dev/null || true
+if [[ -s "$HOME/.config/alias-lens/completion.zsh" ]]; then
+  source "$HOME/.config/alias-lens/completion.zsh"
+fi
 _alias_lens_flush_history() {
   setopt localoptions extendedhistory
   fc -AI "${HISTFILE:-$HOME/.zsh_history}"

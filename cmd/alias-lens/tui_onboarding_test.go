@@ -42,7 +42,7 @@ func TestQuestionMarkOpensAndClosesKeyboardGuide(t *testing.T) {
 		t.Fatal("? did not open the keyboard guide")
 	}
 	view := help.View()
-	for _, want := range []string{"Keyboard guide", "Run the selected alias", "Edit description, command, or name"} {
+	for _, want := range []string{"Keyboard guide", "Use the selected alias", "Edit description, command, or name"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("keyboard guide does not contain %q:\n%s", want, view)
 		}

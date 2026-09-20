@@ -586,6 +586,9 @@ fi
 
 const bashIntegration = `# Alias Lens Bash integration
 unalias al 2>/dev/null || true
+if [ -s "$HOME/.config/alias-lens/completion.bash" ]; then
+  . "$HOME/.config/alias-lens/completion.bash"
+fi
 # Bash records history timestamps only while HISTTIMEFORMAT is set. An empty
 # value keeps the normal history display while preserving dates for stats.
 if [ -z "${HISTTIMEFORMAT+x}" ]; then
@@ -679,6 +682,9 @@ command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE="${HISTFILE:-$HOME/.ba
 
 const zshIntegration = `# Alias Lens Zsh integration
 unalias al 2>/dev/null || true
+if [[ -s "$HOME/.config/alias-lens/completion.zsh" ]]; then
+  source "$HOME/.config/alias-lens/completion.zsh"
+fi
 _alias_lens_flush_history() {
   setopt localoptions extendedhistory
   fc -AI "${HISTFILE:-$HOME/.zsh_history}"

@@ -25,6 +25,8 @@ archives:
     files:
       - LICENSE
       - NOTICE
+      - THIRD_PARTY_NOTICES.md
+      - THIRD_PARTY_LICENSES.txt
       - README.md
 
 checksum:

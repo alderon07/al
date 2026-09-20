@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,8 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+
+	workflowplan "alias-lens/internal/plan"
 )
 
 const currentConfigVersion = 2
@@ -198,6 +201,12 @@ func validateAppConfig(config AppConfig) error {
 }
 
 func runConfigCommand(arguments []string) error {
+	if len(arguments) > 0 && arguments[0] == "profile" {
+		return runConfigProfileCommand(arguments[1:])
+	}
+	if len(arguments) == 1 && arguments[0] == "migrate" {
+		return runConfigMigrationCommand()
+	}
 	config, err := loadConfig()
 	if err != nil {
 		return err
@@ -300,13 +309,90 @@ func runConfigCommand(arguments []string) error {
 		}
 		config.Footer = defaultFooterConfig()
 	default:
-		return fmt.Errorf("usage: al config [shell|provider|protocol|disable|footer-message|footer-icon|footer-reset]")
+		return fmt.Errorf("usage: al config [shell|provider|protocol|disable|profile|footer-message|footer-icon|footer-reset]")
 	}
 	if err := saveConfig(config); err != nil {
 		return err
 	}
 	fmt.Println("Alias Lens configuration updated")
 	return nil
+}
+
+func runConfigProfileCommand(arguments []string) error {
+	if len(arguments) == 1 && arguments[0] == "list" {
+		observed, err := observeConfig()
+		if err != nil {
+			return err
+		}
+		if len(observed.Config.Profiles) == 0 {
+			fmt.Println("No machine profiles are active.")
+			fmt.Println("Add one with: al config profile add NAME")
+			return nil
+		}
+		fmt.Println("Active machine profiles:")
+		for _, profile := range observed.Config.Profiles {
+			fmt.Println("-", profile)
+		}
+		return nil
+	}
+	if len(arguments) != 2 || (arguments[0] != "add" && arguments[0] != "remove") {
+		return fmt.Errorf("usage: al config profile list|add NAME|remove NAME")
+	}
+	preview, err := buildProfilePlan(arguments[0], arguments[1])
+	if err != nil {
+		return err
+	}
+	fmt.Print(workflowplan.RenderPlain(preview))
+	if len(preview.Actions) == 0 {
+		fmt.Println("Nothing needed to change.")
+		return nil
+	}
+	path, err := configPath()
+	if err != nil {
+		return err
+	}
+	action, name := arguments[0], arguments[1]
+	if err := applyPrivatePlan(filepath.Dir(path), preview, func() (workflowplan.OperationPlan, error) {
+		return buildProfilePlan(action, name)
+	}); err != nil {
+		return err
+	}
+	if action == "add" {
+		fmt.Printf("Machine profile %q is now active.\n", name)
+	} else {
+		fmt.Printf("Machine profile %q is no longer active.\n", name)
+	}
+	fmt.Printf("Your current aliases were left unchanged. Enter al catalog preview --from %s to review the new selection.\n", activeShellNameForConfig())
+	return nil
+}
+
+func runConfigMigrationCommand() error {
+	preview, err := buildConfigMigrationPlan()
+	if err != nil {
+		return err
+	}
+	fmt.Print(workflowplan.RenderPlain(preview))
+	if len(preview.Actions) == 0 {
+		fmt.Println("Nothing needed to change.")
+		return nil
+	}
+	path, err := configPath()
+	if err != nil {
+		return err
+	}
+	if err := applyPrivatePlan(filepath.Dir(path), preview, buildConfigMigrationPlan); err != nil {
+		return err
+	}
+	fmt.Println("Settings now use the current data format. Your choices did not change.")
+	return nil
+}
+
+func activeShellNameForConfig() string {
+	observed, err := observeConfig()
+	if err == nil && (observed.Config.Shell == "bash" || observed.Config.Shell == "zsh") {
+		return observed.Config.Shell
+	}
+	return "bash"
 }
 
 type ProviderConfig struct {
@@ -329,31 +415,31 @@ func loadConfig() (AppConfig, error) {
 	if err != nil {
 		return config, err
 	}
-	var header struct {
-		Version *int `json:"version"`
-	}
-	if err := json.Unmarshal(contents, &header); err != nil {
+	var fields map[string]json.RawMessage
+	if err := decodeUniqueJSON(contents, &fields); err != nil {
 		return config, fmt.Errorf("parse %s: %w", path, err)
 	}
 	rawVersion := 0
-	if header.Version != nil {
-		rawVersion = *header.Version
+	versionPresent := false
+	if raw, exists := fields["version"]; exists {
+		versionPresent = true
+		if err := json.Unmarshal(raw, &rawVersion); err != nil || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			return config, fmt.Errorf("parse %s: invalid configuration version", path)
+		}
 	}
 	if rawVersion <= 1 {
-		var fields map[string]json.RawMessage
-		if err := json.Unmarshal(contents, &fields); err != nil {
-			return config, fmt.Errorf("parse %s: %w", path, err)
-		}
 		for _, field := range []string{"profiles", "shortcut_profile", "footer"} {
 			if _, exists := fields[field]; exists {
 				return config, fmt.Errorf("parse %s: configuration version %d cannot contain %q; remove that field or set it after migration", path, rawVersion, field)
 			}
 		}
 	}
-	if err := json.Unmarshal(contents, &config); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(contents))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&config); err != nil {
 		return config, fmt.Errorf("parse %s: %w", path, err)
 	}
-	if header.Version == nil {
+	if !versionPresent {
 		config.Version = 0
 	}
 	var migrated bool

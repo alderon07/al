@@ -17,7 +17,7 @@ func TestRiskyAliasRequiresExplicitConfirmation(t *testing.T) {
 		t.Fatalf("risky alias ran without confirmation: confirm=%#v selected=%#v", confirm.runConfirm, confirm.selected)
 	}
 	view := confirm.View()
-	for _, want := range []string{"Review before running", "wipe", "git reset --hard", "discards uncommitted Git changes", "y", "run alias"} {
+	for _, want := range []string{"Review before using this alias", "wipe", "git reset --hard", "discards uncommitted Git changes", "y", "use alias"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("confirmation does not contain %q:\n%s", want, view)
 		}
@@ -42,7 +42,7 @@ func TestRiskyAliasConfirmationCanBeCanceled(t *testing.T) {
 
 	canceled, cmd := updated.(model).Update(tea.KeyMsg{Type: tea.KeyEsc})
 	result := canceled.(model)
-	if cmd != nil || result.runConfirm != nil || result.selected != nil || result.status != "Run canceled" {
+	if cmd != nil || result.runConfirm != nil || result.selected != nil || result.status != "Canceled" {
 		t.Fatalf("Esc did not cancel cleanly: %#v", result)
 	}
 }

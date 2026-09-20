@@ -1,6 +1,6 @@
 # State, planning, and portability specification
 
-Status: proposed on 2026-09-18. This document defines acceptance criteria before implementation. The user approved the plain-language and shortcut-profile portion on 2026-09-19. Every other work phase still needs an approval record before implementation starts.
+Status: approved for staged implementation on 2026-09-19. The phase 4 WSL restart check and the platform checks named in this document remain release gates. See `docs/acceptance/STATE_WORKFLOW_STAGES.md` for the approval scope.
 
 ## Purpose
 
@@ -233,7 +233,7 @@ The mutating command always does this work again:
 
 No command accepts a plan report as permission to skip these checks.
 
-Plain plan output uses the columns `ACTION`, `TARGET`, `RISK`, and `REASON`, followed by an approval and diagnostic summary. Terminal control bytes are escaped. JSON output is buffered before one stdout write and follows the error rules already defined for catalog shadow reports.
+Plain plan output uses short sentences such as `Create`, `Update`, `Low risk`, and `Review this first`. It ends by confirming that nothing changed. It does not expose internal field names or diagnostic codes. Terminal control bytes are escaped. JSON output is buffered before one stdout write and follows the error rules already defined for catalog shadow reports.
 
 ## Catalog semantic comparison
 
@@ -868,7 +868,7 @@ Tests use isolated temporary homes and repositories. They set every shell, XDG, 
 | Expected state | Static candidates match the command specification. Dynamic candidates stay inert and bounded. Installation is idempotent and shell-specific. Removal preserves unrelated settings and refuses edited blocks. Existing help and command behavior remain unchanged. |
 | Automated evidence | Command-spec parity tests, Bash and Zsh completion golden tests, PTY completion tests, mutation-plan tests, and phase 3 baseline comparisons. |
 | Terminal evidence | Bash 3.2, Bash 5.2, and Zsh 5.9 completion sessions. |
-| Approval | Required before completions implementation. |
+| Approval | Generated Bash and Zsh completion programs and bounded read-only candidates approved by the user on 2026-09-19. Installation and removal still require the shared operation-plan writer and their automated and terminal evidence. |
 
 ### SW-013 preserves privacy, repository isolation, and command compatibility
 
@@ -926,7 +926,7 @@ The review found and corrected these blocking ambiguities:
 
 An implementation review on 2026-09-19 checked the approved plain-language and shortcut-profile work. It found and corrected version-1 decoding of version-2 fields, missing profile validation, pasted and modified keys reaching actions or text fields, Meta being treated as Command, duplicated shortcut label and matching rules, hidden configuration errors, and help text that claimed unavailable fallbacks. The release checklist still requires native terminal evidence before shortcut profiles are complete.
 
-No unresolved product-boundary, compatibility, or safety blocker remains in the draft. Independent approval is still required before any implementation stage starts.
+The user approved staged implementation on 2026-09-19. The first implementation review found that catalog activation cannot use a group of independent private-file transactions. Activation and rollback remain blocked until one recovery protocol can cover the generated file, local state, and the owned startup-file range as one old-or-new change. This block does not apply to read-only status, plans, inactive import, semantic comparison, profiles, shortcuts, or completion files.
 
 ## Review checklist
 

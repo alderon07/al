@@ -54,7 +54,7 @@ func TestDecodeRejectsUnsafeStructure(t *testing.T) {
 }
 
 func TestCatalogImportAllowlist(t *testing.T) {
-	allowed := map[string]bool{"bytes": true, "encoding/json": true, "errors": true, "fmt": true, "io": true, "regexp": true, "sort": true, "strings": true, "unicode/utf8": true}
+	allowed := map[string]bool{"bytes": true, "crypto/sha256": true, "encoding/hex": true, "encoding/json": true, "errors": true, "fmt": true, "io": true, "regexp": true, "sort": true, "strings": true, "unicode/utf8": true}
 	packages, err := parser.ParseDir(token.NewFileSet(), ".", func(info os.FileInfo) bool { return !strings.HasSuffix(info.Name(), "_test.go") }, parser.ImportsOnly)
 	if err != nil {
 		t.Fatal(err)

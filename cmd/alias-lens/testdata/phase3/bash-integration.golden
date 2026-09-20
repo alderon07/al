@@ -1,5 +1,8 @@
 # Alias Lens Bash integration
 unalias al 2>/dev/null || true
+if [ -s "$HOME/.config/alias-lens/completion.bash" ]; then
+  . "$HOME/.config/alias-lens/completion.bash"
+fi
 # Bash records history timestamps only while HISTTIMEFORMAT is set. An empty
 # value keeps the normal history display while preserving dates for stats.
 if [ -z "${HISTTIMEFORMAT+x}" ]; then

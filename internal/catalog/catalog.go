@@ -14,6 +14,7 @@ import (
 
 const (
 	SchemaVersion    = 1
+	SchemaVersion2   = 2
 	MaxDocumentBytes = 8 << 20
 	MaxEntries       = 10000
 	MaxDiagnostics   = 100
@@ -31,9 +32,15 @@ type Entry struct {
 	Category    string                          `json:"category,omitempty"`
 	Tags        []string                        `json:"tags,omitempty"`
 	Platforms   []string                        `json:"platforms,omitempty"`
+	When        *Conditions                     `json:"when,omitempty"`
 	Favorite    bool                            `json:"favorite,omitempty"`
 	Portable    *Portable                       `json:"portable,omitempty"`
 	Native      map[string]NativeImplementation `json:"native,omitempty"`
+}
+type Conditions struct {
+	ProfilesAny  []string `json:"profiles_any,omitempty"`
+	ProfilesNone []string `json:"profiles_none,omitempty"`
+	Shells       []string `json:"shells,omitempty"`
 }
 type Portable struct {
 	Program       string   `json:"program"`
@@ -43,6 +50,46 @@ type Portable struct {
 type NativeImplementation struct {
 	AliasValue   *string `json:"alias_value,omitempty"`
 	FunctionBody *string `json:"function_body,omitempty"`
+}
+
+// wireCatalogV1 and wireCatalogV2 are deliberately separate wire models. The v1
+// decoder has no conditions field, so a v2-only value cannot cross the v1
+// serialization boundary by accident.
+type wireCatalogV1 struct {
+	SchemaVersion int           `json:"schema_version"`
+	Entries       []wireEntryV1 `json:"entries"`
+}
+
+type wireEntryV1 struct {
+	ID          string                          `json:"id"`
+	Name        string                          `json:"name"`
+	Kind        string                          `json:"kind"`
+	Description string                          `json:"description,omitempty"`
+	Category    string                          `json:"category,omitempty"`
+	Tags        []string                        `json:"tags,omitempty"`
+	Platforms   []string                        `json:"platforms,omitempty"`
+	Favorite    bool                            `json:"favorite,omitempty"`
+	Portable    *Portable                       `json:"portable,omitempty"`
+	Native      map[string]NativeImplementation `json:"native,omitempty"`
+}
+
+type wireCatalogV2 struct {
+	SchemaVersion int           `json:"schema_version"`
+	Entries       []wireEntryV2 `json:"entries"`
+}
+
+type wireEntryV2 struct {
+	ID          string                          `json:"id"`
+	Name        string                          `json:"name"`
+	Kind        string                          `json:"kind"`
+	Description string                          `json:"description,omitempty"`
+	Category    string                          `json:"category,omitempty"`
+	Tags        []string                        `json:"tags,omitempty"`
+	Platforms   []string                        `json:"platforms,omitempty"`
+	When        *Conditions                     `json:"when,omitempty"`
+	Favorite    bool                            `json:"favorite,omitempty"`
+	Portable    *Portable                       `json:"portable,omitempty"`
+	Native      map[string]NativeImplementation `json:"native,omitempty"`
 }
 type Diagnostic struct {
 	Code       string `json:"code"`
@@ -60,8 +107,9 @@ var idPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 var commandNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]*$`)
 var functionNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 var programPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.+-]*$`)
+var profileNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 var deniedPrograms = makeSet(strings.Fields("alias bg break builtin cd command compdef continue declare dirs disown enable eval exec exit export false fc fg functions getopts hash jobs kill let local logout popd pushd read readonly return set shift source suspend times trap true typeset ulimit umask unalias unset wait whence where which . :"))
-var fieldRank = makeRank([]string{"root", "schema_version", "entries", "id", "name", "kind", "description", "category", "tags", "platforms", "favorite", "portable", "native"})
+var fieldRank = makeRank([]string{"root", "schema_version", "entries", "id", "name", "kind", "description", "category", "tags", "platforms", "when", "favorite", "portable", "native"})
 
 func makeSet(values []string) map[string]bool {
 	result := map[string]bool{}
@@ -83,8 +131,8 @@ func diagnostic(code string, index int, field, message string) Diagnostic {
 
 func Validate(value Catalog) []Diagnostic {
 	var result []Diagnostic
-	if value.SchemaVersion != SchemaVersion {
-		result = append(result, diagnostic("invalid_schema_version", -1, "schema_version", "schema_version must be 1"))
+	if value.SchemaVersion != SchemaVersion && value.SchemaVersion != SchemaVersion2 {
+		result = append(result, diagnostic("invalid_schema_version", -1, "schema_version", "schema_version must be 1 or 2"))
 	}
 	if value.Entries == nil {
 		result = append(result, diagnostic("missing_entries", -1, "entries", "entries is required"))
@@ -137,6 +185,12 @@ func Validate(value Catalog) []Diagnostic {
 				result = append(result, diagnostic("invalid_platform", index, "platforms", "platform is not supported"))
 			}
 		}
+		if value.SchemaVersion == SchemaVersion && entry.When != nil {
+			result = append(result, diagnostic("unsupported_when", index, "when", "when requires schema_version 2"))
+		}
+		if value.SchemaVersion == SchemaVersion2 && entry.When != nil {
+			validateConditions(&result, index, entry.When)
+		}
 		if entry.Portable != nil {
 			if entry.Kind != "command" {
 				result = append(result, diagnostic("portable_function", index, "portable", "portable is valid only for command entries"))
@@ -154,6 +208,45 @@ func Validate(value Catalog) []Diagnostic {
 		}
 	}
 	return orderAndLimit(result)
+}
+
+func validateConditions(result *[]Diagnostic, index int, value *Conditions) {
+	if len(value.ProfilesAny) == 0 && len(value.ProfilesNone) == 0 && len(value.Shells) == 0 {
+		*result = append(*result, diagnostic("empty_when", index, "when", "when needs at least one condition"))
+	}
+	validateProfiles := func(field string, values []string) {
+		if len(values) > 32 {
+			*result = append(*result, diagnostic("too_many_"+field, index, "when", field+" exceeds 32 values"))
+		}
+		seen := map[string]bool{}
+		for _, item := range values {
+			if !profileNamePattern.MatchString(item) {
+				*result = append(*result, diagnostic("invalid_"+field, index, "when", field+" contains an invalid profile name"))
+			}
+			if seen[item] {
+				*result = append(*result, diagnostic("duplicate_"+field, index, "when", field+" contains a duplicate profile"))
+			}
+			seen[item] = true
+		}
+	}
+	validateProfiles("profiles_any", value.ProfilesAny)
+	validateProfiles("profiles_none", value.ProfilesNone)
+	any := makeSet(value.ProfilesAny)
+	for _, item := range value.ProfilesNone {
+		if any[item] {
+			*result = append(*result, diagnostic("overlapping_profiles", index, "when", "a profile cannot appear in both profile lists"))
+		}
+	}
+	seenShells := map[string]bool{}
+	for _, shell := range value.Shells {
+		if shell != "bash" && shell != "zsh" {
+			*result = append(*result, diagnostic("invalid_condition_shell", index, "when", "shells can contain only bash or zsh"))
+		}
+		if seenShells[shell] {
+			*result = append(*result, diagnostic("duplicate_condition_shell", index, "when", "shells contains a duplicate value"))
+		}
+		seenShells[shell] = true
+	}
 }
 
 func validatePortable(result *[]Diagnostic, index int, value *Portable) {
@@ -211,6 +304,7 @@ func Normalize(value Catalog) Catalog {
 		result.Entries[index] = entry
 		result.Entries[index].Native = nil
 		result.Entries[index].Portable = nil
+		result.Entries[index].When = nil
 		result.Entries[index].Tags = uniqueSorted(entry.Tags)
 		result.Entries[index].Platforms = orderedPlatforms(entry.Platforms)
 		if len(result.Entries[index].Tags) == 0 {
@@ -227,6 +321,13 @@ func Normalize(value Catalog) Catalog {
 		}
 		if entry.Portable != nil {
 			result.Entries[index].Portable = &Portable{Program: entry.Portable.Program, Args: append([]string{}, entry.Portable.Args...), PassArguments: entry.Portable.PassArguments}
+		}
+		if entry.When != nil {
+			result.Entries[index].When = &Conditions{
+				ProfilesAny:  uniqueSorted(entry.When.ProfilesAny),
+				ProfilesNone: uniqueSorted(entry.When.ProfilesNone),
+				Shells:       uniqueSorted(entry.When.Shells),
+			}
 		}
 	}
 	sort.SliceStable(result.Entries, func(i, j int) bool {
@@ -272,16 +373,22 @@ func orderedPlatforms(values []string) []string {
 }
 
 func Encode(value Catalog) ([]byte, []Diagnostic) {
+	value = Normalize(value)
 	diagnostics := Validate(value)
 	if len(diagnostics) > 0 {
 		return nil, diagnostics
 	}
-	value = Normalize(value)
 	var output bytes.Buffer
 	encoder := json.NewEncoder(&output)
 	encoder.SetEscapeHTML(false)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(value); err != nil {
+	var wire any
+	if value.SchemaVersion == SchemaVersion {
+		wire = toCatalogV1(value)
+	} else {
+		wire = toCatalogV2(value)
+	}
+	if err := encoder.Encode(wire); err != nil {
 		return nil, []Diagnostic{diagnostic("encode_failed", -1, "root", "catalog encoding failed")}
 	}
 	if output.Len() > MaxDocumentBytes {
@@ -303,17 +410,69 @@ func Decode(data []byte) (Catalog, []Diagnostic) {
 	if err := checkRequiredFields(data); err != nil {
 		return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", err.Error())}
 	}
+	var header struct {
+		SchemaVersion int `json:"schema_version"`
+	}
+	if err := json.Unmarshal(data, &header); err != nil {
+		return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", "catalog structure is invalid")}
+	}
 	var value Catalog
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&value); err != nil {
-		return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", "catalog structure is invalid")}
+	switch header.SchemaVersion {
+	case SchemaVersion:
+		var wire wireCatalogV1
+		if err := decoder.Decode(&wire); err != nil {
+			return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", "catalog structure is invalid")}
+		}
+		value = fromCatalogV1(wire)
+	case SchemaVersion2:
+		var wire wireCatalogV2
+		if err := decoder.Decode(&wire); err != nil {
+			return Catalog{}, []Diagnostic{diagnostic("invalid_structure", -1, "root", "catalog structure is invalid")}
+		}
+		value = fromCatalogV2(wire)
+	default:
+		return Catalog{}, Validate(Catalog{SchemaVersion: header.SchemaVersion, Entries: []Entry{}})
 	}
+	value = Normalize(value)
 	diagnostics := Validate(value)
 	if len(diagnostics) > 0 {
 		return Catalog{}, diagnostics
 	}
 	return value, nil
+}
+
+func toCatalogV1(value Catalog) wireCatalogV1 {
+	result := wireCatalogV1{SchemaVersion: SchemaVersion, Entries: make([]wireEntryV1, len(value.Entries))}
+	for index, entry := range value.Entries {
+		result.Entries[index] = wireEntryV1{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
+	}
+	return result
+}
+
+func toCatalogV2(value Catalog) wireCatalogV2 {
+	result := wireCatalogV2{SchemaVersion: SchemaVersion2, Entries: make([]wireEntryV2, len(value.Entries))}
+	for index, entry := range value.Entries {
+		result.Entries[index] = wireEntryV2{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, When: entry.When, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
+	}
+	return result
+}
+
+func fromCatalogV1(value wireCatalogV1) Catalog {
+	result := Catalog{SchemaVersion: SchemaVersion, Entries: make([]Entry, len(value.Entries))}
+	for index, entry := range value.Entries {
+		result.Entries[index] = Entry{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
+	}
+	return result
+}
+
+func fromCatalogV2(value wireCatalogV2) Catalog {
+	result := Catalog{SchemaVersion: SchemaVersion2, Entries: make([]Entry, len(value.Entries))}
+	for index, entry := range value.Entries {
+		result.Entries[index] = Entry{ID: entry.ID, Name: entry.Name, Kind: entry.Kind, Description: entry.Description, Category: entry.Category, Tags: entry.Tags, Platforms: entry.Platforms, When: entry.When, Favorite: entry.Favorite, Portable: entry.Portable, Native: entry.Native}
+	}
+	return result
 }
 
 func checkRequiredFields(data []byte) error {
@@ -323,6 +482,10 @@ func checkRequiredFields(data []byte) error {
 	}
 	if _, ok := root["schema_version"]; !ok {
 		return fmt.Errorf("schema_version is required")
+	}
+	var schemaVersion int
+	if err := json.Unmarshal(root["schema_version"], &schemaVersion); err != nil {
+		return fmt.Errorf("schema_version must be a number")
 	}
 	entriesRaw, ok := root["entries"]
 	if !ok {
@@ -346,6 +509,25 @@ func checkRequiredFields(data []byte) error {
 			for _, field := range []string{"program", "args", "pass_arguments"} {
 				if _, ok := portable[field]; !ok {
 					return fmt.Errorf("portable required field is missing")
+				}
+			}
+		}
+		if raw, ok := entry["when"]; ok {
+			if schemaVersion != SchemaVersion2 {
+				return fmt.Errorf("when requires schema_version 2")
+			}
+			var conditions map[string]json.RawMessage
+			if err := json.Unmarshal(raw, &conditions); err != nil {
+				return fmt.Errorf("when must be an object")
+			}
+			for _, field := range []string{"profiles_any", "profiles_none", "shells"} {
+				list, present := conditions[field]
+				if !present {
+					continue
+				}
+				var values []string
+				if err := json.Unmarshal(list, &values); err != nil || len(values) == 0 {
+					return fmt.Errorf("when.%s must be a non-empty list", field)
 				}
 			}
 		}
@@ -470,11 +652,16 @@ func changedFields(a, b Entry) []string {
 	if strings.Join(a.Platforms, "\x00") != strings.Join(b.Platforms, "\x00") {
 		fields = append(fields, "platforms")
 	}
+	aj, _ := json.Marshal(a.When)
+	bj, _ := json.Marshal(b.When)
+	if !bytes.Equal(aj, bj) {
+		fields = append(fields, "when")
+	}
 	if a.Favorite != b.Favorite {
 		fields = append(fields, "favorite")
 	}
-	aj, _ := json.Marshal(a.Portable)
-	bj, _ := json.Marshal(b.Portable)
+	aj, _ = json.Marshal(a.Portable)
+	bj, _ = json.Marshal(b.Portable)
 	if !bytes.Equal(aj, bj) {
 		fields = append(fields, "portable")
 	}

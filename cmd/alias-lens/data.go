@@ -62,11 +62,19 @@ func localDataPaths(home string) ([]dataPath, error) {
 		{Kind: "alias backup", Path: aliasPath + ".alias-lens.bak"},
 		{Kind: "configuration", Path: filepath.Join(configDirectory, "config.json")},
 		{Kind: "config backup", Path: filepath.Join(configDirectory, "config.json.alias-lens.bak")},
+		{Kind: "portable catalog", Path: filepath.Join(configDirectory, "catalog.json")},
+		{Kind: "Bash suggestions", Path: filepath.Join(configDirectory, "completion.bash")},
+		{Kind: "Zsh suggestions", Path: filepath.Join(configDirectory, "completion.zsh")},
+		{Kind: "generated shells", Path: filepath.Join(configDirectory, "generated")},
+		{Kind: "change backups", Path: filepath.Join(configDirectory, "backups")},
+		{Kind: "change journals", Path: filepath.Join(configDirectory, "transactions")},
 		{Kind: "theme", Path: filepath.Join(configDirectory, "theme.json")},
 		{Kind: "usage", Path: usagelog.Path(home)},
 		{Kind: "revisions", Path: filepath.Join(dataDirectory, "revisions")},
 		{Kind: "cloned repos", Path: filepath.Join(dataDirectory, "repos")},
 		{Kind: "sync state", Path: stateDirectory},
+		{Kind: "catalog snapshots", Path: filepath.Join(stateDirectory, "catalog-snapshots")},
+		{Kind: "native approvals", Path: filepath.Join(stateDirectory, "native-approvals.json")},
 	}
 	startupPaths, err := adapter.StartupPaths(home, currentPlatform())
 	if err != nil {

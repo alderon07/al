@@ -2,6 +2,7 @@
 /al
 /alias-lens
 /dist/
+node_modules/
 *.test
 *.out
 coverage.*
@@ -49,3 +50,6 @@ repos/
 Thumbs.db
 *~
 *.swp
+
+# Local build metadata for the embedded diff viewer
+cmd/alias-lens/web-src/dist-meta.json

@@ -551,7 +551,7 @@ func (m model) View() string {
 	if m.selectMode {
 		title = pixelIconLabel(iconAlias, "Choose an alias to use in your shell.", titleStyle) + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
 	} else if m.executeMode {
-		title = pixelIconLabel(iconCommand, "Choose an alias to run.", titleStyle) + "\n" + dimStyle.Render("Press Enter to run it. Press Esc to leave without running anything.")
+		title = pixelIconLabel(iconCommand, "Choose an alias to use.", titleStyle) + "\n" + dimStyle.Render("Press Enter to use it. Press Esc to leave without choosing anything.")
 	}
 	if len(m.aliases) == 0 {
 		title = pixelIconLabel(iconAlias, "Set up your first shortcut.", titleStyle) + "\n" + dimStyle.Render("Create an alias here or add one to the active alias file.")
@@ -635,15 +635,15 @@ func (m model) View() string {
 			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
 		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("enter ") + cyanStyle("run") + dimStyle.Render("  ·  tab edit  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutHelp)+" help  ·  esc quit")
+		footer = dimStyle.Render("enter ") + cyanStyle("use") + dimStyle.Render("  ·  tab edit  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutHelp)+" help  ·  esc quit")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("run") + dimStyle.Render("  ·  tab edit  ·  ? help  ·  esc quit")
+			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("use") + dimStyle.Render("  ·  tab edit  ·  ? help  ·  esc quit")
 		}
 	}
 	if contentWidth < 50 {
 		action := "select"
 		if m.executeMode {
-			action = "run"
+			action = "use"
 		}
 		footer = dimStyle.Render("enter ") + cyanStyle(action) + dimStyle.Render("  ·  ? help  ·  esc quit")
 		if m.selectMode {
@@ -733,7 +733,7 @@ func (m model) updateRunConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if message.Type == tea.KeyEsc || message.String() == "n" {
 		m.runConfirm = nil
-		m.status = "Run canceled"
+		m.status = "Canceled"
 		return m, nil
 	}
 	if message.String() != "y" {
@@ -765,11 +765,11 @@ func (m model) runConfirmationView(width, height, contentWidth int, header strin
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(coralColor).
 		Render(renderPixelIcon(iconCommand) + " " + wrapText(alias.Command, max(24, contentWidth-13)))
-	body := pixelIconLabel(iconHealth, "Review before running", titleStyle) +
+	body := pixelIconLabel(iconHealth, "Review before using this alias", titleStyle) +
 		"\n" + dimStyle.Render("Alias ") + name + dimStyle.Render(" may make changes that are hard to undo.") +
 		"\n\n" + command +
 		"\n\n" + lipgloss.NewStyle().Foreground(coralColor).Render(wrapText(reason, contentWidth))
-	footer := aliasStyle.Render("y") + dimStyle.Render(" run alias  ·  ") + aliasStyle.Render("n") + dimStyle.Render(" or esc cancel")
+	footer := aliasStyle.Render("y") + dimStyle.Render(" use alias  ·  ") + aliasStyle.Render("n") + dimStyle.Render(" or esc cancel")
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
 	page = pageWithMaker(page, contentWidth, height)
 	return lipgloss.NewStyle().Width(width).Height(height).Padding(1, 3).Render(page)

@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "operation": "catalog.enable",
+  "inputs": [
+    {
+      "role": "catalog",
+      "display_path": "~/.config/alias-lens/catalog.json",
+      "sha256": "catalog"
+    },
+    {
+      "role": "config",
+      "display_path": "~/.config/alias-lens/config.json",
+      "sha256": "config"
+    }
+  ],
+  "actions": [
+    {
+      "sequence": 1,
+      "kind": "create",
+      "target_role": "generated_file",
+      "display_path": "~/.config/alias-lens/generated/bash/hash.sh",
+      "reason": "the resolved Bash definitions changed",
+      "risk": "low",
+      "planned_sha256": "generated",
+      "backup": false,
+      "reversible": true
+    },
+    {
+      "sequence": 2,
+      "kind": "activate",
+      "target_role": "active_pointer",
+      "display_path": "~/.local/state/alias-lens/active",
+      "reason": "activate the rendered definitions",
+      "risk": "review",
+      "planned_sha256": "pointer",
+      "backup": true,
+      "reversible": true
+    }
+  ],
+  "approvals": [
+    {
+      "kind": "native_code",
+      "entry_id": "a",
+      "shell": "bash",
+      "implementation_sha256": "other",
+      "state": "approved"
+    },
+    {
+      "kind": "native_code",
+      "entry_id": "b",
+      "shell": "zsh",
+      "implementation_sha256": "implementation",
+      "state": "required"
+    }
+  ],
+  "diagnostics": [],
+  "summary": {
+    "action_count": 2,
+    "blocked": false
+  }
+}

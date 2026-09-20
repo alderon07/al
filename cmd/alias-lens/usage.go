@@ -25,6 +25,8 @@ Find and use aliases:
   describe   Add generated comments to aliases that do not have descriptions
 
 Protect and recover aliases:
+  status     Show what is ready and what needs attention without changing files
+  plan       Preview a catalog or settings change without applying it
   check      Check alias syntax and details without running the file
   scan       Report likely secrets by type and line number; hides secret values
   history    List private revisions created before Alias Lens changes the file
@@ -47,6 +49,7 @@ Configure Git sync:
 Other commands:
   theme      List dark themes or select one by preset name
   shortcuts  Show or choose Windows, Linux, or macOS keyboard shortcuts
+  completion Print Bash or Zsh completion code
   shell-init Print Bash or Zsh integration; normally called by al setup
   --web      Start the optional local web interface on 127.0.0.1:8787
   --version  Print the installed version
@@ -55,13 +58,49 @@ Run "al help COMMAND" or "al COMMAND --help" for syntax, effects, and examples.
 `
 
 var commandUsage = map[string]string{
-	"catalog": `Usage: al catalog shadow [--shell bash|zsh] [--json]
+	"status": `Usage: al status [--json]
 
-Inspect the selected shell alias file through the shell-neutral catalog pipeline.
-Shadow mode safely converts supported entries and checks that they stay the same.
+Show whether settings, the portable catalog, shell setup, synchronization, and
+recovery state are ready. This command only reads local files. It does not
+create files, migrate settings, repair an interrupted change, or contact a
+provider. Exit status 0 means everything is ready. Status 1 means one or more
+items need attention.
+`,
+	"plan": `Usage: al plan [--json] COMMAND [ARGUMENTS]
+
+Preview a catalog or settings change without applying it. The report lists each
+file action, why it is needed, its review level, and whether it can be undone.
+Planning can use private temporary files for validation, but removes them before
+returning and does not change managed files.
+
+Available previews:
+  al plan config migrate
+  al plan config profile add NAME
+  al plan config profile remove NAME
+  al plan catalog migrate --to 2
+  al plan completion install bash
+  al plan completion remove zsh
+`,
+	"catalog": `Usage:
+  al catalog preview [--from bash|zsh] [--json]
+  al catalog import --from bash|zsh
+  al catalog shadow [--shell bash|zsh] [--json]
+  al catalog diff [--json|--show-code|--web] [--from repository|installed] [--shell bash|zsh]
+  al catalog migrate --to 2
+
+Preview checks which entries can move into a portable catalog and changes no
+files. Import copies safe entries into an inactive catalog. It keeps your native
+alias file and shell setup unchanged. Shadow prints the lower-level safety report.
 It never writes a catalog, alias file, startup file, configuration, or sync state.
 Exit status 0 means every inspected entry is equivalent. Status 1 means at least
 one entry needs attention. Status 2 means Alias Lens could not inspect the file.
+
+Catalog diff compares entries by their stable identity and reports which details
+changed without printing command or function text. --show-code displays exact
+private text only in an interactive terminal. It leaves both files unchanged.
+
+Catalog migrate saves a private backup, then updates a version 1 catalog to data
+format 2 without changing its entries or preparing shell files.
 `,
 	"pick": `Usage: al pick [--command] [QUERY]
 
@@ -225,13 +264,20 @@ a scoped API token without echo and keeps it only for the current picker.
   al config provider gitlab [HOST]
   al config protocol PROVIDER auto|ssh|https
   al config disable PROVIDER
+  al config migrate
+  al config profile list
+  al config profile add NAME
+  al config profile remove NAME
   al config footer-message MESSAGE
   al config footer-icon ICON
   al config footer-reset
 
 With no arguments, print the effective Alias Lens configuration without tokens.
 The other forms select a shell, enable a provider, choose its Git clone protocol,
-disable it, or customize the TUI footer. Use {icon} in MESSAGE to place the icon.
+manage local machine profiles, update the settings data format, disable a
+provider, or customize the TUI footer. Profile changes show their plan, save a
+private backup, and do not prepare new shell definitions automatically.
+Use {icon} in MESSAGE to place the icon.
 ICON may be heart, spark, brand, alias, command, stats, sync, theme, none, one
 emoji written as emoji:VALUE, or a custom 4x2 bitmap such as #..#/.##. Quote
 messages, emoji values, and custom bitmaps in a shell.
@@ -314,6 +360,20 @@ Examples:
   al shortcuts macos
   al shortcuts test
 `,
+	"completion": `Usage:
+  al completion bash|zsh
+  al completion install bash|zsh
+  al completion remove bash|zsh
+
+Print a deterministic completion program for Bash or Zsh. The program completes
+commands, flags, shell names, configured profile names, and entry names. Dynamic
+candidates are read only from local Alias Lens files. Completion never contacts
+a provider, runs an alias, or prints command and function implementations.
+
+Install saves the generated program in Alias Lens's private settings directory.
+Remove deletes that owned file so new shells stop loading suggestions. Neither
+command changes aliases or another shell's settings.
+`,
 	"shell-init": `Usage: al shell-init bash|zsh
 
 Print the selected shell's functions and prompt integration. Zsh and Bash 4+
@@ -342,14 +402,11 @@ func printUsage() {
 
 func printCommandUsage(command string) {
 	command = strings.ToLower(command)
-	if command == "version" || command == "-v" {
-		command = "--version"
-	}
-	text, ok := commandUsage[command]
+	spec, ok := lookupCommandSpec(command)
 	if !ok {
 		fmt.Printf("Unknown command %q.\n\n", command)
 		printUsage()
 		return
 	}
-	fmt.Print(text)
+	fmt.Print(spec.Usage)
 }

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0d1514" />
+    <title>Catalog changes · Alias Lens</title>
+    <link rel="stylesheet" href="/diff.css" />
+  </head>
+  <body>
+    <div class="paper-grid" aria-hidden="true"></div>
+    <main class="page">
+      <header class="masthead">
+        <a class="wordmark" href="/" aria-label="Alias Lens home"><span>&gt;_</span> alias/lens</a>
+        <div class="privacy-note"><i aria-hidden="true"></i> private loopback session</div>
+      </header>
+
+      <section class="intro" aria-labelledby="page-title">
+        <p class="kicker">CATALOG CHANGE DESK / READ ONLY</p>
+        <h1 id="page-title">See what changed.<br /><em>Decide later.</em></h1>
+        <p id="status" class="status" role="status" aria-live="polite">Reading the local comparison…</p>
+        <p class="source-line">Comparing <strong id="source-label">local copies</strong></p>
+      </section>
+
+      <section id="counts" class="counts" aria-label="Change totals"></section>
+
+      <section class="review" aria-labelledby="review-title">
+        <div class="section-heading">
+          <div><p class="section-number">01</p><h2 id="review-title">Review the summary</h2></div>
+          <label class="filter">Filter changes<input id="change-filter" type="search" autocomplete="off" placeholder="name or change type" /></label>
+        </div>
+        <div id="changes" class="change-list" aria-live="polite"></div>
+      </section>
+
+      <section class="exact-gate" aria-labelledby="exact-gate-title">
+        <div><p class="section-number">02</p><h2 id="exact-gate-title">Exact text stays closed</h2><p>Open it only when you are ready to inspect the command text. This screen cannot apply, edit, or merge anything.</p></div>
+        <button id="show-exact" class="primary-button" type="button">Show exact changes <span aria-hidden="true">↘</span></button>
+      </section>
+
+      <section id="exact-panel" class="exact-panel" aria-labelledby="exact-title" tabindex="-1" hidden>
+        <div class="section-heading exact-heading">
+          <div><p class="section-number">03</p><h2 id="exact-title">Exact before and after</h2></div>
+          <div class="layout-switch" aria-label="Diff layout">
+            <button type="button" data-layout="unified" aria-pressed="false">Unified</button>
+            <button type="button" data-layout="split" aria-pressed="true">Split</button>
+          </div>
+        </div>
+        <div id="exact-list" class="exact-list"></div>
+      </section>
+
+      <footer><span>Alias Lens never sent this comparison off your computer.</span><span>No apply actions live on this page.</span></footer>
+    </main>
+    <script type="module" src="/diff.js"></script>
+  </body>
+</html>

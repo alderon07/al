@@ -132,6 +132,30 @@ func runMain() int {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			return 1
 		}
+	case "status":
+		exitCode, err := runStatusCommand(os.Args[2:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+		return exitCode
+	case "plan":
+		exitCode, err := runPlanCommand(os.Args[2:])
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+		}
+		return exitCode
+	case "completion":
+		if err := runCompletionCommand(os.Args[2:], os.Stdout); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			if strings.HasPrefix(err.Error(), "usage:") || strings.HasPrefix(err.Error(), "unsupported shell") {
+				return 2
+			}
+			return 1
+		}
+	case "completion-candidates":
+		if !runCompletionCandidates(os.Args[2:], os.Stdout) {
+			return 1
+		}
 	case "pick":
 		commandOnly := false
 		executeSelection := false
@@ -396,6 +420,10 @@ func runWeb() error {
 
 	fmt.Printf("Alias Lens web mode is running at http://%s/#token=%s\n", address, token)
 	fmt.Println("Reading aliases from", aliasDisplayPath())
+	return serveLocalWeb(address, handler)
+}
+
+func serveLocalWeb(address string, handler http.Handler) error {
 	server := &http.Server{
 		Addr:              address,
 		Handler:           handler,
@@ -419,31 +447,61 @@ func generateWebToken() (string, error) {
 }
 
 func newWebHandler(token, expectedHost string) (http.Handler, error) {
+	return newWebHandlerWithCatalogDiff(token, expectedHost, nil)
+}
+
+func newWebHandlerWithCatalogDiff(token, expectedHost string, catalogDiff *catalogDiffWebView) (http.Handler, error) {
 	static, err := fs.Sub(web, "web")
 	if err != nil {
 		return nil, fmt.Errorf("load web assets: %w", err)
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/aliases", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			w.Header().Set("Allow", http.MethodGet)
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-			return
+	requireAuthentication := func(next http.HandlerFunc) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			provided := r.Header.Get("Authorization")
+			expected := "Bearer " + token
+			if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				http.Error(w, "web session authentication required", http.StatusUnauthorized)
+				return
+			}
+			next(w, r)
 		}
-		provided := r.Header.Get("Authorization")
-		expected := "Bearer " + token
-		if subtle.ConstantTimeCompare([]byte(provided), []byte(expected)) != 1 {
-			w.Header().Set("WWW-Authenticate", "Bearer")
-			http.Error(w, "web session authentication required", http.StatusUnauthorized)
-			return
-		}
-		aliasesHandler(w, r)
-	})
-	mux.Handle("/", http.FileServer(http.FS(static)))
+	}
+	if catalogDiff == nil {
+		mux.HandleFunc("/api/aliases", requireAuthentication(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet {
+				w.Header().Set("Allow", http.MethodGet)
+				http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+				return
+			}
+			aliasesHandler(w, r)
+		}))
+	} else {
+		mux.HandleFunc("/api/catalog-diff", requireAuthentication(catalogDiff.summaryHandler))
+		mux.HandleFunc("/api/catalog-diff/details", requireAuthentication(catalogDiff.detailHandler))
+	}
+	staticHandler := http.FileServer(http.FS(static))
+	if catalogDiff == nil {
+		mux.Handle("/", staticHandler)
+	} else {
+		mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/":
+				copy := r.Clone(r.Context())
+				copy.URL.Path = "/diff.html"
+				staticHandler.ServeHTTP(w, copy)
+			case "/diff.html", "/diff.css", "/diff.js":
+				staticHandler.ServeHTTP(w, r)
+			default:
+				http.NotFound(w, r)
+			}
+		})
+	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'none'; base-uri 'none'; frame-ancestors 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; font-src 'self'; worker-src 'self'; img-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
 		w.Header().Set("Referrer-Policy", "no-referrer")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if r.Host != expectedHost {

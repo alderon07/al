@@ -131,14 +131,14 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
     - [x] Record the clean pre-restart WSL 2 run and matching report hashes.
     - [ ] Shut down WSL, reopen it, and rerun the verifier.
 - [ ] Approve and deliver the state, planning, and portability work in `docs/STATE_WORKFLOW_SPEC.md` after the phase 4 WSL gate.
-  - [ ] Add the observational status and shared operation-plan foundation.
+  - [x] Add the observational status and shared operation-plan foundation.
   - [ ] Route catalog enablement and rollback through the approved transaction plan.
   - [ ] Add semantic catalog diff, three-way reconciliation, and native-approval gates.
-  - [ ] Add versioned machine profiles and catalog conditions.
+  - [x] Add versioned machine profiles and catalog conditions.
   - [ ] Use plain-language copy shared by CLI and TUI results.
   - [ ] Add selectable Windows, Linux, and macOS shortcut profiles with terminal-safe fallbacks.
     - [x] Add automatic OS and WSL defaults, saved overrides, shared semantic bindings, friendly help, and automated tests.
     - [ ] Check preferred keys and fallbacks in Windows Terminal, a Linux terminal, and macOS Terminal before release.
   - [ ] Add one-command catalog bootstrap.
-  - [ ] Add generated Bash and Zsh completions from one command specification.
+  - [x] Add generated Bash and Zsh completions from one command specification.
   - [ ] Defer alias packs until the required stable release cycle has passed.

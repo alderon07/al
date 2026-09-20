@@ -32,8 +32,6 @@ var shadowValidatorPath = trustedShadowShell
 var shadowSyntaxValidator = validateShadowSyntax
 var shadowStdout io.Writer = os.Stdout
 
-var errShadowDuplicateConfigField = errors.New("duplicate configuration field")
-
 const (
 	shadowConfigLimit = 1 << 20
 	shadowSourceLimit = 8 << 20
@@ -87,8 +85,17 @@ func runCatalogCommand(arguments []string) (exitCode int, commandErr error) {
 			commandErr = fmt.Errorf("shadow inspection stopped unexpectedly")
 		}
 	}()
+	if handled, code, err := runCatalogWorkflowCommand(arguments); handled {
+		return code, err
+	}
+	if len(arguments) > 0 && arguments[0] == "preview" {
+		return runCatalogPreviewCommand(arguments[1:])
+	}
+	if len(arguments) > 0 && arguments[0] == "import" {
+		return runCatalogImportCommand(arguments[1:])
+	}
 	if len(arguments) == 0 || arguments[0] != "shadow" {
-		return 2, fmt.Errorf("usage: al catalog shadow [--shell bash|zsh] [--json]")
+		return 2, catalogCommandUsageError()
 	}
 	jsonOutput := false
 	shellName := ""
@@ -257,64 +264,6 @@ func shadowShellAdapter(explicit string) (ShellAdapter, error) {
 		return nil, fmt.Errorf("unsupported configured shell %q", shellName)
 	}
 	return adapter, nil
-}
-
-func decodeUniqueJSON(contents []byte, target any) error {
-	decoder := json.NewDecoder(bytes.NewReader(contents))
-	var walk func(int) error
-	walk = func(depth int) error {
-		if depth > 32 {
-			return fmt.Errorf("JSON is too deeply nested")
-		}
-		token, err := decoder.Token()
-		if err != nil {
-			return err
-		}
-		delimiter, ok := token.(json.Delim)
-		if !ok {
-			return nil
-		}
-		switch delimiter {
-		case '{':
-			seen := map[string]bool{}
-			for decoder.More() {
-				keyToken, err := decoder.Token()
-				if err != nil {
-					return err
-				}
-				key, ok := keyToken.(string)
-				if !ok {
-					return fmt.Errorf("invalid object field")
-				}
-				if seen[key] {
-					return errShadowDuplicateConfigField
-				}
-				seen[key] = true
-				if err := walk(depth + 1); err != nil {
-					return err
-				}
-			}
-			_, err = decoder.Token()
-			return err
-		case '[':
-			for decoder.More() {
-				if err := walk(depth + 1); err != nil {
-					return err
-				}
-			}
-			_, err = decoder.Token()
-			return err
-		}
-		return nil
-	}
-	if err := walk(0); err != nil {
-		return err
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return fmt.Errorf("trailing JSON data")
-	}
-	strict := json.NewDecoder(bytes.NewReader(contents))
-	return strict.Decode(target)
 }
 
 func readShadowRegular(path string, limit int64) ([]byte, error) {
