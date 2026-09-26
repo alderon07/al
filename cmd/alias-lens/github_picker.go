@@ -188,8 +188,8 @@ func (m repoPickerModel) View() string {
 	if m.busy {
 		footer = statusStyle.Render("Cloning and configuring repository…")
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, subtitle, "", search, "", list.String(), "", footer)
-	return frame.renderWithMaker(page)
+	page := lipgloss.JoinVertical(lipgloss.Left, header, subtitle, "", search, "", list.String())
+	return frame.renderWithFooter(page, footer)
 }
 
 func filterRemoteRepos(repos []RemoteRepo, query string) []RemoteRepo {

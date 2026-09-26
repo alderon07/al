@@ -148,8 +148,8 @@ func (m model) revisionDrawerView(frame tuiFrame, header string) string {
 	} else {
 		footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body.String(), "", footer)
-	return frame.renderWithMaker(page)
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body.String())
+	return frame.renderWithFooter(page, footer)
 }
 
 func formatByteSize(size int64) string {

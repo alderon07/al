@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
@@ -62,6 +63,58 @@ func TestPageShortcutsWorkFromEveryPage(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestHeldPageShortcutDoesNotToggleBetweenPages(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	current := navigationTestModel(pageAliases)
+	current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF2})
+	if current.currentPage() != pageStats {
+		t.Fatalf("first shortcut opened %v, want stats", current.currentPage())
+	}
+	for range 12 {
+		current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF2, Repeat: true})
+		current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF2})
+		if current.currentPage() != pageStats {
+			t.Fatal("held shortcut toggled away from stats")
+		}
+	}
+
+	released, _ := current.Update(tea.KeyReleaseMsg{Key: tea.KeyMsg{Type: tea.KeyF2}})
+	current = pressPageShortcut(t, released.(model), tea.KeyMsg{Type: tea.KeyF2})
+	if current.currentPage() != pageAliases {
+		t.Fatalf("press after release opened %v, want aliases", current.currentPage())
+	}
+}
+
+func TestDifferentPageShortcutInterruptsRepeatGuard(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	current := pressPageShortcut(t, navigationTestModel(pageAliases), tea.KeyMsg{Type: tea.KeyF2})
+	current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF1})
+	if current.currentPage() != pageHelp {
+		t.Fatalf("different shortcut opened %v, want help", current.currentPage())
+	}
+	current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyDown})
+	current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF1})
+	if current.currentPage() != pageAliases {
+		t.Fatalf("shortcut after another key opened %v, want aliases", current.currentPage())
+	}
+}
+
+func TestLegacyPageShortcutCanToggleAfterQuietPeriod(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	current := pressPageShortcut(t, navigationTestModel(pageAliases), tea.KeyMsg{Type: tea.KeyF2})
+	current.lastShortcutAt = time.Now().Add(-2 * pageShortcutRepeatWindow)
+	current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF2})
+	if current.currentPage() != pageAliases {
+		t.Fatalf("shortcut after quiet period opened %v, want aliases", current.currentPage())
+	}
+}
+
+func pressPageShortcut(t *testing.T, current model, key tea.KeyMsg) model {
+	t.Helper()
+	updated, _ := current.Update(key)
+	return updated.(model)
 }
 
 func TestPageShortcutRestoresUnsavedThemePreview(t *testing.T) {

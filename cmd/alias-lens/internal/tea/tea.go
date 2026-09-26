@@ -76,15 +76,18 @@ const (
 )
 
 type KeyMsg struct {
-	Type  KeyType
-	Runes []rune
-	Alt   bool
-	Ctrl  bool
-	Meta  bool
-	Shift bool
-	Super bool
-	Paste bool
+	Type   KeyType
+	Runes  []rune
+	Alt    bool
+	Ctrl   bool
+	Meta   bool
+	Shift  bool
+	Super  bool
+	Paste  bool
+	Repeat bool
 }
+
+type KeyReleaseMsg struct{ Key KeyMsg }
 
 func (message KeyMsg) String() string {
 	prefix := ""
@@ -212,6 +215,7 @@ func (model *v2Model) View() tea2.View {
 	view := tea2.NewView(model.model.View())
 	view.AltScreen = model.config.altScreen
 	view.ReportFocus = model.config.reportFocus
+	view.KeyboardEnhancements.ReportEventTypes = true
 	if provider, ok := model.model.(terminalBackgroundModel); ok {
 		view.BackgroundColor = parseHexColor(provider.TerminalBackground())
 	}
@@ -243,7 +247,11 @@ func adaptCommand(command Cmd) tea2.Cmd {
 func translateMessage(message tea2.Msg) Msg {
 	switch value := message.(type) {
 	case tea2.KeyPressMsg:
-		return translateKey(value.Key())
+		key := translateKey(value.Key())
+		key.Repeat = value.Key().IsRepeat
+		return key
+	case tea2.KeyReleaseMsg:
+		return KeyReleaseMsg{Key: translateKey(value.Key())}
 	case tea2.WindowSizeMsg:
 		return WindowSizeMsg{Width: value.Width, Height: value.Height}
 	case tea2.FocusMsg:
