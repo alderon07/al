@@ -61,6 +61,8 @@ func localDataPaths(home string) ([]dataPath, error) {
 		{Kind: "alias file", Path: aliasPath},
 		{Kind: "alias backup", Path: aliasPath + ".alias-lens.bak"},
 		{Kind: "configuration", Path: filepath.Join(configDirectory, "config.json")},
+		{Kind: "context marks", Path: filepath.Join(configDirectory, "contexts.json")},
+		{Kind: "context lock", Path: filepath.Join(configDirectory, "contexts.lock")},
 		{Kind: "portable catalog", Path: filepath.Join(configDirectory, "catalog.json")},
 		{Kind: "Bash suggestions", Path: filepath.Join(configDirectory, "completion.bash")},
 		{Kind: "Zsh suggestions", Path: filepath.Join(configDirectory, "completion.zsh")},

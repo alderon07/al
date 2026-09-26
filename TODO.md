@@ -100,7 +100,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 ## Reduce the next alias pain points
 
 - [x] Let `Tab` return the selected alias to the prompt for editing instead of running it.
-- [ ] Add directory and Git-workspace scopes for suggestions and search ranking.
+- [x] Boost aliases marked for the current Git project or folder in suggestions and search ranking.
 - [ ] Add optional completion hooks for success rate, duration, and last-used stats.
 - [ ] Add configurable history exclusions before collecting more execution context.
 - [x] Add an import preview that finds duplicate names and commands before changing the alias file.

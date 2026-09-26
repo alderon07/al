@@ -30,6 +30,7 @@ const (
 	shortcutHealth
 	shortcutAdd
 	shortcutEdit
+	shortcutContext
 	shortcutDelete
 	shortcutRefresh
 	shortcutSave
@@ -114,6 +115,10 @@ var shortcutDefinitions = []shortcutDefinition{
 		windows: shortcutBindings(terminalShortcut("Ctrl+E", shortcutKey{typeCode: tea.KeyCtrlE})),
 		linux:   shortcutBindings(terminalShortcut("Ctrl+E", shortcutKey{typeCode: tea.KeyCtrlE})),
 		macos:   shortcutBindings(nativeShortcut("Cmd+Shift+E", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'e', super: true, shift: true}), terminalShortcut("Ctrl+E", shortcutKey{typeCode: tea.KeyCtrlE}))},
+	{action: shortcutContext,
+		windows: shortcutBindings(terminalShortcut("Ctrl+B", shortcutKey{typeCode: tea.KeyCtrlB})),
+		linux:   shortcutBindings(terminalShortcut("Ctrl+B", shortcutKey{typeCode: tea.KeyCtrlB})),
+		macos:   shortcutBindings(nativeShortcut("Cmd+B", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'b', super: true}), terminalShortcut("Ctrl+B", shortcutKey{typeCode: tea.KeyCtrlB}))},
 	{action: shortcutDelete,
 		windows: shortcutBindings(terminalShortcut("Delete", shortcutKey{typeCode: tea.KeyDelete}), nativeShortcut("Ctrl+D", shortcutKey{typeCode: tea.KeyCtrlD})),
 		linux:   shortcutBindings(terminalShortcut("Delete", shortcutKey{typeCode: tea.KeyDelete}), nativeShortcut("Ctrl+D", shortcutKey{typeCode: tea.KeyCtrlD})),
@@ -260,6 +265,7 @@ func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
 	return append(guide,
 		[2]string{shortcutLabel(profile, shortcutAdd), "Add an alias"},
 		[2]string{shortcutLabel(profile, shortcutEdit), "Edit description, command, or name"},
+		[2]string{shortcutLabel(profile, shortcutContext), "Mark or unmark an alias for this project or folder"},
 		[2]string{shortcutLabel(profile, shortcutDelete), "Delete an alias after confirmation"},
 		[2]string{shortcutLabel(profile, shortcutRevisions), "Browse and restore saved versions"},
 		[2]string{shortcutLabel(profile, shortcutStats), "Open alias usage stats"},

@@ -100,6 +100,13 @@ al search --json daily
 al use docker
 ```
 
+Mark an alias for the Git project you are working in with `al context add NAME`.
+Inside a Git repository, Alias Lens then puts that alias higher in suggestions
+throughout the project. Outside Git, the mark belongs to the current folder.
+Marked aliases remain available everywhere, and exact search matches still win.
+Use `al search --global QUERY` to see the original search order.
+Running `al search` without a query keeps the alphabetical list.
+
 ## Use the keys that matter
 
 Press `?` inside the TUI for the full searchable keyboard guide.
@@ -111,6 +118,7 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | `Tab` | Return the selected alias to the prompt without running it |
 | `Ctrl+N` | Add an alias |
 | `Ctrl+E` | Edit the selected alias |
+| `Ctrl+B` | Mark or unmark the selected alias for this project or folder |
 | `Delete` or `Ctrl+D` | Delete the selected alias after confirmation |
 | `F2` | Open usage stats |
 | `Ctrl+,` or `F3` | Customize the TUI footer |
@@ -158,6 +166,19 @@ al describe
 ```
 
 Alias Lens preserves comments that you wrote yourself.
+
+Manage project and folder marks from the terminal:
+
+```bash
+al context add deploy
+al context add ll --directory
+al context list
+al context remove deploy --all
+```
+
+The marks stay in a private local file. They do not change your alias definitions
+or sync to your dotfiles repository. `Ctrl+B` in the alias browser toggles the
+current project or folder mark. On macOS, `Cmd+B` is also available.
 
 It also finds common Bash and Zsh functions. Add metadata above an alias or function when you prefer to edit the file:
 

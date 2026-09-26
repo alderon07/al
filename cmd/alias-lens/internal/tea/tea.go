@@ -38,6 +38,7 @@ const (
 	KeyEscape    KeyType = KeyEsc
 
 	KeyCtrlA KeyType = 1
+	KeyCtrlB KeyType = 2
 	KeyCtrlC KeyType = 3
 	KeyCtrlD KeyType = 4
 	KeyCtrlE KeyType = 5
@@ -116,7 +117,7 @@ func (message KeyMsg) String() string {
 		KeyShiftTab: "shift+tab", KeyHome: "home", KeyEnd: "end", KeyPgUp: "pgup",
 		KeyPgDown: "pgdown", KeyDelete: "delete", KeyF1: "f1", KeyF2: "f2", KeyF3: "f3",
 		KeyF4: "f4", KeyF5: "f5", KeyF6: "f6", KeyF7: "f7", KeyF8: "f8",
-		KeyCtrlA: "ctrl+a", KeyCtrlC: "ctrl+c", KeyCtrlD: "ctrl+d", KeyCtrlE: "ctrl+e",
+		KeyCtrlA: "ctrl+a", KeyCtrlB: "ctrl+b", KeyCtrlC: "ctrl+c", KeyCtrlD: "ctrl+d", KeyCtrlE: "ctrl+e",
 		KeyCtrlF: "ctrl+f", KeyCtrlG: "ctrl+g", KeyCtrlH: "ctrl+h", KeyCtrlN: "ctrl+n", KeyCtrlR: "ctrl+r",
 		KeyCtrlS: "ctrl+s", KeyCtrlT: "ctrl+t", KeyCtrlU: "ctrl+u", KeyCtrlZ: "ctrl+z",
 	}
@@ -297,7 +298,7 @@ func translateKey(key tea2.Key) KeyMsg {
 
 func controlKeyType(code rune) (KeyType, bool) {
 	keys := map[rune]KeyType{
-		'a': KeyCtrlA, 'c': KeyCtrlC, 'd': KeyCtrlD, 'e': KeyCtrlE, 'f': KeyCtrlF,
+		'a': KeyCtrlA, 'b': KeyCtrlB, 'c': KeyCtrlC, 'd': KeyCtrlD, 'e': KeyCtrlE, 'f': KeyCtrlF,
 		'g': KeyCtrlG, 'h': KeyCtrlH, 'n': KeyCtrlN, 'r': KeyCtrlR, 's': KeyCtrlS, 't': KeyCtrlT, 'u': KeyCtrlU,
 		'z': KeyCtrlZ,
 	}

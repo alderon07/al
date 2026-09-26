@@ -47,6 +47,7 @@ func newPublicCommandSpecs() []commandSpec {
 		{"pick", "Select an alias without using it"},
 		{"use", "Select and use an alias through the shell integration"},
 		{"search", "Find aliases by name or metadata"},
+		{"context", "Mark aliases for the current project or folder"},
 		{"stats", "Show alias usage"},
 		{"export", "Export aliases or usage data"},
 		{"import", "Preview or import aliases from a file"},
@@ -168,8 +169,12 @@ func completionRules() []completionRule {
 		{Path: []string{"pick"}, Values: []string{"--command"}, Dynamic: "entries"},
 		{Path: []string{"pick", "--command"}, Dynamic: "entries"},
 		{Path: []string{"use"}, Dynamic: "entries"},
-		{Path: []string{"search"}, Values: []string{"--json"}, Dynamic: "entries"},
-		{Path: []string{"search", "--json"}, Dynamic: "entries"},
+		{Path: []string{"search"}, Values: []string{"--json", "--global"}, Dynamic: "entries"},
+		{Path: []string{"search", "--json"}, Values: []string{"--global"}, Dynamic: "entries"},
+		{Path: []string{"search", "--global"}, Values: []string{"--json"}, Dynamic: "entries"},
+		{Path: []string{"context"}, Values: []string{"list", "add", "remove"}},
+		{Path: []string{"context", "add"}, Dynamic: "entries"},
+		{Path: []string{"context", "remove"}, Dynamic: "entries"},
 		{Path: []string{"meta"}, Dynamic: "entries"},
 	}
 }

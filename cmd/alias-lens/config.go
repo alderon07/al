@@ -143,6 +143,13 @@ func validateTrackedFileConfig(tracked TrackedFileConfig) error {
 	if sameFilePath(tracked.Source, configFile) {
 		return fmt.Errorf("refusing to track Alias Lens configuration: %s", tracked.Source)
 	}
+	contextsFile, err := contextPath()
+	if err != nil {
+		return err
+	}
+	if sameFilePath(tracked.Source, contextsFile) {
+		return fmt.Errorf("refusing to track private context marks: %s", tracked.Source)
+	}
 	if _, err := cleanRepositoryRelativePath(tracked.RepositoryPath, "tracked repository path"); err != nil {
 		return err
 	}

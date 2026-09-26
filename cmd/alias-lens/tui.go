@@ -39,6 +39,7 @@ var (
 
 type model struct {
 	aliases           []Alias
+	context           contextRanking
 	query             string
 	cursor            int
 	width             int
@@ -135,6 +136,7 @@ func runTUI() {
 		fmt.Fprintf(os.Stderr, "Could not read %s: %v\n", aliasDisplayPath(), err)
 		return
 	}
+	ranking, contextErr := currentContextRanking()
 	if terminalIsDumb() {
 		printPlainAliasList(os.Stderr, aliases, "")
 		return
@@ -145,6 +147,9 @@ func runTUI() {
 	status := ""
 	if themeErr != nil {
 		status = themeErr.Error()
+	}
+	if contextErr != nil {
+		status = "Context ranking unavailable: " + contextErr.Error()
 	}
 
 	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithReportFocus()}
@@ -166,7 +171,7 @@ func runTUI() {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status, executeMode: true, tourVisible: tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}, options...).Run()
+	finished, err := tea.NewProgram(model{aliases: aliases, context: ranking, width: 80, height: 24, theme: theme, status: status, executeMode: true, tourVisible: tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}, options...).Run()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Alias Lens could not start:", err)
 		return
@@ -212,6 +217,7 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 	if err != nil {
 		return err
 	}
+	ranking, contextErr := currentContextRanking()
 	if terminalIsDumb() {
 		printPlainAliasList(os.Stderr, aliases, query)
 		return nil
@@ -238,7 +244,10 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	initial := model{aliases: aliases, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}
+	initial := model{aliases: aliases, context: ranking, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}
+	if contextErr != nil {
+		initial.status = "Context ranking unavailable: " + contextErr.Error()
+	}
 	finished, err := tea.NewProgram(initial, options...).Run()
 	if err != nil {
 		return err
@@ -344,6 +353,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.startEditForm(matches)
 			return m, nil
 		}
+		if !m.selectMode && matchesShortcut(message, m.shortcutProfile, shortcutContext) {
+			m.toggleSelectedContext(matches)
+			return m, nil
+		}
 		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type == tea.KeyCtrlD || m.query == "") {
 			if len(matches) > 0 {
 				m.deleteName = matches[m.cursor].Name
@@ -416,10 +429,62 @@ func (m *model) reloadAliasesAndTheme() {
 		m.cursor = 0
 		m.status = fmt.Sprintf("Reloaded %d aliases", len(aliases))
 	}
+	if ranking, err := currentContextRanking(); err == nil {
+		m.context = ranking
+	} else {
+		m.status = "Context ranking unavailable: " + err.Error()
+	}
 	theme, err := loadTheme()
 	if err == nil {
 		m.theme = theme
 		applyTheme(theme)
+	}
+}
+
+func (m *model) toggleSelectedContext(matches []Alias) {
+	if len(matches) == 0 {
+		return
+	}
+	selected := matches[min(m.cursor, len(matches)-1)]
+	count := 0
+	for _, alias := range m.aliases {
+		if alias.Name == selected.Name {
+			count++
+		}
+	}
+	if count > 1 {
+		m.status = "Duplicate alias name; run al check before marking it"
+		return
+	}
+	kind, path, err := contextToggleTarget(m.context, selected)
+	if err != nil {
+		m.status = err.Error()
+		return
+	}
+	if m.context.hasBinding(selected, kind, path) {
+		_, err = removeContextBindings(m.context.Shell, selected.Name, kind, path)
+	} else {
+		err = addContextBinding(selected, m.context.Shell, kind, path)
+	}
+	if err != nil {
+		m.status = "Could not change context: " + err.Error()
+		return
+	}
+	m.context, err = loadContextRanking(m.context.Shell, m.context.Working)
+	if err != nil {
+		m.status = "Context changed, but could not reload it: " + err.Error()
+		return
+	}
+	if m.context.hasBinding(selected, kind, path) {
+		m.status = "Marked " + selected.Name + " for this " + map[string]string{contextRepository: "project", contextDirectory: "folder"}[kind]
+	} else {
+		m.status = "Removed the local context mark from " + selected.Name
+	}
+	for index, alias := range m.currentAliases() {
+		if alias.Name == selected.Name && alias.Command == selected.Command && alias.Type == selected.Type {
+			m.cursor = index
+			break
+		}
 	}
 }
 
@@ -665,7 +730,15 @@ func (m model) View() string {
 		body.WriteByte('\n')
 		bodyLeadHeight = lipgloss.Height(lead)
 	} else if strings.TrimSpace(m.query) == "" {
-		lead := pixelIconLabel(iconSpark, "SUGGESTED FOR YOU", lipgloss.NewStyle().Bold(true).Foreground(amberColor))
+		label := "SUGGESTED FOR YOU"
+		if contentWidth >= 68 {
+			if m.context.Working.Repository != "" {
+				label += "  ·  PROJECT " + truncate(terminalSafeText(filepath.Base(m.context.Working.Repository)), max(8, contentWidth-42))
+			} else if m.context.Working.Directory != "" {
+				label += "  ·  THIS FOLDER"
+			}
+		}
+		lead := pixelIconLabel(iconSpark, label, lipgloss.NewStyle().Bold(true).Foreground(amberColor))
 		body.WriteString(lead)
 		body.WriteByte('\n')
 		bodyLeadHeight = lipgloss.Height(lead)
@@ -686,7 +759,7 @@ func (m model) View() string {
 		}
 		start, end := aliasWindow(matches, cursor, contentWidth, aliasBudget)
 		for index := start; index < end; index++ {
-			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth))
+			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth, m.context.match(matches[index]) > 0))
 			if index < end-1 {
 				body.WriteString("\n\n")
 			}
@@ -1383,16 +1456,16 @@ func (m model) currentAliases() []Alias {
 		return unhealthy
 	}
 	if strings.TrimSpace(m.query) == "" {
-		return suggestedAliases(m.aliases)
+		return suggestedAliasesForContext(m.aliases, m.context)
 	}
-	return filterAliases(m.aliases, m.query)
+	return filterAliasesForContext(m.aliases, m.query, m.context)
 }
 
 func (m model) searchFocused() bool {
 	return !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.settingsOpen && !m.helpVisible && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
 }
 
-func renderAlias(alias Alias, active bool, width int) string {
+func renderAlias(alias Alias, active bool, width int, contextual ...bool) string {
 	alias = terminalSafeAlias(alias)
 	cardWidth := max(34, width-3)
 	marker := "  "
@@ -1410,6 +1483,9 @@ func renderAlias(alias Alias, active bool, width int) string {
 		if marker := interfaceMarker(iconFavorite); marker != "" {
 			lineOne += "  " + lipgloss.NewStyle().Foreground(amberColor).Render(marker)
 		}
+	}
+	if len(contextual) > 0 && contextual[0] {
+		lineOne += "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("HERE")
 	}
 	if len(alias.Tags) > 0 {
 		lineOne += "  " + dimStyle.Render("#"+strings.Join(alias.Tags, " #"))
@@ -1479,9 +1555,14 @@ func aliasWindow(aliases []Alias, cursor, width, budget int) (int, int) {
 }
 
 func suggestedAliases(aliases []Alias) []Alias {
+	return suggestedAliasesForContext(aliases, contextRanking{})
+}
+
+func suggestedAliasesForContext(aliases []Alias, context contextRanking) []Alias {
 	type ranked struct {
-		alias Alias
-		score int
+		alias   Alias
+		score   int
+		context int
 	}
 	preferred := map[string]int{
 		"git status -sb": 100,
@@ -1507,9 +1588,15 @@ func suggestedAliases(aliases []Alias) []Alias {
 		} else if len(alias.Name) == 3 {
 			score += 6
 		}
-		rankedAliases = append(rankedAliases, ranked{alias: alias, score: score})
+		rankedAliases = append(rankedAliases, ranked{alias: alias, score: score, context: context.match(alias)})
 	}
 	sort.SliceStable(rankedAliases, func(i, j int) bool {
+		if rankedAliases[i].alias.Favorite != rankedAliases[j].alias.Favorite {
+			return rankedAliases[i].alias.Favorite
+		}
+		if rankedAliases[i].context != rankedAliases[j].context {
+			return rankedAliases[i].context > rankedAliases[j].context
+		}
 		if rankedAliases[i].score == rankedAliases[j].score {
 			return rankedAliases[i].alias.Name < rankedAliases[j].alias.Name
 		}
@@ -1524,6 +1611,10 @@ func suggestedAliases(aliases []Alias) []Alias {
 }
 
 func filterAliases(aliases []Alias, query string) []Alias {
+	return filterAliasesForContext(aliases, query, contextRanking{})
+}
+
+func filterAliasesForContext(aliases []Alias, query string, context contextRanking) []Alias {
 	needle := normalize(query)
 	if needle == "" {
 		return nil
@@ -1536,6 +1627,10 @@ func filterAliases(aliases []Alias, query string) []Alias {
 			}
 		}
 		sort.SliceStable(prefixes, func(i, j int) bool {
+			leftContext, rightContext := context.match(prefixes[i]), context.match(prefixes[j])
+			if leftContext != rightContext {
+				return leftContext > rightContext
+			}
 			if len(prefixes[i].Name) == len(prefixes[j].Name) {
 				return prefixes[i].Name < prefixes[j].Name
 			}
@@ -1544,8 +1639,9 @@ func filterAliases(aliases []Alias, query string) []Alias {
 		return prefixes
 	}
 	type rankedAlias struct {
-		alias Alias
-		score int
+		alias   Alias
+		score   int
+		context int
 	}
 	var ranked []rankedAlias
 	for _, alias := range aliases {
@@ -1577,14 +1673,20 @@ func filterAliases(aliases []Alias, query string) []Alias {
 			}
 		}
 		if score >= 0 {
-			ranked = append(ranked, rankedAlias{alias: alias, score: score})
+			ranked = append(ranked, rankedAlias{alias: alias, score: score, context: context.match(alias)})
 		}
 	}
 	sort.SliceStable(ranked, func(i, j int) bool {
+		if ranked[i].score != ranked[j].score {
+			return ranked[i].score < ranked[j].score
+		}
+		if ranked[i].context != ranked[j].context {
+			return ranked[i].context > ranked[j].context
+		}
 		if ranked[i].score == ranked[j].score {
 			return len(ranked[i].alias.Name) < len(ranked[j].alias.Name)
 		}
-		return ranked[i].score < ranked[j].score
+		return false
 	})
 	matches := make([]Alias, len(ranked))
 	for index := range ranked {
