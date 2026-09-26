@@ -10,6 +10,7 @@ Run `al data paths` to print the paths for the active shell and current configur
 | `<alias file>.alias-lens.bak` | Latest alias contents from before a write | `0600` | Remove manually |
 | `~/.config/alias-lens/config.json` | Data format version, shell, local machine profiles, shortcut choice, repository path, provider settings without tokens, sync settings, and tracked paths | Directory `0700`, file `0600` | Remove manually after disabling sync |
 | `~/.config/alias-lens/catalog.json` | Portable commands, native Bash or Zsh definitions, descriptions, tags, platforms, and conditions | `0600` | Remove manually after catalog rollback |
+| `~/.config/alias-lens/contexts.json` and `contexts.lock` | Explicit alias marks, local project or folder paths, command digests, and a persistent mutation lock | Directory `0700`, files `0600` | Run `al context remove NAME --all` for each marked alias, or remove both files manually |
 | `~/.config/alias-lens/completion.bash` and `completion.zsh` | Generated command and option suggestions; no command implementations | `0600` | Use `al completion remove bash` or `al completion remove zsh` |
 | `~/.config/alias-lens/backups/` | Exact settings and catalog bytes saved before a planned change | Directory `0700`, files `0600` | Remove after confirming rollback is not needed |
 | `~/.config/alias-lens/transactions/` | Private journals used to recover an interrupted planned change | Directory `0700`, files `0600` | Let the next changing command recover them; do not edit them |
@@ -20,4 +21,4 @@ Run `al data paths` to print the paths for the active shell and current configur
 | `~/.local/state/alias-lens/` | Legacy sync hashes, worker lock and log, tracked-file state, private conflict copies, and the onboarding-tour state | Directory `0700`, files `0600` | Disable sync, then remove manually |
 | Bash or Zsh startup files | Marked Alias Lens loader and PATH blocks among user-owned settings | Existing mode | Run `al setup --remove` |
 
-Provider credentials stay outside `config.json`. GitHub uses the `gh` credential store. GitLab and Bitbucket tokens come from their documented environment variables. Alias Lens does not record duration, exit status, current directory, or workspace.
+Provider credentials stay outside `config.json`. GitHub uses the `gh` credential store. GitLab and Bitbucket tokens come from their documented environment variables. Alias Lens does not record duration, exit status, or a history of where commands ran. `al context add` saves only the paths the user explicitly marks, and those marks are never synced.

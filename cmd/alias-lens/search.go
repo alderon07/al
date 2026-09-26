@@ -9,12 +9,20 @@ import (
 
 func runSearchCommand(arguments []string) error {
 	jsonOutput := false
-	if len(arguments) > 0 && arguments[0] == "--json" {
-		jsonOutput = true
+	global := false
+	for len(arguments) > 0 && strings.HasPrefix(arguments[0], "--") {
+		switch arguments[0] {
+		case "--json":
+			jsonOutput = true
+		case "--global":
+			global = true
+		default:
+			return fmt.Errorf("usage: al search [--json] [--global] [QUERY]")
+		}
 		arguments = arguments[1:]
 	}
 	if len(arguments) > 1 {
-		return fmt.Errorf("usage: al search [--json] [QUERY]")
+		return fmt.Errorf("usage: al search [--json] [--global] [QUERY]")
 	}
 	aliases, err := loadAliases()
 	if err != nil {
@@ -22,7 +30,15 @@ func runSearchCommand(arguments []string) error {
 	}
 	results := aliases
 	if len(arguments) == 1 && strings.TrimSpace(arguments[0]) != "" {
-		results = filterAliases(aliases, arguments[0])
+		if global {
+			results = filterAliases(aliases, arguments[0])
+		} else {
+			ranking, err := currentContextRanking()
+			if err != nil {
+				return fmt.Errorf("load context ranking: %w; use --global to search without it", err)
+			}
+			results = filterAliasesForContext(aliases, arguments[0], ranking)
+		}
 	}
 	if jsonOutput {
 		encoder := json.NewEncoder(os.Stdout)

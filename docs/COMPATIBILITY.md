@@ -6,12 +6,12 @@ Alias Lens stores a schema version in `~/.config/alias-lens/config.json`. Before
 
 Starting with 1.0, the following user commands keep their meaning throughout the 1.x series:
 
-- Alias work: `pick`, `use`, `search`, `suggest`, `stats`, `export`, `import`, `meta`, and `describe`.
+- Alias work: `pick`, `use`, `search`, `context`, `suggest`, `stats`, `export`, `import`, `meta`, and `describe`.
 - Safety and recovery: `check`, `scan`, `history`, `undo`, `doctor`, and `setup`.
 - Configuration and sync: `repo`, `config`, `data`, `track`, `untrack`, `sync`, `diff`, `autosync`, and `watch`.
 - Interface and system commands: `status`, `plan`, `theme`, `catalog preview`, `catalog import`, `catalog shadow`, `catalog diff`, `completion`, `shell-init`, `--web`, and `--version`.
 
-The stable flags are `pick --command`, `search --json`, `stats --plain`, `export --format`, `export --period`, `export --output`, `import --apply`, `check --strict`, `setup --repair`, `setup --remove`, `sync --push`, `sync --pull`, `theme --check`, `status --json`, `catalog shadow --shell`, `catalog shadow --json`, `catalog diff --json`, `catalog diff --show-code`, `catalog diff --web`, `catalog diff --from`, and `catalog diff --shell`. A minor release can add a command, flag, accepted value, or optional output field. It cannot change the meaning of an existing one.
+The stable flags are `pick --command`, `search --json`, `search --global`, `context add --repo`, `context add --directory`, `context remove --all`, `stats --plain`, `export --format`, `export --period`, `export --output`, `import --apply`, `check --strict`, `setup --repair`, `setup --remove`, `sync --push`, `sync --pull`, `theme --check`, `status --json`, `catalog shadow --shell`, `catalog shadow --json`, `catalog diff --json`, `catalog diff --show-code`, `catalog diff --web`, `catalog diff --from`, and `catalog diff --shell`. A minor release can add a command, flag, accepted value, or optional output field. It cannot change the meaning of an existing one.
 
 `shell-entry`, `record-use`, `pick --execute`, `completion-candidates`, and `watch --ensure` are integration commands. They can change when Alias Lens installs matching shell integration. The browser HTML, CSS, JavaScript, and local API are not part of the 1.0 contract.
 

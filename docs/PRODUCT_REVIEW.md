@@ -72,7 +72,7 @@ Measure before reconsidering. Add benchmarks for cold startup, 10,000 aliases, a
 The highest-value additions are about context and safe control, not copying Atuin's history database.
 
 1. Add an insert-for-edit action. Atuin uses `Enter` to execute and `Tab` to return a command to the prompt. Alias Lens needs the same escape hatch for aliases that require one-off arguments.
-2. Rank by directory and Git workspace. Project-specific aliases should rise when the user is inside that project, without hiding global aliases.
+2. Rank by directory and Git workspace. `al context add` now marks aliases for a local project or folder, and search boosts equally relevant matches there without hiding global aliases.
 3. Record outcomes only after an explicit privacy design. Exit status and duration can identify broken or slow aliases, but collection needs exclusions and a documented retention policy.
 4. Preview imports and conflicts. Show duplicate names, duplicate commands, shell incompatibilities, and proposed metadata before writing.
 5. Keep bindings optional. Atuin lets users disable defaults and bind its shell widgets themselves. Alias Lens now follows this model.

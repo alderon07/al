@@ -17,6 +17,7 @@ Find and use aliases:
   pick       Select an alias and print its name or command; never runs it
   use        Select and immediately run an alias; requires al setup
   search     Print aliases that match a name, command, description, or tag
+  context    Mark aliases for the current project or folder
   stats      Rank aliases used directly or launched through Alias Lens
   export     Export aliases or usage stats as JSON, YAML, or CSV
   import     Preview aliases from a file, then apply them in one safe write
@@ -126,15 +127,40 @@ Read the active shell's private history file and list repeated long commands tha
 do not already have aliases. Commands likely to contain credentials are excluded.
 The add form writes the numbered suggestion to the active alias file.
 `,
-	"search": `Usage: al search [--json] [QUERY]
+	"search": `Usage: al search [--json] [--global] [QUERY]
 
 Print every alias that matches QUERY across its name, command, description, tags,
-category, and platform metadata. An empty query lists every alias. Output is plain
-tab-separated text by default. --json emits the complete Alias objects.
+category, and platform metadata. An empty query lists every alias alphabetically.
+Output is plain tab-separated text by default. --json emits the complete Alias
+objects. Project and folder marks break ties between equally relevant matches.
+--global uses the original context-free order.
 
 Examples:
   al search git
   al search --json daily
+  al search --global git
+`,
+	"context": `Usage:
+  al context list
+  al context add NAME [--repo|--directory]
+  al context remove NAME [--repo|--directory|--all]
+
+Mark an alias as useful in the current Git project or folder. Inside a Git
+repository, add and remove target its root by default. Outside Git, they target
+the exact current folder. --directory targets the exact folder inside Git.
+--repo requires a Git repository. --all removes every mark for NAME in the
+active shell, including marks for folders that have moved or disappeared.
+
+Marks only affect suggestions and search order. Every alias stays available
+everywhere. Marks are stored privately on this machine and are not synced.
+Inside the alias browser, Ctrl+B toggles the selected alias for this project or
+folder. On macOS, Cmd+B is also available.
+
+Examples:
+  al context add deploy
+  al context add ll --directory
+  al context list
+  al context remove deploy --all
 `,
 	"stats": `Usage: al stats [--plain] [all|today|week|month|year]
 

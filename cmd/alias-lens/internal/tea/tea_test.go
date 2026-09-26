@@ -14,6 +14,7 @@ func TestTranslateV2Keys(t *testing.T) {
 	}{
 		{name: "rune", key: tea2.Key{Code: 'a', Text: "a"}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'a'}}},
 		{name: "ctrl", key: tea2.Key{Code: 'g', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyCtrlG}},
+		{name: "context mark", key: tea2.Key{Code: 'b', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyCtrlB}},
 		{name: "unknown ctrl", key: tea2.Key{Code: 'x', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'x'}, Ctrl: true}},
 		{name: "control punctuation", key: tea2.Key{Code: ',', Mod: tea2.ModCtrl}, want: KeyMsg{Type: KeyRunes, Runes: []rune{','}, Ctrl: true}},
 		{name: "control shifted punctuation", key: tea2.Key{Code: '/', ShiftedCode: '?', Mod: tea2.ModCtrl | tea2.ModShift}, want: KeyMsg{Type: KeyRunes, Runes: []rune{'?'}, Ctrl: true, Shift: true}},

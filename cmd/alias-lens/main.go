@@ -113,6 +113,11 @@ func runMain() int {
 			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
 			return 1
 		}
+	case "context":
+		if err := runContextCommand(os.Args[2:]); err != nil {
+			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			return 1
+		}
 	case "catalog":
 		exitCode, err := runCatalogCommand(os.Args[2:])
 		if err != nil {
