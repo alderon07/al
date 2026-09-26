@@ -39,6 +39,30 @@ func TestRepositorySyncPreservesUnrelatedStagedFiles(t *testing.T) {
 	if target, err := os.ReadFile(filepath.Join(repository, "shell", ".bash_aliases")); err != nil || string(target) != string(aliases) {
 		t.Fatalf("repository alias copy = %q, %v", target, err)
 	}
+	if info, err := os.Stat(filepath.Join(repository, "shell", ".bash_aliases")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("repository alias copy mode = %v, %v; want 0600", info, err)
+	}
+	if err := os.Chmod(filepath.Join(repository, "shell", ".bash_aliases"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncRepositoryFiles(AppConfig{Repository: repository, AliasFile: "shell/.bash_aliases"}, source, false); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(filepath.Join(repository, "shell", ".bash_aliases")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("matching repository alias copy mode = %v, %v; want 0600", info, err)
+	}
+	if err := os.Chmod(filepath.Join(repository, "shell", ".bash_aliases"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("alias gs='git status --short'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := syncRepositoryFiles(AppConfig{Repository: repository, AliasFile: "shell/.bash_aliases"}, source, false); err != nil {
+		t.Fatal(err)
+	}
+	if info, err := os.Stat(filepath.Join(repository, "shell", ".bash_aliases")); err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("replaced repository alias copy mode = %v, %v; want 0600", info, err)
+	}
 }
 
 func TestPushFailureLeavesCompleteRepositoryCopy(t *testing.T) {

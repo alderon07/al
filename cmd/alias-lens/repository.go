@@ -239,6 +239,9 @@ func pullRepository() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if err := protectRepositoryAliasCopy(config.Repository, config.AliasFile, target, remote); err != nil {
+		return "", err
+	}
 	_, remoteOnly, conflicts := compareAliasFiles(local, remote)
 	if len(conflicts) > 0 {
 		var names []string
@@ -305,9 +308,13 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 	}
 	changed := !bytes.Equal(contents, existing)
 	if changed {
-		if err := writeRepositoryFile(config.Repository, relative, contents, 0o644); err != nil {
+		if err := writeRepositoryFile(config.Repository, relative, contents, 0o600); err != nil {
 			return "", err
 		}
+	} else if err := protectRepositoryAliasCopy(config.Repository, relative, target, existing); err != nil {
+		return "", err
+	}
+	if changed {
 		if output, err := gitOutput("-C", config.Repository, "add", "--", relative); err != nil {
 			return "", fmt.Errorf("git add failed: %s", strings.TrimSpace(string(output)))
 		}
@@ -325,6 +332,20 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 		return "Aliases committed locally", nil
 	}
 	return "Repository already matches " + aliasDisplayPath(), nil
+}
+
+func protectRepositoryAliasCopy(repository, relative, target string, contents []byte) error {
+	info, err := os.Stat(target)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm() == 0o600 {
+		return nil
+	}
+	return writeRepositoryFile(repository, relative, contents, 0o600)
 }
 
 func scanOutgoingAliasHistory(repository, relative string) error {

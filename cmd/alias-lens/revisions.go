@@ -17,9 +17,6 @@ type Revision struct {
 }
 
 func saveRevision(aliasPath string, contents []byte) error {
-	if len(contents) == 0 {
-		return nil
-	}
 	directory, err := revisionDirectory(aliasPath)
 	if err != nil {
 		return err

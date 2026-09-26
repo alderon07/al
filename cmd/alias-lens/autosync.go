@@ -106,11 +106,25 @@ func runWatch(daemon bool) error {
 	if err != nil {
 		return err
 	}
+	stopHeartbeat := make(chan struct{})
+	heartbeatDone := make(chan struct{})
+	heartbeatErrors := make(chan error, 1)
+	go func() {
+		defer close(heartbeatDone)
+		maintainSyncLock(lock, stopHeartbeat, heartbeatErrors, 30*time.Second)
+	}()
 	defer func() {
+		close(stopHeartbeat)
+		<-heartbeatDone
+		releaseSyncLock(lock)
 		lock.Close()
-		os.Remove(lock.Name())
 	}()
 	for {
+		select {
+		case err := <-heartbeatErrors:
+			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
+		default:
+		}
 		if ctx.Err() != nil {
 			_ = writeSyncStatus("stopped", "automatic sync stopped cleanly", "", "")
 			return nil
@@ -139,14 +153,19 @@ func runWatch(daemon bool) error {
 				writeSyncStatus("offline", cycleErr.Error(), state.LocalHash, state.RemoteHash)
 			}
 		}
+		select {
+		case err := <-heartbeatErrors:
+			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
+		default:
+		}
 		if !daemon {
 			return cycleErr
 		}
-		if err := os.Chtimes(lock.Name(), time.Now(), time.Now()); err != nil {
-			return fmt.Errorf("refresh sync lock: %w", err)
-		}
 		timer := time.NewTimer(time.Duration(config.AutoSync.IntervalSeconds) * time.Second)
 		select {
+		case err := <-heartbeatErrors:
+			timer.Stop()
+			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
 		case <-ctx.Done():
 			if !timer.Stop() {
 				<-timer.C
@@ -328,6 +347,11 @@ func reconcileAliases(config AppConfig) error {
 	if remoteErr != nil && !remoteMissing {
 		return remoteErr
 	}
+	if !remoteMissing {
+		if err := protectRepositoryAliasCopy(config.Repository, config.AliasFile, target, remote); err != nil {
+			return err
+		}
+	}
 	if localMissing {
 		if remoteMissing {
 			if err := writeNewAliasFile(aliasPath, nil); err != nil {
@@ -421,6 +445,59 @@ func acquireSyncLock() (*os.File, error) {
 		}
 	}
 	return nil, openErr
+}
+
+func maintainSyncLock(lock *os.File, stop <-chan struct{}, errs chan<- error, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			if err := refreshSyncLock(lock); err != nil {
+				errs <- err
+				return
+			}
+		}
+	}
+}
+
+func refreshSyncLock(lock *os.File) error {
+	owned, err := lock.Stat()
+	if err != nil {
+		return err
+	}
+	current, err := os.Stat(lock.Name())
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(owned, current) {
+		return fmt.Errorf("lock was replaced")
+	}
+	now := time.Now()
+	if err := os.Chtimes(lock.Name(), now, now); err != nil {
+		return err
+	}
+	current, err = os.Stat(lock.Name())
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(owned, current) {
+		return fmt.Errorf("lock was replaced")
+	}
+	return nil
+}
+
+func releaseSyncLock(lock *os.File) {
+	owned, err := lock.Stat()
+	if err != nil {
+		return
+	}
+	current, err := os.Stat(lock.Name())
+	if err == nil && os.SameFile(owned, current) {
+		_ = os.Remove(lock.Name())
+	}
 }
 
 func syncDataPath(name string) (string, error) {

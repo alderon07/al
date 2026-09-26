@@ -365,13 +365,15 @@ func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) err
 	if err := aliasFileMatchesExpected(path, contents); err != nil {
 		return err
 	}
-	if len(contents) > 0 {
+	if _, err := os.Lstat(path); err == nil {
 		if err := saveRevision(path, contents); err != nil {
 			return fmt.Errorf("save revision: %w", err)
 		}
 		if err := writePrivateBackup(path+".alias-lens.bak", contents); err != nil {
 			return fmt.Errorf("create backup: %w", err)
 		}
+	} else if !os.IsNotExist(err) {
+		return err
 	}
 	writePath := path
 	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
