@@ -90,6 +90,8 @@ type model struct {
 	cursorHidden      bool
 	terminalBlurred   bool
 	shortcutProfile   ShortcutProfile
+	lastPageShortcut  tuiPage
+	lastShortcutAt    time.Time
 	executableWatch   executableWatch
 	executableUpdated bool
 }
@@ -104,6 +106,8 @@ func (m model) TerminalBackground() string {
 type cursorBlinkMsg struct{}
 
 const cursorBlinkInterval = 500 * time.Millisecond
+
+const pageShortcutRepeatWindow = 1200 * time.Millisecond
 
 type tuiPage int
 
@@ -307,8 +311,16 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = message.Width
 		m.height = message.Height
 		return m, nil
+	case tea.KeyReleaseMsg:
+		if target, ok := pageForShortcut(message.Key, m.shortcutProfile); ok && target == m.lastPageShortcut {
+			m.lastShortcutAt = time.Time{}
+		}
+		return m, nil
 	case tea.KeyMsg:
 		m.cursorHidden = false
+		if _, shortcut := pageForShortcut(message, m.shortcutProfile); !shortcut {
+			m.lastShortcutAt = time.Time{}
+		}
 		if m.tourVisible {
 			return m.updateTour(message)
 		}
@@ -458,6 +470,22 @@ func (m model) updatePageNavigation(message tea.KeyMsg) (model, bool) {
 	if !ok || (m.selectMode && target != pageHelp) {
 		return m, false
 	}
+	now := time.Now()
+	if message.Repeat {
+		if target == m.lastPageShortcut {
+			m.lastShortcutAt = now
+		}
+		return m, true
+	}
+	// Legacy terminals cannot mark key repeats or releases, so hold off toggling
+	// the same non-text shortcut until its press stream has gone quiet.
+	legacyRepeatGuard := message.Type != tea.KeyRunes || message.Ctrl || message.Meta || message.Super || message.Alt
+	if legacyRepeatGuard && target == m.lastPageShortcut && !m.lastShortcutAt.IsZero() && now.Sub(m.lastShortcutAt) < pageShortcutRepeatWindow {
+		m.lastShortcutAt = now
+		return m, true
+	}
+	m.lastPageShortcut = target
+	m.lastShortcutAt = now
 	if m.currentPage() == target {
 		m.closePages()
 		return m, true
@@ -719,8 +747,8 @@ func (m model) View() string {
 			body.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(matches))))
 		}
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", body.String(), "", footer)
-	return frame.renderWithMaker(page)
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", body.String())
+	return frame.renderWithFooter(page, footer)
 }
 
 func (m *model) startAddForm() {
@@ -829,8 +857,8 @@ func (m model) runConfirmationView(frame tuiFrame, header string) string {
 		"\n\n" + command +
 		"\n\n" + lipgloss.NewStyle().Foreground(coralColor).Render(wrapText(reason, contentWidth))
 	footer := aliasStyle.Render("y") + dimStyle.Render(" use alias  ·  ") + aliasStyle.Render("n") + dimStyle.Render(" or esc cancel")
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
-	return frame.renderWithMaker(page)
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
+	return frame.renderWithFooter(page, footer)
 }
 
 func (m model) helpView(frame tuiFrame, header string) string {
@@ -878,8 +906,8 @@ func (m model) helpView(frame tuiFrame, header string) string {
 		footerText = fmt.Sprintf("showing %d of %d  ·  type to filter  ·  esc close", visible, len(shortcuts))
 		footerView = footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", rows.String(), "", footerView)
-	return frame.renderWithMaker(page)
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", rows.String())
+	return frame.renderWithFooter(page, footerView)
 }
 
 func pageNavigationHint(width int, profiles ...ShortcutProfile) string {
@@ -1028,8 +1056,8 @@ func (m model) themePickerView(frame tuiFrame, header string) string {
 		rows.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(themes))))
 	}
 
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", rows.String(), "", footer)
-	return frame.renderWithMaker(page)
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", rows.String())
+	return frame.renderWithFooter(page, footer)
 }
 
 func (m model) refreshTrackedFiles() model {
@@ -1145,14 +1173,22 @@ func (m model) trackedFilesView(frame tuiFrame, header string) string {
 	} else {
 		body.WriteString(dimStyle.Render("Repository: ") + cyanStyle(compactHomePath(m.trackedRepo)))
 	}
-	body.WriteString("\n\n")
+	if frame.height < 24 {
+		body.WriteByte('\n')
+	} else {
+		body.WriteString("\n\n")
+	}
 
 	if m.trackedErr != "" {
 		body.WriteString(lipgloss.NewStyle().Foreground(coralColor).Render(wrapText("Could not load sync status: "+m.trackedErr, contentWidth)))
 	} else {
 		body.WriteString(pixelIconLabel(iconAlias, "PRIMARY ALIAS FILE", titleStyle))
 		body.WriteString("\n" + renderTrackedFile(m.primarySync, false, contentWidth))
-		body.WriteString("\n\n" + pixelIconLabel(iconRepository, "EXTRA TRACKED FILES", lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
+		sectionSeparator := "\n\n"
+		if frame.height < 24 {
+			sectionSeparator = "\n"
+		}
+		body.WriteString(sectionSeparator + pixelIconLabel(iconRepository, "EXTRA TRACKED FILES", lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
 		body.WriteString(dimStyle.Render(fmt.Sprintf("  %d enrolled", len(m.tracked))))
 		body.WriteString("\n")
 		if len(m.tracked) == 0 {
@@ -1183,8 +1219,12 @@ func (m model) trackedFilesView(frame tuiFrame, header string) string {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
 	footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", pixelIconLabel(iconSync, "See what Alias Lens keeps in sync.", titleStyle), "", body.String(), "", footer)
-	return frame.renderWithMaker(page)
+	sections := []string{header, "", pixelIconLabel(iconSync, "See what Alias Lens keeps in sync.", titleStyle), "", body.String()}
+	if frame.height < 24 {
+		sections = []string{header, body.String()}
+	}
+	page := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return frame.renderWithFooter(page, footer)
 }
 
 func (m model) trackedVisibleCount() int { return max(1, (m.height-21)/5) }
@@ -1368,6 +1408,9 @@ func (m model) addFormView(frame tuiFrame, header string) string {
 	contentWidth := frame.contentWidth
 	labels := []string{"ALIAS NAME", "COMMAND", "WHAT IT DOES", "TAGS", "CATEGORY"}
 	hints := []string{"ex: gpf", "ex: git push --force-with-lease", "ex: Safely force-push the current branch", "ex: git,daily", "ex: git"}
+	if frame.height < 24 {
+		hints = []string{"ex: gpf", "ex: git status", "ex: Check status", "ex: git,daily", "ex: git"}
+	}
 	var form strings.Builder
 	headingIcon := iconAlias
 	heading := "ADD AN ALIAS"
@@ -1379,6 +1422,10 @@ func (m model) addFormView(frame tuiFrame, header string) string {
 	}
 	form.WriteString(pixelIconLabel(headingIcon, heading, lipgloss.NewStyle().Bold(true).Foreground(amberColor)))
 	form.WriteString("\n" + dimStyle.Render(message))
+	fieldSeparator := "\n\n"
+	if frame.height < 24 {
+		fieldSeparator = "\n"
+	}
 	for index := range m.form {
 		border := lineColor
 		cursor := ""
@@ -1392,14 +1439,18 @@ func (m model) addFormView(frame tuiFrame, header string) string {
 		}
 		label := lipgloss.NewStyle().Bold(true).Width(14).Foreground(colorForField(index)).Render(labels[index])
 		field := lipgloss.NewStyle().Width(max(20, contentWidth-20)).Padding(0, 1).Background(panelColor).Foreground(inkColor).Border(lipgloss.ThickBorder(), false, false, false, true).BorderForeground(border).Render(value + cursor)
-		form.WriteString("\n\n" + label + field)
+		form.WriteString(fieldSeparator + label + field)
 	}
 	footer := dimStyle.Render("tab/enter next  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSave)) + " save  ·  esc cancel")
 	if m.status != "" {
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render(m.status)
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", form.String(), "", footer)
-	return frame.renderWithMaker(page)
+	sections := []string{header, "", form.String()}
+	if frame.height < 24 {
+		sections = []string{header, form.String()}
+	}
+	page := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return frame.renderWithFooter(page, footer)
 }
 
 func (m model) currentAliases() []Alias {

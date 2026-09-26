@@ -91,6 +91,45 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 	}
 }
 
+func TestHeldPageShortcutDoesNotFlickerInPTY(t *testing.T) {
+	command := exec.Command(os.Args[0], "-test.run=^TestTUIResizeHelper$")
+	command.Env = append(os.Environ(), "ALIAS_LENS_TUI_RESIZE_HELPER=1", "NO_COLOR=1", "TERM=xterm-256color")
+	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 36, Cols: 120})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := &synchronizedBuffer{}
+	go func() { _, _ = io.Copy(output, terminal) }()
+	t.Cleanup(func() {
+		_, _ = terminal.Write([]byte{3})
+		_ = terminal.Close()
+		if command.Process != nil {
+			_ = command.Process.Kill()
+		}
+		_ = command.Wait()
+	})
+
+	waitForPTYText(t, output, 0, resizeFooterMessage(120, 36, pageAliases))
+	if _, err := terminal.Write([]byte("\x1bOQ")); err != nil {
+		t.Fatal(err)
+	}
+	waitForPTYText(t, output, 0, resizeFooterMessage(120, 36, pageStats))
+	offset := output.length()
+	for range 12 {
+		if _, err := terminal.Write([]byte("\x1bOQ")); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(40 * time.Millisecond)
+	}
+	if redraw := output.stringFrom(offset); strings.Contains(redraw, resizeFooterMessage(120, 36, pageAliases)) {
+		t.Fatalf("held F2 redrew the aliases page:\n%q", redraw)
+	}
+	if _, err := terminal.Write([]byte("\x1b[B\x1bOQ")); err != nil {
+		t.Fatal(err)
+	}
+	waitForPTYText(t, output, offset, resizeFooterMessage(120, 36, pageAliases))
+}
+
 func TestControlPunctuationPTY(t *testing.T) {
 	tests := []struct {
 		name     string

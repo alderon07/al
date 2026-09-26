@@ -61,7 +61,7 @@ func TestTerminalDiffPTYAtNarrowAndWideWidths(t *testing.T) {
 	if err := pty.Setsize(terminal, &pty.Winsize{Rows: 18, Cols: 48}); err != nil {
 		t.Fatal(err)
 	}
-	compact := waitForPTYText(t, output, compactOffset, "Repository comparison")
+	compact := waitForPTYText(t, output, compactOffset, "esc back")
 	if !strings.Contains(compact, "OLD   NEW   CHANGE") || !strings.Contains(compact, "esc back") {
 		t.Fatalf("compact PTY diff lost its contents or controls:\n%q", compact)
 	}
@@ -69,7 +69,7 @@ func TestTerminalDiffPTYAtNarrowAndWideWidths(t *testing.T) {
 	if err := pty.Setsize(terminal, &pty.Winsize{Rows: 36, Cols: 120}); err != nil {
 		t.Fatal(err)
 	}
-	wide := waitForPTYText(t, output, offset, "Tracked copy")
+	wide := waitForPTYText(t, output, offset, "│")
 	if !strings.Contains(wide, "Current file") || !strings.Contains(wide, "│") {
 		t.Fatalf("wide PTY diff did not show split columns:\n%q", wide)
 	}

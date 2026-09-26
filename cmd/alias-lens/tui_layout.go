@@ -68,7 +68,10 @@ func (frame tuiFrame) renderWithMaker(page string) string {
 func (frame tuiFrame) renderWithFooter(body, footer string) string {
 	credit := makerCredit(frame.contentWidth)
 	footerHeight := frame.measureHeight(footer)
-	creditHeight := frame.measureHeight(credit)
+	creditHeight := 0
+	if credit != "" {
+		creditHeight = frame.measureHeight(credit)
+	}
 	availableBodyHeight := max(1, frame.contentHeight()-footerHeight-creditHeight)
 	if frame.measureHeight(body) > availableBodyHeight {
 		body = lipgloss.NewStyle().Width(frame.contentWidth).MaxHeight(availableBodyHeight).Render(body)

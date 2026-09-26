@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
@@ -105,6 +107,113 @@ func TestFooterRemainsInsideViewportAcrossResizes(t *testing.T) {
 		}
 		if !strings.Contains(visible, "esc quit") {
 			t.Errorf("%dx%d viewport lost control footer:\n%s", size.width, size.height, visible)
+		}
+	}
+}
+
+func TestEmptyMakerMessageReclaimsFooterRow(t *testing.T) {
+	applyFooterConfig(FooterConfig{Message: "", Icon: "none", Alignment: "right", Tone: "quiet", Rule: "dots"})
+	t.Cleanup(func() { applyFooterConfig(defaultFooterConfig()) })
+
+	frame := newMainTUIFrame(48, 18)
+	bodyRows := make([]string, frame.contentHeight()-1)
+	for index := range bodyRows {
+		bodyRows[index] = "body " + strconv.Itoa(index+1)
+	}
+	view := frame.renderWithFooter(strings.Join(bodyRows, "\n"), "shortcuts")
+
+	if !strings.Contains(view, bodyRows[len(bodyRows)-1]) {
+		t.Fatalf("empty maker message clipped the last body row:\n%s", view)
+	}
+	if row := lineContaining(view, "shortcuts"); row != frame.height-2 {
+		t.Fatalf("shortcut row = %d, want %d:\n%s", row, frame.height-2, view)
+	}
+}
+
+func TestShortcutsSitImmediatelyAboveDottedRule(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	applyTheme(builtInTheme("phosphor"))
+	applyFooterConfig(FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "right", Tone: "quiet", Rule: "dots"})
+	t.Cleanup(func() {
+		applyTheme(defaultTheme())
+		applyFooterConfig(defaultFooterConfig())
+	})
+
+	confirmation := navigationTestModel(pageAliases)
+	confirmation.runConfirm = &Alias{Name: "gs", Command: "git status"}
+	pages := []struct {
+		name  string
+		model model
+	}{
+		{"aliases", navigationTestModel(pageAliases)},
+		{"help", navigationTestModel(pageHelp)},
+		{"themes", navigationTestModel(pageThemes)},
+		{"revisions", navigationTestModel(pageRevisions)},
+		{"sync", navigationTestModel(pageSync)},
+		{"health", navigationTestModel(pageHealth)},
+		{"tour", model{tourVisible: true, theme: builtInTheme("phosphor")}},
+		{"add form", model{adding: true, theme: builtInTheme("phosphor")}},
+		{"confirmation", confirmation},
+	}
+	for _, size := range []struct{ width, height int }{{120, 36}, {48, 18}} {
+		for _, page := range pages {
+			t.Run(page.name+"_"+strconv.Itoa(size.width), func(t *testing.T) {
+				page.model.width, page.model.height = size.width, size.height
+				view := page.model.View()
+				if gotWidth, gotHeight := lipgloss.Width(view), lipgloss.Height(view); gotWidth != size.width || gotHeight != size.height {
+					t.Fatalf("rendered %dx%d, want %dx%d", gotWidth, gotHeight, size.width, size.height)
+				}
+				lines := strings.Split(view, "\n")
+				rule := strings.Repeat("·", newMainTUIFrame(size.width, size.height).contentWidth)
+				ruleRow := lineContaining(view, rule)
+				if ruleRow < 1 || ruleRow >= len(lines)-1 {
+					t.Fatalf("dotted footer rule missing or outside viewport: row=%d\n%s", ruleRow, view)
+				}
+				if strings.TrimSpace(ansi.Strip(lines[ruleRow-1])) == "" {
+					t.Fatalf("blank row between shortcuts and dotted rule:\n%s", view)
+				}
+				if page.name == "aliases" && size.width == 120 {
+					if strings.TrimSpace(ansi.Strip(lines[ruleRow-2])) != "" || !strings.Contains(lines[ruleRow-3], "esc quit") {
+						t.Fatalf("alias controls and navigation lost their blank separator:\n%s", view)
+					}
+				}
+				if !strings.Contains(lines[ruleRow+1], "Made by Naqi") {
+					t.Fatalf("credit is not directly below dotted rule:\n%s", view)
+				}
+				if size.width == 48 {
+					requiredContent := map[string]string{
+						"add form": "CATEGORY",
+						"tour":     "Open the searchable keyboard guide",
+						"sync":     "EXTRA TRACKED FILES",
+					}[page.name]
+					if requiredContent != "" && !strings.Contains(view, requiredContent) {
+						t.Fatalf("compact layout hides %q:\n%s", requiredContent, view)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestRepositoryPickerShortcutsSitAboveDottedRule(t *testing.T) {
+	applyTheme(builtInTheme("phosphor"))
+	applyFooterConfig(FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "right", Tone: "quiet", Rule: "dots"})
+	t.Cleanup(func() {
+		applyTheme(defaultTheme())
+		applyFooterConfig(defaultFooterConfig())
+	})
+
+	for _, size := range []struct{ width, height int }{{120, 36}, {48, 18}} {
+		picker := repoPickerModel{width: size.width, height: size.height}
+		view := picker.View()
+		if gotWidth, gotHeight := lipgloss.Width(view), lipgloss.Height(view); gotWidth != size.width || gotHeight != size.height {
+			t.Fatalf("%dx%d picker rendered %dx%d", size.width, size.height, gotWidth, gotHeight)
+		}
+		lines := strings.Split(view, "\n")
+		rule := strings.Repeat("·", newMainTUIFrame(size.width, size.height).contentWidth)
+		ruleRow := lineContaining(view, rule)
+		if ruleRow < 1 || !strings.Contains(lines[ruleRow-1], "esc cancel") {
+			t.Fatalf("%dx%d picker shortcuts are not beside the dotted rule:\n%s", size.width, size.height, view)
 		}
 	}
 }

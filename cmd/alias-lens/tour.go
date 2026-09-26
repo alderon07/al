@@ -81,10 +81,18 @@ func (m model) tourView(frame tuiFrame, header string) string {
 	if mark := fullBrandMark(); mark != "" && height >= 24 {
 		body = mark + "\n"
 	}
+	stepSeparator := "\n\n"
+	if height < 24 {
+		stepSeparator = "\n"
+	}
 	body += pixelIconLabel(iconBrand, "Alias Lens is ready.", titleStyle) +
 		"\n" + dimStyle.Render("Four keys are enough to get started.") +
-		"\n\n" + strings.Join(steps, "\n\n")
+		stepSeparator + strings.Join(steps, stepSeparator)
 	footer := aliasStyle.Render("enter") + dimStyle.Render(" start  ·  ") + aliasStyle.Render("?") + dimStyle.Render(" full guide  ·  esc dismiss")
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body, "", footer)
-	return frame.renderWithMaker(page)
+	sections := []string{header, "", body}
+	if height < 24 {
+		sections = []string{header, body}
+	}
+	page := lipgloss.JoinVertical(lipgloss.Left, sections...)
+	return frame.renderWithFooter(page, footer)
 }

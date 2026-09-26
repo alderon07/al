@@ -44,12 +44,24 @@ func TestProgramOptionsReachV2View(t *testing.T) {
 	program := NewProgram(model, WithAltScreen(), WithReportFocus())
 	wrapped := &v2Model{model: program.model, config: program.config}
 	view := wrapped.View()
-	if !view.AltScreen || !view.ReportFocus || view.Content != "test" {
+	if !view.AltScreen || !view.ReportFocus || !view.KeyboardEnhancements.ReportEventTypes || view.Content != "test" {
 		t.Fatalf("v2 view options were not preserved: %+v", view)
 	}
 	red, green, blue, alpha := view.BackgroundColor.RGBA()
 	if red != 0x1111 || green != 0x2222 || blue != 0x3333 || alpha != 0xffff {
 		t.Fatalf("v2 view background = %#v", view.BackgroundColor)
+	}
+}
+
+func TestTranslateV2KeyRepeatAndRelease(t *testing.T) {
+	key := tea2.Key{Code: tea2.KeyF2, IsRepeat: true}
+	press, ok := translateMessage(tea2.KeyPressMsg(key)).(KeyMsg)
+	if !ok || press.Type != KeyF2 || !press.Repeat {
+		t.Fatalf("repeat translation = %#v", press)
+	}
+	release, ok := translateMessage(tea2.KeyReleaseMsg(key)).(KeyReleaseMsg)
+	if !ok || release.Key.Type != KeyF2 {
+		t.Fatalf("release translation = %#v", release)
 	}
 }
 
