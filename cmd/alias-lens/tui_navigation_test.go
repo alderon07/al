@@ -85,9 +85,9 @@ func TestPageShortcutsDoNotInterruptEditingOrConfirmation(t *testing.T) {
 		t.Fatalf("help shortcut interrupted the form: %#v", got)
 	}
 
-	confirmation := model{revisionOpen: true, revisionConfirm: true}
+	confirmation := model{revisionOpen: true, diff: &terminalDiff{confirmRestore: true}}
 	updated, _ = confirmation.Update(tea.KeyMsg{Type: tea.KeyF2})
-	if got := updated.(model); !got.revisionOpen || !got.revisionConfirm || got.statsOpen {
+	if got := updated.(model); !got.revisionOpen || got.diff == nil || !got.diff.confirmRestore || got.statsOpen {
 		t.Fatalf("stats shortcut interrupted revision confirmation: %#v", got)
 	}
 }

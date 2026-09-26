@@ -72,9 +72,9 @@ type model struct {
 	runConfirm        *Alias
 	revisionOpen      bool
 	revisionCursor    int
-	revisionConfirm   bool
 	revisions         []Revision
 	revisionErr       string
+	diff              *terminalDiff
 	healthOnly        bool
 	trackedOnly       bool
 	tracked           []trackedFileItem
@@ -125,19 +125,30 @@ type trackedFileItem struct {
 }
 
 func runTUI() {
+	if err := runTUIWithDiff(false); err != nil {
+		fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+	}
+}
+
+func runTUIWithDiff(repositoryDiff bool) error {
 	config, configErr := loadConfig()
 	if configErr != nil {
-		fmt.Fprintln(os.Stderr, "Alias Lens could not read its settings:", configErr)
-		return
+		return fmt.Errorf("could not read settings: %w", configErr)
 	}
-	aliases, err := loadAliases()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Could not read %s: %v\n", aliasDisplayPath(), err)
-		return
+	var aliases []Alias
+	if !repositoryDiff {
+		var err error
+		aliases, err = loadAliases()
+		if err != nil {
+			return fmt.Errorf("could not read %s: %w", aliasDisplayPath(), err)
+		}
 	}
 	if terminalIsDumb() {
+		if repositoryDiff {
+			return fmt.Errorf("al diff --tui needs a terminal; use al diff for plain output")
+		}
 		printPlainAliasList(os.Stderr, aliases, "")
-		return
+		return nil
 	}
 	theme, themeErr := loadTheme()
 	applyFooterConfig(config.Footer)
@@ -166,10 +177,16 @@ func runTUI() {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	finished, err := tea.NewProgram(model{aliases: aliases, width: 80, height: 24, theme: theme, status: status, executeMode: true, tourVisible: tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}, options...).Run()
+	initial := model{aliases: aliases, width: 80, height: 24, theme: theme, status: status, executeMode: !repositoryDiff, tourVisible: !repositoryDiff && tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}
+	if repositoryDiff {
+		if err := initial.openRepositoryDiff(); err != nil {
+			return err
+		}
+		initial.diff.fromCLI = true
+	}
+	finished, err := tea.NewProgram(initial, options...).Run()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "Alias Lens could not start:", err)
-		return
+		return fmt.Errorf("could not start terminal view: %w", err)
 	}
 	selected, ok := finished.(model)
 	if ok && selected.selected != nil {
@@ -179,6 +196,7 @@ func runTUI() {
 			writeAliasSelection(os.Stdout, terminalOutput, selected.selected.Name, stdoutIsTerminal)
 		}
 	}
+	return nil
 }
 
 const editSelectionPrefix = "__alias_lens_edit__:"
@@ -303,8 +321,8 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.runConfirm != nil {
 			return m.updateRunConfirmation(message)
 		}
-		if m.revisionOpen && m.revisionConfirm {
-			return m.updateRevisionDrawer(message)
+		if m.diff != nil {
+			return m.updateDiff(message)
 		}
 		if m.settingsOpen && !matchesShortcut(message, m.shortcutProfile, shortcutSettings) && footerSettingsHandles(message, m.shortcutProfile) {
 			return m.updateFooterSettings(message)
@@ -535,9 +553,9 @@ func (m *model) closePages() {
 	m.settingsBefore = appearanceSettings{}
 	m.themePicker = false
 	m.revisionOpen = false
-	m.revisionConfirm = false
 	m.revisions = nil
 	m.revisionErr = ""
+	m.diff = nil
 	m.trackedOnly = false
 	m.healthOnly = false
 	m.status = ""
@@ -553,6 +571,9 @@ func (m model) View() string {
 	cursor := min(m.cursor, max(0, len(matches)-1))
 
 	headerDetails := fmt.Sprintf("  •  %d aliases", len(m.aliases))
+	if m.diff != nil && m.diff.fromCLI {
+		headerDetails = "  •  repository diff"
+	}
 	if issues := healthIssueCount(m.aliases); issues > 0 {
 		label := "issues"
 		if issues == 1 {
@@ -604,6 +625,9 @@ func (m model) View() string {
 	}
 	if m.runConfirm != nil {
 		return m.runConfirmationView(frame, header)
+	}
+	if m.diff != nil {
+		return m.diffView(frame, header)
 	}
 	if m.revisionOpen {
 		return m.revisionDrawerView(frame, header)
@@ -1091,6 +1115,12 @@ func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.cursor = 0
 	case tea.KeyEnd:
 		m.cursor = max(0, len(m.tracked)-1)
+	case tea.KeyRunes:
+		if message.String() == "d" {
+			if err := m.openRepositoryDiff(); err != nil {
+				m.status = err.Error()
+			}
+		}
 	}
 	return m, nil
 }
@@ -1148,7 +1178,7 @@ func (m model) trackedFilesView(frame tuiFrame, header string) string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  ctrl+g save to repo  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSync)) + " or esc aliases  ·  ctrl+c quit")
+	footer := dimStyle.Render("↑↓ move  ·  d compare aliases  ·  ctrl+g save to repo  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSync)) + " or esc aliases  ·  ctrl+c quit")
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}

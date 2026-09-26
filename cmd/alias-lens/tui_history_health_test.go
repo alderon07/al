@@ -33,9 +33,17 @@ func TestRevisionDrawerRestoresSelectionAndPreservesCurrentFile(t *testing.T) {
 		t.Fatalf("revision drawer is missing guidance or leaked alias contents:\n%s", view)
 	}
 
-	confirming, _ := drawer.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if !confirming.(model).revisionConfirm {
-		t.Fatal("Enter did not request restore confirmation")
+	previewing, _ := drawer.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	preview := previewing.(model)
+	if preview.diff == nil || !strings.Contains(preview.View(), "git status -sb") || !strings.Contains(preview.View(), "git status'") {
+		t.Fatalf("Enter did not preview the current and selected revision:\n%s", preview.View())
+	}
+	if contents, err := os.ReadFile(path); err != nil || string(contents) != string(current) {
+		t.Fatalf("preview changed the live file: %q, %v", contents, err)
+	}
+	confirming, _ := preview.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	if !confirming.(model).diff.confirmRestore {
+		t.Fatal("r did not request restore confirmation")
 	}
 	restored, _ := confirming.(model).Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	result := restored.(model)

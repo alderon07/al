@@ -1,5 +1,7 @@
 # Third-party notices
 
+The native terminal diff viewer uses `github.com/aymanbagabas/go-udiff` v0.2.0. It includes code by The Go Authors under the BSD 3-Clause license and additions by Ayman Bagabas under the MIT license. Both license texts appear in `THIRD_PARTY_LICENSES.txt`.
+
 Alias Lens includes an optional local browser bundle built from the packages below. Exact versions and integrity hashes are pinned in `cmd/alias-lens/web-src/package-lock.json`. The complete copyright, permission, and notice text distributed with every production dependency is reproduced in `THIRD_PARTY_LICENSES.txt` and included in release archives.
 
 Apache License 2.0:

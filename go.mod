@@ -4,6 +4,7 @@ go 1.24.2
 
 require (
 	charm.land/bubbletea/v2 v2.0.1
+	github.com/aymanbagabas/go-udiff v0.2.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/creack/pty/v2 v2.0.1

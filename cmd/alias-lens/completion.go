@@ -146,6 +146,7 @@ func completionRules() []completionRule {
 		{Path: []string{"catalog", "shadow", "--json"}, Values: []string{"--shell"}},
 		{Path: []string{"catalog", "shadow", "--json", "--shell"}, Values: shells},
 		{Path: []string{"catalog", "diff"}, Values: []string{"--json", "--show-code", "--web", "--from", "--shell"}},
+		{Path: []string{"diff"}, Values: []string{"--tui"}},
 		{Path: []string{"catalog", "diff", "--from"}, Values: []string{"repository", "installed"}},
 		{Path: []string{"catalog", "diff", "--shell"}, Values: shells},
 		{Path: []string{"repo"}, Values: providers},

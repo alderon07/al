@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -361,6 +362,9 @@ func isDescriptionComment(line string) bool {
 }
 
 func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) error {
+	if err := aliasFileMatchesExpected(path, contents); err != nil {
+		return err
+	}
 	if len(contents) > 0 {
 		if err := saveRevision(path, contents); err != nil {
 			return fmt.Errorf("save revision: %w", err)
@@ -405,10 +409,27 @@ func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) err
 			return err
 		}
 	}
+	if err := aliasFileMatchesExpected(writePath, contents); err != nil {
+		return err
+	}
 	if err := os.Rename(temporaryPath, writePath); err != nil {
 		return err
 	}
 	return syncDirectory(filepath.Dir(writePath))
+}
+
+func aliasFileMatchesExpected(path string, expected []byte) error {
+	current, err := readFileLimited(path, aliasFileLimit)
+	if os.IsNotExist(err) && len(expected) == 0 {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(current, expected) {
+		return fmt.Errorf("alias file changed since it was read; retry the edit")
+	}
+	return nil
 }
 
 func writePrivateBackup(path string, contents []byte) error {

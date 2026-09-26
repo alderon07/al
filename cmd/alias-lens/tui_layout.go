@@ -1,6 +1,10 @@
 package main
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 const (
 	mainTUIHorizontalPadding = 3
@@ -59,4 +63,20 @@ func (frame tuiFrame) renderStyled(page string, style lipgloss.Style) string {
 
 func (frame tuiFrame) renderWithMaker(page string) string {
 	return frame.render(pageWithMaker(page, frame.contentWidth, frame.contentHeight()))
+}
+
+func (frame tuiFrame) renderWithFooter(body, footer string) string {
+	credit := makerCredit(frame.contentWidth)
+	footerHeight := frame.measureHeight(footer)
+	creditHeight := frame.measureHeight(credit)
+	availableBodyHeight := max(1, frame.contentHeight()-footerHeight-creditHeight)
+	if frame.measureHeight(body) > availableBodyHeight {
+		body = lipgloss.NewStyle().Width(frame.contentWidth).MaxHeight(availableBodyHeight).Render(body)
+	}
+	gap := max(0, frame.contentHeight()-frame.measureHeight(body)-footerHeight-creditHeight)
+	page := body + strings.Repeat("\n", gap+1) + footer
+	if credit != "" {
+		page += "\n" + credit
+	}
+	return frame.render(page)
 }

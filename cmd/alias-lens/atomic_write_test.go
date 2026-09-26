@@ -37,6 +37,26 @@ func TestInterruptedAliasWriteKeepsOriginalAndBackup(t *testing.T) {
 	}
 }
 
+func TestAliasWriteRejectsEditBeforeFinalRename(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	original := []byte("alias old='true'\n")
+	concurrent := []byte("alias newer='true'\n")
+	if err := os.WriteFile(path, original, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	previousHook := atomicWriteBeforeRename
+	atomicWriteBeforeRename = func(target string) error {
+		return os.WriteFile(target, concurrent, 0o600)
+	}
+	t.Cleanup(func() { atomicWriteBeforeRename = previousHook })
+	if err := writeAliasFile(path, original, []byte("alias restored='true'\n"), 0o600); err == nil {
+		t.Fatal("alias write replaced a concurrent edit")
+	}
+	if contents, err := os.ReadFile(path); err != nil || string(contents) != string(concurrent) {
+		t.Fatalf("concurrent edit was overwritten: %q, %v", contents, err)
+	}
+}
+
 func TestInterruptedTrackedReplacementKeepsOriginalAndBackup(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "settings")

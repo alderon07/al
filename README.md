@@ -115,10 +115,10 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | `F2` | Open usage stats |
 | `Ctrl+,` or `F3` | Customize the TUI footer |
 | `F7` | Show alias health warnings |
-| `F6` | Show tracked files and sync status |
+| `F6` | Show tracked files and sync status; press `d` to compare aliases |
 | `Ctrl+G` | Sync while the TUI is open |
 | `F4` | Preview and select a theme |
-| `Ctrl+Z` or `F8` | Browse and restore revisions |
+| `Ctrl+Z` or `F8` | Browse revisions; press `Enter` to preview before restoring |
 | `Ctrl+R` or `F5` | Reload aliases and settings |
 | `Esc` | Exit |
 
@@ -293,9 +293,13 @@ Environment files, keys, and credential-shaped filenames cannot be tracked. Alia
 
 If the local and remote copies both changed, Alias Lens keeps the live file untouched and saves private conflict copies. Run `al diff` to compare them.
 
+Run `al diff --tui` for a native terminal diff of the tracked and current alias files. In the TUI, press `F6`, then `d` to open the same comparison. The viewer shows full file changes, including comments and metadata. Use `n` and `p` to jump between changes, arrow keys to scroll, and `s` to switch between unified and split layouts when the terminal is wide enough.
+
 ## Undo the oops
 
 Alias Lens saves a private revision before each edit and before it restores another version.
+
+In the TUI, press `Ctrl+Z` or `F8`, choose a revision, and press `Enter` to preview what restoring it would change. Press `r`, then `y` to restore it.
 
 ```bash
 al history

@@ -360,8 +360,15 @@ func runMain() int {
 		}
 		fmt.Println(message)
 	case "diff":
+		if len(os.Args) == 3 && os.Args[2] == "--tui" {
+			if err := runTUIWithDiff(true); err != nil {
+				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				return 1
+			}
+			return 0
+		}
 		if len(os.Args) != 2 {
-			fmt.Fprintln(os.Stderr, "Usage: al diff")
+			fmt.Fprintln(os.Stderr, "Usage: al diff [--tui]")
 			return 2
 		}
 		if err := showRepositoryDiff(); err != nil {

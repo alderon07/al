@@ -310,11 +310,12 @@ commit containing only that alias file. It does not push. --push also sends the
 commit to the Git remote after a secret scan. --pull uses "git pull --ff-only"
 and imports remote-only aliases. Conflicting definitions stop the import.
 `,
-	"diff": `Usage: al diff
+	"diff": `Usage: al diff [--tui]
 
 Compare aliases and shell functions in the live alias file with the configured
 repository copy. Print names that exist on only one side and both command texts
-for changed definitions. Neither file is modified.
+for changed definitions. --tui opens a read-only native terminal viewer with
+line changes, including comments and metadata. Neither file is modified.
 `,
 	"autosync": `Usage:
   al autosync status

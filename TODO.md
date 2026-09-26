@@ -72,6 +72,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Confirm risky aliases before execution and explain why they were flagged.
 - [x] Make alias descriptions editable from the TUI.
 - [x] Browse and restore private revisions with `Ctrl+Z`.
+- [x] Preview private revisions and repository changes in a native terminal diff viewer before restoring.
 - [x] Distinguish missing, broken, and risky aliases in the wide header.
 - [x] Show a one-time keyboard tour after setup.
 

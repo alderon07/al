@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
@@ -10,8 +11,8 @@ import (
 
 func (m *model) openRevisionDrawer() {
 	m.revisionOpen = true
+	m.diff = nil
 	m.revisionCursor = 0
-	m.revisionConfirm = false
 	m.revisionErr = ""
 	path, err := aliasesPath()
 	if err != nil {
@@ -27,17 +28,6 @@ func (m *model) openRevisionDrawer() {
 func (m model) updateRevisionDrawer(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if message.Type == tea.KeyCtrlC {
 		return m, tea.Quit
-	}
-	if m.revisionConfirm {
-		if message.Type == tea.KeyEsc || message.String() == "n" {
-			m.revisionConfirm = false
-			m.status = "Restore canceled"
-			return m, nil
-		}
-		if message.String() != "y" {
-			return m, nil
-		}
-		return m.restoreSelectedRevision()
 	}
 	if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
 		m.openRevisionDrawer()
@@ -63,40 +53,57 @@ func (m model) updateRevisionDrawer(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.revisionCursor = max(0, len(m.revisions)-1)
 	case tea.KeyEnter:
 		if len(m.revisions) > 0 && m.revisionErr == "" {
-			m.revisionConfirm = true
-			m.status = ""
+			if err := m.openSelectedRevisionDiff(); err != nil {
+				m.revisionErr = err.Error()
+			}
 		}
 	}
 	return m, nil
 }
 
 func (m model) restoreSelectedRevision() (tea.Model, tea.Cmd) {
-	if len(m.revisions) == 0 {
+	if len(m.revisions) == 0 || m.diff == nil || m.diff.revisionID == "" {
 		return m, nil
 	}
 	index := min(max(0, m.revisionCursor), len(m.revisions)-1)
 	selected := m.revisions[index]
+	if selected.ID != m.diff.revisionID {
+		m.diff.err = "The selected revision changed. Close this preview and open it again."
+		m.diff.confirmRestore = false
+		return m, nil
+	}
 	path, err := aliasesPath()
 	if err == nil {
-		err = restoreRevisionFile(path, selected)
+		var current, previous []byte
+		var mode os.FileMode
+		current, mode, _, err = readAliasFile(path)
+		if err == nil {
+			previous, err = readFileLimited(selected.Path, aliasFileLimit)
+		}
+		if err == nil && (contentHash(current) != m.diff.oldHash || contentHash(previous) != m.diff.newHash) {
+			err = fmt.Errorf("aliases or this revision changed since preview; reopen the diff before restoring")
+		}
+		if err == nil {
+			err = writeAliasFile(path, current, previous, mode)
+		}
 	}
 	if err != nil {
-		m.revisionConfirm = false
-		m.revisionErr = err.Error()
+		m.diff.confirmRestore = false
+		m.diff.err = err.Error()
 		return m, nil
 	}
 	aliases, err := loadAliases()
 	if err != nil {
-		m.revisionConfirm = false
-		m.revisionErr = "Restored, but reload failed: " + err.Error()
+		m.diff.confirmRestore = false
+		m.diff.err = "Restored, but reload failed: " + err.Error()
 		return m, nil
 	}
 	m.aliases = aliases
 	m.query = ""
 	m.cursor = 0
 	m.revisionOpen = false
-	m.revisionConfirm = false
 	m.revisions = nil
+	m.diff = nil
 	m.status = "Restored " + selected.Time.Local().Format("Jan 2, 15:04") + " · previous version saved"
 	return m, nil
 }
@@ -141,15 +148,10 @@ func (m model) revisionDrawerView(frame tuiFrame, header string) string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  enter restore  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRevisions)) + " or esc close")
-	if m.revisionConfirm && len(m.revisions) > 0 {
-		selected := m.revisions[min(max(0, m.revisionCursor), len(m.revisions)-1)]
-		footer = lipgloss.NewStyle().Foreground(coralColor).Render("Restore " + selected.Time.Local().Format("Jan 2, 15:04") + "?  y confirm  ·  n or esc cancel")
-	} else {
-		footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
-	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body.String(), "", footer)
-	return frame.renderWithMaker(page)
+	footer := dimStyle.Render("↑↓ move  ·  enter preview  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRevisions)) + " or esc close")
+	footer = footerWithNavigation(footer, contentWidth, m.shortcutProfile)
+	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body.String())
+	return frame.renderWithFooter(page, footer)
 }
 
 func formatByteSize(size int64) string {
