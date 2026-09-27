@@ -206,7 +206,8 @@ func showRepositoryDiffTo(output io.Writer) error {
 		fmt.Fprintln(output, "The commands and functions match, but comments, metadata, ordering, whitespace, or unparsed syntax differ.")
 		fmt.Fprintf(output, "  local:   %s\n", source)
 		fmt.Fprintf(output, "  tracked: %s\n", target)
-		fmt.Fprintln(output, "Neither file was changed. Review both files, then run al sync --push to publish the active file or edit the active file before pushing.")
+		fmt.Fprintln(output, "Neither file was changed. Run al diff --tui to review every changed line before choosing what to keep.")
+		fmt.Fprintln(output, "Run al sync --push only when the active file contains everything you want to publish.")
 		return nil
 	}
 	fmt.Fprintln(output, "Alias files differ. Neither file was changed.")
@@ -222,6 +223,8 @@ func showRepositoryDiffTo(output io.Writer) error {
 	for _, conflict := range conflicts {
 		fmt.Fprintf(output, "CHANGED    %s\n  local:  %s\n  remote: %s\n", conflict.Name, terminalSafeText(conflict.Local), terminalSafeText(conflict.Remote))
 	}
+	fmt.Fprintln(output, "\nThis summary covers parsed alias and function names and commands only. Comments, metadata, ordering, whitespace, or other shell lines may also differ.")
+	fmt.Fprintln(output, "Run al diff --tui to review every changed line before replacing the repository copy.")
 	writeRepositoryDiffGuidance(output, len(localOnly), len(remoteOnly), len(conflicts))
 	return nil
 }
@@ -317,13 +320,21 @@ func pullRepository() (string, error) {
 			return "", err
 		}
 	}
-	imported := len(additions)
-	if imported == 0 && skippedFunctions == 0 {
-		return "Repository pulled; no new aliases were found", nil
+	updated := local
+	if len(additions) > 0 {
+		updated, err = readFileLimited(source, aliasFileLimit)
+		if err != nil {
+			return "", fmt.Errorf("read imported aliases: %w", err)
+		}
 	}
-	message := fmt.Sprintf("Repository pulled; imported %d aliases", imported)
+	message := fmt.Sprintf("Repository pulled; imported %d aliases", len(additions))
 	if skippedFunctions > 0 {
 		message += fmt.Sprintf("; left %d remote functions unchanged for manual review", skippedFunctions)
+	}
+	if bytes.Equal(updated, remote) {
+		message += "; active and repository alias files match"
+	} else {
+		message += "; active and repository alias files still differ. Run al diff to review what remains before pushing"
 	}
 	return message, nil
 }

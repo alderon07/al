@@ -20,7 +20,7 @@ func TestPlainSyncConflictMessageInNarrowPTY(t *testing.T) {
 }
 
 func TestRepositoryDiffGuidanceInNarrowPTY(t *testing.T) {
-	runSyncConflictPTY(t, "diff", 0, []string{"Alias files differ", "1 local-only, 1 repository-only", "To keep aliases from both files", "al sync --pull", "al diff again", "al sync --push"})
+	runSyncConflictPTY(t, "diff", 0, []string{"Alias files differ", "1 local-only, 1 repository-only", "al diff --tui", "To keep aliases from both files", "al sync --pull", "al diff again", "al sync --push"})
 }
 
 func runSyncConflictPTY(t *testing.T, subcommand string, expectedExit int, expected []string) {

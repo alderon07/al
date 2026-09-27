@@ -18,3 +18,7 @@ Plain `al sync` copies the active alias file over the repository copy. When auto
 - A diff with non-conflicting additions on both sides recommends `al sync --pull`, another `al diff`, and `al sync --push` only after remaining repository-only entries are copied or intentionally discarded.
 - A changed definition says that Alias Lens cannot choose between commands and requires manual resolution before `al sync --push`.
 - Whole-file differences recommend explicit `al sync --push` instead of plain `al sync`.
+- Every nonmatching `al diff` result states that its alias summary may omit comments, metadata, and unparsed shell lines, and directs the user to `al diff --tui` before replacing the repository copy.
+- `al sync --pull` reports how many aliases it imported and whether the active and repository files still differ. Remaining differences point to `al diff`.
+- Automatic alias and tracked-file conflict errors identify their private local and repository snapshots without printing snapshot contents.
+- `al autosync status` reports unreadable or invalid primary and tracked-file state instead of showing a default waiting state.

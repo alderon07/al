@@ -115,6 +115,21 @@ func TestRepositoryDiffExplainsResolutionByDifferenceType(t *testing.T) {
 	}
 }
 
+func TestRepositoryDiffWarnsAboutLinesOutsideAliasSummary(t *testing.T) {
+	local := []byte("alias keep='true'\nalias new='printf local'\n")
+	remote := []byte("# Keep this repository note\nalias keep='true'\n")
+	setupRepositoryDiffTest(t, local, remote)
+	var output bytes.Buffer
+	if err := showRepositoryDiffTo(&output); err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{"LOCAL ONLY", "new", "summary covers parsed alias and function", "Comments, metadata", "al diff --tui"} {
+		if !strings.Contains(output.String(), expected) {
+			t.Fatalf("diff output does not contain %q: %s", expected, output.String())
+		}
+	}
+}
+
 func setupRepositoryDiffTest(t *testing.T, local, remote []byte) {
 	t.Helper()
 	home := t.TempDir()

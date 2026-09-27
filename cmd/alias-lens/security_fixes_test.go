@@ -132,7 +132,7 @@ func TestManualPullStillImportsRemoteAliasesWithoutTopLevelCode(t *testing.T) {
 	}
 
 	message, err := pullRepository()
-	if err != nil || !strings.Contains(message, "imported 1 aliases") {
+	if err != nil || !strings.Contains(message, "imported 1 aliases") || !strings.Contains(message, "still differ") || !strings.Contains(message, "al diff") {
 		t.Fatalf("manual pull = %q, %v", message, err)
 	}
 	contents, err := os.ReadFile(aliasPath)
