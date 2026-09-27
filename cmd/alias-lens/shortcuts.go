@@ -229,6 +229,18 @@ var shortcutDefinitions = []shortcutDefinition{
 	scopedKeysShortcut("diff", shortcutDiffPanRight, terminalShortcut("Right", shortcutKey{typeCode: tea.KeyRight})),
 }
 
+var defaultLetterShortcuts = map[shortcutAction]rune{
+	shortcutHelp: 'h', shortcutStats: 's', shortcutSettings: 'o', shortcutThemes: 't',
+	shortcutRevisions: 'v', shortcutSync: 'y', shortcutHealth: 'i', shortcutAdd: 'a',
+	shortcutEdit: 'e', shortcutContext: 'c', shortcutDelete: 'd', shortcutRefresh: 'r',
+	shortcutCommit:              'p',
+	shortcutStatsPreviousPeriod: 'h', shortcutStatsNextPeriod: 'l',
+	shortcutStatsNextView: 'n', shortcutStatsPreviousView: 'p',
+	shortcutStatsPreviousRow: 'k', shortcutStatsNextRow: 'j',
+	shortcutDiffScrollDown: 'j', shortcutDiffScrollUp: 'k',
+	shortcutDiffPanLeft: 'h', shortcutDiffPanRight: 'l',
+}
+
 func commonShortcut(action shortcutAction, label string, key tea.KeyType) shortcutDefinition {
 	choice := shortcutBindings(terminalShortcut(label, shortcutKey{typeCode: key}))
 	return shortcutDefinition{action: action, windows: choice, linux: choice, macos: choice}
@@ -415,7 +427,7 @@ func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
 		enterAction = "Select without using it"
 	}
 	guide := [][2]string{
-		{"Type", "Search names, commands, and descriptions"},
+		{"/", "Search names, commands, and descriptions; Esc returns to commands"},
 		{shortcutLabel(profile, shortcutMoveUp) + " / " + shortcutLabel(profile, shortcutMoveDown), "Move through results"},
 		{shortcutLabel(profile, shortcutPageUp) + " / " + shortcutLabel(profile, shortcutPageDown), "Move by page"},
 		{shortcutLabel(profile, shortcutFirst) + " / " + shortcutLabel(profile, shortcutLast), "Jump to first or last result"},
@@ -481,6 +493,22 @@ func shortcutChoiceForProfile(definition shortcutDefinition, profile ShortcutPro
 			}
 		}
 	}
+	choice := baseShortcutChoiceForProfile(definition, profile)
+	if letter, ok := defaultLetterShortcuts[definition.action]; ok {
+		key := shortcutKey{typeCode: tea.KeyRunes, runeCode: letter}
+		bindings := make([]shortcutBinding, 0, len(choice.bindings)+1)
+		bindings = append(bindings, terminalShortcut(string(letter), key))
+		for _, binding := range choice.bindings {
+			if binding.key != key {
+				bindings = append(bindings, binding)
+			}
+		}
+		return shortcutBindings(bindings...)
+	}
+	return choice
+}
+
+func baseShortcutChoiceForProfile(definition shortcutDefinition, profile ShortcutProfile) shortcutChoice {
 	switch profile.name {
 	case "windows":
 		return definition.windows

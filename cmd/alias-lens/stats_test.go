@@ -370,7 +370,7 @@ func TestMainTUIOpensStatsAndReturnsToAliases(t *testing.T) {
 		t.Fatal("F2 did not open stats inside the main TUI")
 	}
 	view := stats.View()
-	for _, expected := range []string{"ALIAS LENS", "Alias rhythm", "ll", "F2/esc return"} {
+	for _, expected := range []string{"ALIAS LENS", "Alias rhythm", "ll", "s/esc return"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("embedded stats view is missing %q:\n%s", expected, view)
 		}

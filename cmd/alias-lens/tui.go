@@ -92,6 +92,14 @@ type model struct {
 	cursorHidden      bool
 	terminalBlurred   bool
 	shortcutProfile   ShortcutProfile
+	shortcutsOpen     bool
+	shortcutCursor    int
+	shortcutCapture   bool
+	shortcutPending   string
+	shortcutFilter    string
+	shortcutFiltering bool
+	shortcutLauncher  string
+	aliasMode         aliasInputMode
 	lastPageShortcut  tuiPage
 	lastShortcutAt    time.Time
 	executableWatch   executableWatch
@@ -111,6 +119,14 @@ const cursorBlinkInterval = 500 * time.Millisecond
 
 const pageShortcutRepeatWindow = 1200 * time.Millisecond
 
+type aliasInputMode int
+
+const (
+	aliasModeLegacy aliasInputMode = iota
+	aliasModeCommand
+	aliasModeSearch
+)
+
 type tuiPage int
 
 const (
@@ -122,6 +138,7 @@ const (
 	pageRevisions
 	pageSync
 	pageHealth
+	pageShortcuts
 )
 
 type trackedFileItem struct {
@@ -187,7 +204,7 @@ func runTUIWithDiff(repositoryDiff bool) error {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	initial := model{aliases: aliases, context: ranking, width: 80, height: 24, theme: theme, status: status, executeMode: !repositoryDiff, tourVisible: !repositoryDiff && tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}
+	initial := model{aliases: aliases, context: ranking, width: 80, height: 24, theme: theme, status: status, executeMode: !repositoryDiff, tourVisible: !repositoryDiff && tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), shortcutLauncher: launcherLabel(config), aliasMode: aliasModeCommand, executableWatch: watchRunningExecutable()}
 	if repositoryDiff {
 		if err := initial.openRepositoryDiff(); err != nil {
 			return err
@@ -267,7 +284,7 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	initial := model{aliases: aliases, context: ranking, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}
+	initial := model{aliases: aliases, context: ranking, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config), shortcutLauncher: launcherLabel(config), aliasMode: aliasModeSearch, executableWatch: watchRunningExecutable()}
 	if contextErr != nil {
 		initial.status = "Context ranking unavailable: " + contextErr.Error()
 	}
@@ -327,7 +344,76 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
-		message = translateShortcut(message, m.shortcutProfile, m.activeTranslatedShortcuts()...)
+		if m.shortcutsOpen {
+			return m.updateShortcutEditor(message)
+		}
+		if m.helpVisible && message.Type == tea.KeyTab {
+			m.lastShortcutAt = time.Time{}
+			return m.updateHelp(message)
+		}
+		if m.helpVisible && plainTextKey(message) {
+			m.lastShortcutAt = time.Time{}
+			return m.updateHelp(message)
+		}
+		if !m.tourVisible && !m.adding && m.deleteName == "" && m.runConfirm == nil && m.diff == nil && !m.helpVisible && !m.statsOpen && !m.settingsOpen && !m.themePicker && !m.revisionOpen && !m.trackedOnly {
+			if m.aliasMode == aliasModeSearch {
+				if message.Type == tea.KeyEsc {
+					m.lastShortcutAt = time.Time{}
+					m.aliasMode = aliasModeCommand
+					return m, nil
+				}
+				if message.Type == tea.KeyBackspace || message.Type == tea.KeyDelete {
+					m.lastShortcutAt = time.Time{}
+					if m.query != "" {
+						_, size := utf8.DecodeLastRuneInString(m.query)
+						m.query = m.query[:len(m.query)-size]
+						m.cursor = 0
+					}
+					return m, nil
+				}
+				if plainTextKey(message) {
+					m.lastShortcutAt = time.Time{}
+					m.healthOnly = false
+					input := string(message.Runes)
+					if message.Type == tea.KeySpace {
+						input = " "
+					}
+					m.query = appendSearchQuery(m.query, input)
+					m.cursor = 0
+					return m, nil
+				}
+			} else if m.aliasMode == aliasModeCommand && message.Type == tea.KeyRunes && acceptsTextInput(message) && string(message.Runes) == "/" {
+				m.lastShortcutAt = time.Time{}
+				m.healthOnly = false
+				m.aliasMode = aliasModeSearch
+				m.cursorHidden = false
+				return m, nil
+			}
+		}
+		if m.diff != nil && !m.diff.confirmRestore {
+			if _, handled := resolveShortcut(message, m.shortcutProfile, diffTranslatedShortcutActions...); handled {
+				m.lastShortcutAt = time.Time{}
+				return m.updateDiff(translateShortcut(message, m.shortcutProfile, diffTranslatedShortcutActions...))
+			}
+		}
+		if m.statsOpen {
+			if _, handled := resolveShortcut(message, m.shortcutProfile, statsTranslatedShortcutActions...); handled {
+				m.lastShortcutAt = time.Time{}
+				return m.updateStatsView(translateShortcut(message, m.shortcutProfile, statsTranslatedShortcutActions...))
+			}
+		}
+		if m.trackedOnly && matchesShortcut(message, m.shortcutProfile, shortcutOpenDiff) {
+			m.lastShortcutAt = time.Time{}
+			if err := m.openRepositoryDiff(); err != nil {
+				m.status = err.Error()
+			}
+			return m, nil
+		}
+		allowed := m.activeTranslatedShortcuts()
+		if (m.adding || m.settingsOpen || m.helpVisible) && plainTextKey(message) {
+			allowed = nil
+		}
+		message = translateShortcut(message, m.shortcutProfile, allowed...)
 		m.cursorHidden = false
 		if _, shortcut := pageForShortcut(message, m.shortcutProfile); !shortcut {
 			m.lastShortcutAt = time.Time{}
@@ -347,7 +433,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.diff != nil {
 			return m.updateDiff(message)
 		}
-		if m.settingsOpen && !matchesShortcut(message, m.shortcutProfile, shortcutSettings) && footerSettingsHandles(message, m.shortcutProfile) {
+		if m.settingsOpen && (plainTextKey(message) || !matchesShortcut(message, m.shortcutProfile, shortcutSettings) && footerSettingsHandles(message, m.shortcutProfile)) {
 			return m.updateFooterSettings(message)
 		}
 		if updated, handled := m.updatePageNavigation(message); handled {
@@ -392,6 +478,15 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type != tea.KeyDelete || m.query == "") {
 			if len(matches) > 0 {
 				m.deleteName = matches[m.cursor].Name
+			}
+			return m, nil
+		}
+		if matchesShortcut(message, m.shortcutProfile, shortcutCommit) {
+			result, err := syncRepository(false)
+			if err != nil {
+				m.status = err.Error()
+			} else {
+				m.status = result
 			}
 			return m, nil
 		}
@@ -442,6 +537,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case tea.KeyRunes:
 			if !acceptsTextInput(message) {
+				return m, nil
+			}
+			if m.aliasMode == aliasModeCommand {
 				return m, nil
 			}
 			m.healthOnly = false
@@ -611,6 +709,8 @@ func (m model) currentPage() tuiPage {
 	switch {
 	case m.helpVisible:
 		return pageHelp
+	case m.shortcutsOpen:
+		return pageShortcuts
 	case m.statsOpen:
 		return pageStats
 	case m.settingsOpen:
@@ -639,6 +739,11 @@ func (m *model) closePages() {
 		applyFooterConfig(m.settingsBefore.Footer)
 	}
 	m.helpVisible = false
+	m.shortcutsOpen = false
+	m.shortcutCapture = false
+	m.shortcutPending = ""
+	m.shortcutFiltering = false
+	m.shortcutFilter = ""
 	m.helpQuery = ""
 	m.statsOpen = false
 	m.settingsOpen = false
@@ -715,6 +820,9 @@ func (m model) View() string {
 	if m.helpVisible {
 		return m.helpView(frame, header)
 	}
+	if m.shortcutsOpen {
+		return m.shortcutEditorView(frame, header)
+	}
 	if m.statsOpen {
 		return m.statsView(frame, header)
 	}
@@ -730,12 +838,16 @@ func (m model) View() string {
 	if m.trackedOnly {
 		return m.trackedFilesView(frame, header)
 	}
+	searchPlaceholder := "search aliases…"
+	if m.aliasMode == aliasModeCommand {
+		searchPlaceholder = "press / to search aliases…"
+	}
 	search := lipgloss.NewStyle().
 		Width(searchFieldWidth(contentWidth)-2).
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(acidColor).
-		Render(acidStyle(markerPrefix(iconSearch)) + searchTextCursorAtWidth(m.query, m.searchFocused() && !m.cursorHidden, searchFieldWidth(contentWidth)))
+		Render(acidStyle(markerPrefix(iconSearch)) + searchTextWithCursorAtWidth(m.query, searchPlaceholder, m.searchFocused() && !m.cursorHidden, searchFieldWidth(contentWidth)))
 
 	moveKeys := primaryShortcutLabel(m.shortcutProfile, shortcutMoveUp) + "/" + primaryShortcutLabel(m.shortcutProfile, shortcutMoveDown)
 	if moveKeys == "Up/Down" {
@@ -760,6 +872,11 @@ func (m model) View() string {
 			footer = dimStyle.Render(moveKeys+" move  ·  "+useKey+" ") + cyanStyle("use") + dimStyle.Render("  ·  "+promptKey+" edit  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 		}
 	}
+	if m.aliasMode == aliasModeCommand && !m.selectMode {
+		footer = dimStyle.Render("command mode  ·  / search  ·  " + useKey + " use  ·  " + helpKey + " help  ·  " + quitKey + " quit")
+	} else if m.aliasMode == aliasModeSearch && !m.selectMode {
+		footer = dimStyle.Render("search mode  ·  type to filter  ·  esc commands  ·  " + useKey + " use")
+	}
 	if contentWidth < 50 {
 		action := "select"
 		if m.executeMode {
@@ -768,6 +885,10 @@ func (m model) View() string {
 		footer = dimStyle.Render(useKey+" ") + cyanStyle(action) + dimStyle.Render("  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 		if m.selectMode {
 			footer = dimStyle.Render(useKey + " select  ·  " + helpKey + " help  ·  " + quitKey + " cancel")
+		} else if m.aliasMode == aliasModeCommand {
+			footer = dimStyle.Render("/ search  ·  " + helpKey + " help  ·  " + quitKey + " quit")
+		} else if m.aliasMode == aliasModeSearch {
+			footer = dimStyle.Render("type to search  ·  esc commands")
 		}
 	}
 	if contentWidth >= 79 && !m.selectMode {
@@ -870,9 +991,17 @@ func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if message.Type == tea.KeyCtrlC {
 		return m, tea.Quit
 	}
-	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutHelp) {
+	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutHelp) && (!plainTextKey(message) || message.Type == tea.KeyRunes && string(message.Runes) == "?") {
 		m.helpVisible = false
 		m.helpQuery = ""
+		return m, nil
+	}
+	if message.Type == tea.KeyTab {
+		m.helpVisible = false
+		m.shortcutsOpen = true
+		m.shortcutCursor = 0
+		m.shortcutFilter = ""
+		m.status = ""
 		return m, nil
 	}
 	switch message.Type {
@@ -967,7 +1096,7 @@ func (m model) helpView(frame tuiFrame, header string) string {
 	}
 	search := lipgloss.NewStyle().Width(searchFieldWidth(contentWidth)-2).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconHelp)) + searchTextWithCursorAtWidth(m.helpQuery, "filter shortcuts…", true, searchFieldWidth(contentWidth)))
 	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
-	footerText := strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutHelp)) + " or esc close  ·  ctrl+c quit"
+	footerText := "tab configure shortcuts  ·  esc close"
 	footerView := footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
 	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footerView)-frame.makerHeight()-4)
 	var rows strings.Builder
@@ -986,7 +1115,7 @@ func (m model) helpView(frame tuiFrame, header string) string {
 	}
 
 	if len(shortcuts) > visible {
-		footerText = fmt.Sprintf("showing %d of %d  ·  type to filter  ·  esc close", visible, len(shortcuts))
+		footerText = fmt.Sprintf("showing %d of %d  ·  tab configure  ·  esc close", visible, len(shortcuts))
 		footerView = footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", rows.String())
@@ -1194,6 +1323,16 @@ func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
 		m = m.refreshTrackedFiles()
 		m.status = "Sync status refreshed"
+		return m, nil
+	}
+	if matchesShortcut(message, m.shortcutProfile, shortcutCommit) {
+		result, err := syncRepository(false)
+		m = m.refreshTrackedFiles()
+		if err != nil {
+			m.status = err.Error()
+		} else {
+			m.status = result
+		}
 		return m, nil
 	}
 	switch message.Type {
@@ -1553,7 +1692,7 @@ func (m model) currentAliases() []Alias {
 }
 
 func (m model) searchFocused() bool {
-	return !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.settingsOpen && !m.helpVisible && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
+	return m.aliasMode != aliasModeCommand && !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.settingsOpen && !m.helpVisible && !m.shortcutsOpen && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
 }
 
 func renderAlias(alias Alias, active bool, width int, contextual ...bool) string {

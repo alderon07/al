@@ -250,6 +250,10 @@ func (m model) updateDiff(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			view.scroll++
 		case "k":
 			view.scroll--
+		case "h":
+			view.horizontal = max(0, view.horizontal-8)
+		case "l":
+			view.horizontal += 8
 		case "n":
 			view.scroll = nextDiffHunk(rows, view.scroll, 1)
 		case "p":

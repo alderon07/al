@@ -72,7 +72,7 @@ func (m model) updateTour(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m model) tourView(frame tuiFrame, header string) string {
 	height := frame.height
 	steps := []string{
-		aliasStyle.Render("Type") + dimStyle.Render("      Search aliases, commands, and descriptions"),
+		aliasStyle.Render("/") + dimStyle.Render("         Search aliases, commands, and descriptions"),
 		aliasStyle.Render("Enter") + dimStyle.Render("     Run the selected alias by name"),
 		aliasStyle.Render(primaryShortcutLabel(m.shortcutProfile, shortcutThemes)) + dimStyle.Render("  Preview and save a dark theme"),
 		aliasStyle.Render(primaryShortcutLabel(m.shortcutProfile, shortcutHelp)) + dimStyle.Render("  Open the searchable keyboard guide"),
@@ -88,7 +88,7 @@ func (m model) tourView(frame tuiFrame, header string) string {
 	body += pixelIconLabel(iconBrand, "Alias Lens is ready.", titleStyle) +
 		"\n" + dimStyle.Render("Four keys are enough to get started.") +
 		stepSeparator + strings.Join(steps, stepSeparator)
-	footer := aliasStyle.Render("enter") + dimStyle.Render(" start  ·  ") + aliasStyle.Render("?") + dimStyle.Render(" full guide  ·  esc dismiss")
+	footer := aliasStyle.Render("enter") + dimStyle.Render(" start  ·  ") + aliasStyle.Render(primaryShortcutLabel(m.shortcutProfile, shortcutHelp)) + dimStyle.Render(" full guide  ·  esc dismiss")
 	sections := []string{header, "", body}
 	if height < 24 {
 		sections = []string{header, body}

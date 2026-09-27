@@ -53,14 +53,14 @@ var translatedShortcutActions = []shortcutAction{
 func (m model) activeTranslatedShortcuts() []shortcutAction {
 	navigation := []shortcutAction{shortcutMoveUp, shortcutMoveDown, shortcutPageUp, shortcutPageDown, shortcutFirst, shortcutLast, shortcutQuit}
 	switch {
-	case m.adding, m.deleteName != "", m.runConfirm != nil, m.settingsOpen, m.helpVisible, m.tourVisible:
+	case m.adding, m.settingsOpen, m.helpVisible, m.deleteName != "", m.runConfirm != nil, m.tourVisible:
 		return []shortcutAction{shortcutQuit}
 	case m.diff != nil && m.diff.confirmRestore:
 		return []shortcutAction{shortcutQuit}
 	case m.diff != nil:
-		return append([]shortcutAction{shortcutQuit}, diffTranslatedShortcutActions...)
+		return append(append([]shortcutAction{}, diffTranslatedShortcutActions...), shortcutQuit)
 	case m.statsOpen:
-		return append([]shortcutAction{shortcutQuit}, statsTranslatedShortcutActions...)
+		return append(append([]shortcutAction{}, statsTranslatedShortcutActions...), shortcutQuit)
 	case m.themePicker, m.revisionOpen:
 		return append(navigation, shortcutUse)
 	case m.trackedOnly:
@@ -89,7 +89,7 @@ func translateShortcut(message tea.KeyMsg, profile ShortcutProfile, allowed ...s
 			}
 			for _, definition := range shortcutDefinitions {
 				if definition.action == action {
-					key := shortcutChoiceForProfile(definition, ShortcutProfile{name: profile.name}).bindings[0].key
+					key := baseShortcutChoiceForProfile(definition, profile).bindings[0].key
 					return tea.KeyMsg{Type: key.typeCode, Runes: []rune{key.runeCode}, Repeat: message.Repeat}
 				}
 			}
@@ -117,6 +117,10 @@ func translateShortcut(message tea.KeyMsg, profile ShortcutProfile, allowed ...s
 
 func shortcutActionName(action shortcutAction) string { return shortcutActionNames[action] }
 
+func plainTextKey(message tea.KeyMsg) bool {
+	return !message.Paste && acceptsTextInput(message) && (message.Type == tea.KeySpace || message.Type == tea.KeyRunes)
+}
+
 func shortcutCompletionActions() []string {
 	actions := make([]string, 0, len(shortcutDefinitions)+1)
 	for _, definition := range shortcutDefinitions {
@@ -132,7 +136,10 @@ func parseShortcutBinding(value string) (shortcutBinding, error) {
 func parseShortcutBindingForAction(action shortcutAction, value string) (shortcutBinding, error) {
 	for _, definition := range shortcutDefinitions {
 		if definition.action == action {
-			return parseShortcutBindingWithPlain(value, definition.scope != "")
+			if definition.scope == "" && strings.TrimSpace(value) == "/" {
+				return shortcutBinding{}, fmt.Errorf("/ opens alias search; choose another key")
+			}
+			return parseShortcutBindingWithPlain(value, definition.scope != "" || action != shortcutSave)
 		}
 	}
 	return parseShortcutBindingWithPlain(value, false)
@@ -214,6 +221,11 @@ func parseShortcutBindingWithPlain(value string, allowPlain bool) (shortcutBindi
 		}
 	case "esc":
 		key.typeCode = tea.KeyEsc
+	case "space":
+		if !allowPlain && !key.ctrl && !key.alt && !key.super {
+			return shortcutBinding{}, fmt.Errorf("plain text keys are reserved for search and forms; use Ctrl, Alt, or Cmd")
+		}
+		key.typeCode = tea.KeySpace
 	default:
 		runes := []rune(canonical)
 		if len(runes) != 1 || !unicode.IsPrint(runes[0]) {
@@ -274,19 +286,16 @@ func validateShortcutOverrides(config AppConfig) error {
 	type assignedKey struct {
 		key           shortcutKey
 		action, scope string
-		custom        bool
 	}
 	seen := []assignedKey{}
 	for _, definition := range shortcutDefinitions {
 		for _, binding := range shortcutChoiceForProfile(definition, profile).bindings {
 			for _, previous := range seen {
-				_, custom := config.Shortcuts[shortcutActionName(definition.action)]
-				if previous.action != shortcutActionName(definition.action) && shortcutKeysOverlap(previous.key, binding.key) && (previous.scope == definition.scope || (previous.scope == "" || definition.scope == "") && (custom || previous.custom)) {
+				if previous.action != shortcutActionName(definition.action) && shortcutKeysOverlap(previous.key, binding.key) && previous.scope == definition.scope {
 					return fmt.Errorf("%s conflicts with %s on %s", shortcutActionName(definition.action), previous.action, binding.label)
 				}
 			}
-			_, custom := config.Shortcuts[shortcutActionName(definition.action)]
-			seen = append(seen, assignedKey{binding.key, shortcutActionName(definition.action), definition.scope, custom})
+			seen = append(seen, assignedKey{binding.key, shortcutActionName(definition.action), definition.scope})
 		}
 	}
 	return nil

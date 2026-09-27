@@ -37,7 +37,7 @@ func TestCustomShortcutReplacesProfileBinding(t *testing.T) {
 }
 
 func TestShortcutOverridesRejectConflictsAndInvalidKeys(t *testing.T) {
-	for _, binding := range []string{"F1", "n", "Ctrl+I", "Alt+"} {
+	for _, binding := range []string{"F1", "s", "Ctrl+I", "Alt+"} {
 		config := defaultConfig()
 		config.Shortcuts = map[string]string{"add": binding}
 		if err := validateAppConfig(config); err == nil {
@@ -150,8 +150,8 @@ func TestControlLetterOverrideMatchesTerminalKey(t *testing.T) {
 func TestShortcutConflictDetectsShiftTolerantDefault(t *testing.T) {
 	config := defaultConfig()
 	config.Shortcuts = map[string]string{"confirm": "Shift+?"}
-	if err := validateAppConfig(config); err == nil {
-		t.Fatal("Shift+? overlap with default help was accepted")
+	if err := validateAppConfig(config); err != nil {
+		t.Fatalf("confirmation key conflicts with a key used outside confirmations: %v", err)
 	}
 }
 

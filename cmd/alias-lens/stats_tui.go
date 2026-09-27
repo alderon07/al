@@ -354,6 +354,12 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch message.Runes[0] {
 		case 'q':
 			m.statsOpen = false
+		case 'n':
+			m.statsViewIndex = (m.statsViewIndex + 1) % len(statsViews)
+			m.statsPeriod = defaultPeriodForStatsView(m.statsViewIndex)
+		case 'p':
+			m.statsViewIndex = (m.statsViewIndex + len(statsViews) - 1) % len(statsViews)
+			m.statsPeriod = defaultPeriodForStatsView(m.statsViewIndex)
 		case 'h':
 			m.statsPeriod = (m.statsPeriod + len(statsPeriods) - 1) % len(statsPeriods)
 			m.statsSelected = 0
