@@ -92,6 +92,7 @@ func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = message.Width, message.Height
 	case tea.KeyMsg:
+		message = translateShortcut(message, m.shortcutProfile, append([]shortcutAction{shortcutQuit}, statsTranslatedShortcutActions...)...)
 		if matchesShortcut(message, m.shortcutProfile, shortcutStats) {
 			return m, tea.Quit
 		}
@@ -207,7 +208,7 @@ func (m statsModel) View() string {
 
 	closeHint := m.closeHint
 	if closeHint == "" {
-		closeHint = "q close"
+		closeHint = shortcutLabel(m.shortcutProfile, shortcutStatsQuit) + " close"
 	}
 	filterLabel := "period"
 	if m.viewIndex == 1 {
@@ -215,9 +216,19 @@ func (m statsModel) View() string {
 	} else if m.viewIndex == 2 {
 		filterLabel = "age filter"
 	}
-	footerText := "tab view   ←/→ " + filterLabel + "   r refresh   " + closeHint
+	viewKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutStatsNextView))
+	periodKeys := primaryShortcutLabel(m.shortcutProfile, shortcutStatsPreviousPeriod) + "/" + primaryShortcutLabel(m.shortcutProfile, shortcutStatsNextPeriod)
+	rowKeys := primaryShortcutLabel(m.shortcutProfile, shortcutStatsPreviousRow) + "/" + primaryShortcutLabel(m.shortcutProfile, shortcutStatsNextRow)
+	if periodKeys == "Left/Right" {
+		periodKeys = "←/→"
+	}
+	if rowKeys == "Up/Down" {
+		rowKeys = "↑/↓"
+	}
+	reloadKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutStatsReload))
+	footerText := viewKey + " view   " + periodKeys + " " + filterLabel + "   " + reloadKey + " refresh   " + closeHint
 	if m.viewIndex == 0 && width >= 76 {
-		footerText = "tab view   ←/→ period   ↑/↓ inspect   r refresh   " + closeHint
+		footerText = viewKey + " view   " + periodKeys + " period   " + rowKeys + " inspect   " + reloadKey + " refresh   " + closeHint
 	}
 	foot := muted.Render(footerText)
 	note := muted.Render("Counts come only from the active terminal history")
@@ -225,7 +236,7 @@ func (m statsModel) View() string {
 	if m.appHeader != "" && inner >= 79 {
 		bottom = footerWithNavigation(bottom, inner, m.shortcutProfile)
 	}
-	bottom = footerWithMaker(bottom, inner)
+	bottom = footerWithMaker(bottom, frame.footerWidth())
 
 	bodyContent := ""
 	if m.errorText != "" {
@@ -252,7 +263,7 @@ func (m statsModel) View() string {
 	if m.appHeader != "" {
 		top = m.appHeader + "\n\n" + top
 	}
-	availableTopHeight := max(1, frame.contentHeight()-frame.measureHeight(bottom)-1)
+	availableTopHeight := max(1, frame.contentHeight()-frame.measureFooterHeight(bottom)-1)
 	if overflow := frame.measureHeight(top) - availableTopHeight; overflow > 0 {
 		bodyHeight := max(1, lipgloss.Height(bodyContent)-overflow)
 		bodyContent = lipgloss.NewStyle().MaxHeight(bodyHeight).Render(bodyContent)
@@ -261,7 +272,7 @@ func (m statsModel) View() string {
 			top = m.appHeader + "\n\n" + top
 		}
 	}
-	spacerHeight := max(1, frame.contentHeight()-frame.measureHeight(top)-frame.measureHeight(bottom)+1)
+	spacerHeight := max(1, frame.contentHeight()-frame.measureHeight(top)-frame.measureFooterHeight(bottom)+1)
 	content := top + strings.Repeat("\n", spacerHeight) + bottom
 	return frame.renderStyled(content, page)
 }
@@ -325,6 +336,9 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statsPeriod = (m.statsPeriod + 1) % len(statsPeriods)
 			m.statsSelected = 0
 		}
+	case tea.KeyShiftTab:
+		m.statsViewIndex = (m.statsViewIndex + len(statsViews) - 1) % len(statsViews)
+		m.statsPeriod = defaultPeriodForStatsView(m.statsViewIndex)
 	case tea.KeyUp:
 		m.statsSelected = max(0, m.statsSelected-1)
 	case tea.KeyDown:
@@ -384,7 +398,7 @@ func (m model) statsView(frame tuiFrame, header string) string {
 		theme:           m.theme,
 		now:             m.statsNow,
 		appHeader:       header,
-		closeHint:       primaryShortcutLabel(m.shortcutProfile, shortcutStats) + "/esc return",
+		closeHint:       primaryShortcutLabel(m.shortcutProfile, shortcutStats) + "/" + strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit)) + " return",
 		errorText:       m.statsErr,
 		shortcutProfile: m.shortcutProfile,
 		frame:           &frame,

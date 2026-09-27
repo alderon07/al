@@ -38,8 +38,8 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 	})
 
 	initial := waitForPTYText(t, output, 0, resizeFooterMessage(120, 36, pageAliases))
-	assertPTYContentWidth(t, initial, '─', 108, "aliases 120x36")
-	for _, size := range []struct{ columns, rows uint16 }{{80, 24}, {100, 30}, {48, 18}, {120, 36}} {
+	assertPTYContentWidth(t, initial, '─', newMainTUIFrame(120, 36).footerWidth(), "aliases 120x36")
+	for _, size := range []struct{ columns, rows uint16 }{{80, 24}, {200, 50}, {160, 40}, {100, 30}, {48, 18}, {120, 36}} {
 		offset := output.length()
 		if err := pty.Setsize(terminal, &pty.Winsize{Rows: size.rows, Cols: size.columns}); err != nil {
 			t.Fatalf("resize PTY to %dx%d: %v", size.columns, size.rows, err)
@@ -48,7 +48,7 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 		if !strings.Contains(redraw, "esc quit") {
 			t.Fatalf("%dx%d PTY redraw lost control footer:\n%q", size.columns, size.rows, redraw)
 		}
-		assertPTYContentWidth(t, redraw, '─', newMainTUIFrame(int(size.columns), int(size.rows)).contentWidth, "aliases resize")
+		assertPTYContentWidth(t, redraw, '─', newMainTUIFrame(int(size.columns), int(size.rows)).footerWidth(), "aliases resize")
 	}
 
 	statsOffset := output.length()
@@ -56,8 +56,8 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 		t.Fatal(err)
 	}
 	statsRedraw := waitForPTYText(t, output, statsOffset, resizeFooterMessage(120, 36, pageStats))
-	assertPTYContentWidth(t, statsRedraw, '·', 108, "stats 120x36")
-	for _, size := range []struct{ columns, rows uint16 }{{80, 24}, {120, 36}} {
+	assertPTYContentWidth(t, statsRedraw, '·', newMainTUIFrame(120, 36).footerWidth(), "stats 120x36")
+	for _, size := range []struct{ columns, rows uint16 }{{80, 24}, {200, 50}, {160, 40}, {120, 36}} {
 		offset := output.length()
 		if err := pty.Setsize(terminal, &pty.Winsize{Rows: size.rows, Cols: size.columns}); err != nil {
 			t.Fatalf("resize stats PTY to %dx%d: %v", size.columns, size.rows, err)
@@ -66,19 +66,19 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 		if !strings.Contains(redraw, "r refresh") {
 			t.Fatalf("%dx%d stats PTY redraw lost control footer:\n%q", size.columns, size.rows, redraw)
 		}
-		assertPTYContentWidth(t, redraw, '·', newMainTUIFrame(int(size.columns), int(size.rows)).contentWidth, "stats resize")
+		assertPTYContentWidth(t, redraw, '·', newMainTUIFrame(int(size.columns), int(size.rows)).footerWidth(), "stats resize")
 	}
 
 	helpOffset := output.length()
 	if _, err := terminal.Write([]byte("\x1bOP")); err != nil {
 		t.Fatal(err)
 	}
-	helpRedraw := waitForPTYText(t, output, helpOffset, resizeFooterMessage(120, 36, pageHelp))
+	helpRedraw := waitForPTYText(t, output, helpOffset, "Keyboard guide")
 	if !strings.Contains(helpRedraw, "Keyboard guide") {
 		t.Fatalf("help PTY redraw did not open keyboard guide:\n%q", helpRedraw)
 	}
-	assertPTYContentWidth(t, helpRedraw, '─', 108, "help 120x36")
-	for _, size := range []struct{ columns, rows uint16 }{{80, 24}, {48, 18}, {120, 36}} {
+	assertPTYContentWidth(t, helpRedraw, '─', newMainTUIFrame(120, 36).footerWidth(), "help 120x36")
+	for _, size := range []struct{ columns, rows uint16 }{{80, 24}, {200, 50}, {160, 40}, {48, 18}, {120, 36}} {
 		offset := output.length()
 		if err := pty.Setsize(terminal, &pty.Winsize{Rows: size.rows, Cols: size.columns}); err != nil {
 			t.Fatalf("resize help PTY to %dx%d: %v", size.columns, size.rows, err)
@@ -87,7 +87,7 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 		if !strings.Contains(redraw, "esc") || !strings.Contains(redraw, "close") {
 			t.Fatalf("%dx%d help PTY redraw lost control footer:\n%q", size.columns, size.rows, redraw)
 		}
-		assertPTYContentWidth(t, redraw, '─', newMainTUIFrame(int(size.columns), int(size.rows)).contentWidth, "help resize")
+		assertPTYContentWidth(t, redraw, '─', newMainTUIFrame(int(size.columns), int(size.rows)).footerWidth(), "help resize")
 	}
 }
 

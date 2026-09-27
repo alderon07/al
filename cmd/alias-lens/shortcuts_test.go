@@ -247,13 +247,16 @@ func TestEveryShortcutActionHasTerminalSafeBinding(t *testing.T) {
 
 func TestShortcutProfilesDoNotAssignOneKeyToMultipleActions(t *testing.T) {
 	for _, profile := range []ShortcutProfile{shortcutWindows, shortcutLinux, shortcutMacOS} {
-		seen := make(map[shortcutKey]shortcutAction)
+		seen := make(map[string]map[shortcutKey]shortcutAction)
 		for _, definition := range shortcutDefinitions {
+			if seen[definition.scope] == nil {
+				seen[definition.scope] = make(map[shortcutKey]shortcutAction)
+			}
 			for _, binding := range shortcutChoiceForProfile(definition, profile).bindings {
-				if action, exists := seen[binding.key]; exists {
+				if action, exists := seen[definition.scope][binding.key]; exists {
 					t.Errorf("%s binding %s is assigned to actions %d and %d", profile, binding.label, action, definition.action)
 				}
-				seen[binding.key] = definition.action
+				seen[definition.scope][binding.key] = definition.action
 			}
 		}
 	}
@@ -304,7 +307,7 @@ func TestShortcutGuideUsesFriendlyMacLabels(t *testing.T) {
 
 func TestWideNavigationUsesReadableModifierNames(t *testing.T) {
 	hint := pageNavigationHint(120, shortcutLinux)
-	for _, want := range []string{"F1 help", "F3 settings", "Ctrl+Z versions"} {
+	for _, want := range []string{"F1 help", "F3 footer", "Ctrl+Z versions"} {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("wide navigation hint is missing %q: %s", want, hint)
 		}

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -10,12 +11,17 @@ import (
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
 
-type ShortcutProfile string
+type ShortcutProfile struct {
+	name      string
+	overrides string
+}
 
-const (
-	shortcutWindows ShortcutProfile = "windows"
-	shortcutLinux   ShortcutProfile = "linux"
-	shortcutMacOS   ShortcutProfile = "macos"
+func (profile ShortcutProfile) String() string { return profile.name }
+
+var (
+	shortcutWindows = ShortcutProfile{name: "windows"}
+	shortcutLinux   = ShortcutProfile{name: "linux"}
+	shortcutMacOS   = ShortcutProfile{name: "macos"}
 )
 
 type shortcutAction int
@@ -34,6 +40,49 @@ const (
 	shortcutDelete
 	shortcutRefresh
 	shortcutSave
+	shortcutMoveUp
+	shortcutMoveDown
+	shortcutPageUp
+	shortcutPageDown
+	shortcutFirst
+	shortcutLast
+	shortcutUse
+	shortcutPrompt
+	shortcutQuit
+	shortcutCommit
+	shortcutConfirm
+	shortcutDecline
+	shortcutOpenDiff
+	shortcutStatsQuit
+	shortcutStatsPreviousPeriod
+	shortcutStatsNextPeriod
+	shortcutStatsNextView
+	shortcutStatsPreviousView
+	shortcutStatsPreviousRow
+	shortcutStatsNextRow
+	shortcutStatsOverview
+	shortcutStatsAliases
+	shortcutStatsCommands
+	shortcutStatsGrowth
+	shortcutStatsPeriod1
+	shortcutStatsPeriod2
+	shortcutStatsPeriod3
+	shortcutStatsPeriod4
+	shortcutStatsReload
+	shortcutDiffClose
+	shortcutDiffScrollDown
+	shortcutDiffScrollUp
+	shortcutDiffNext
+	shortcutDiffPrevious
+	shortcutDiffLayout
+	shortcutDiffAliases
+	shortcutDiffRestore
+	shortcutDiffPanLeft
+	shortcutDiffPanRight
+	shortcutDiffPageUp
+	shortcutDiffPageDown
+	shortcutDiffFirst
+	shortcutDiffLast
 )
 
 type shortcutKey struct {
@@ -59,6 +108,7 @@ type shortcutChoice struct {
 
 type shortcutDefinition struct {
 	action  shortcutAction
+	scope   string
 	windows shortcutChoice
 	linux   shortcutChoice
 	macos   shortcutChoice
@@ -131,24 +181,94 @@ var shortcutDefinitions = []shortcutDefinition{
 		windows: shortcutBindings(terminalShortcut("Ctrl+S", shortcutKey{typeCode: tea.KeyCtrlS})),
 		linux:   shortcutBindings(terminalShortcut("Ctrl+S", shortcutKey{typeCode: tea.KeyCtrlS})),
 		macos:   shortcutBindings(nativeShortcut("Cmd+S", shortcutKey{typeCode: tea.KeyRunes, runeCode: 's', super: true}), terminalShortcut("Ctrl+S", shortcutKey{typeCode: tea.KeyCtrlS}))},
+	commonShortcut(shortcutMoveUp, "Up", tea.KeyUp),
+	commonShortcut(shortcutMoveDown, "Down", tea.KeyDown),
+	commonShortcut(shortcutPageUp, "PgUp", tea.KeyPgUp),
+	commonShortcut(shortcutPageDown, "PgDown", tea.KeyPgDown),
+	commonShortcut(shortcutFirst, "Home", tea.KeyHome),
+	commonShortcut(shortcutLast, "End", tea.KeyEnd),
+	commonShortcut(shortcutUse, "Enter", tea.KeyEnter),
+	commonShortcut(shortcutPrompt, "Tab", tea.KeyTab),
+	{action: shortcutQuit,
+		windows: shortcutBindings(terminalShortcut("Esc", shortcutKey{typeCode: tea.KeyEsc}), terminalShortcut("Ctrl+C", shortcutKey{typeCode: tea.KeyCtrlC})),
+		linux:   shortcutBindings(terminalShortcut("Esc", shortcutKey{typeCode: tea.KeyEsc}), terminalShortcut("Ctrl+C", shortcutKey{typeCode: tea.KeyCtrlC})),
+		macos:   shortcutBindings(terminalShortcut("Esc", shortcutKey{typeCode: tea.KeyEsc}), terminalShortcut("Ctrl+C", shortcutKey{typeCode: tea.KeyCtrlC}))},
+	commonShortcut(shortcutCommit, "Ctrl+G", tea.KeyCtrlG),
+	scopedRuneShortcut("confirmation", shortcutConfirm, "y", 'y'),
+	scopedRuneShortcut("confirmation", shortcutDecline, "n", 'n'),
+	scopedRuneShortcut("sync", shortcutOpenDiff, "d", 'd'),
+	scopedRuneShortcut("stats", shortcutStatsQuit, "q", 'q'),
+	scopedKeysShortcut("stats", shortcutStatsPreviousPeriod, terminalShortcut("Left", shortcutKey{typeCode: tea.KeyLeft}), terminalShortcut("h", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'h'})),
+	scopedKeysShortcut("stats", shortcutStatsNextPeriod, terminalShortcut("Right", shortcutKey{typeCode: tea.KeyRight}), terminalShortcut("l", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'l'})),
+	scopedKeysShortcut("stats", shortcutStatsNextView, terminalShortcut("Tab", shortcutKey{typeCode: tea.KeyTab})),
+	scopedKeysShortcut("stats", shortcutStatsPreviousView, terminalShortcut("Shift+Tab", shortcutKey{typeCode: tea.KeyShiftTab})),
+	scopedKeysShortcut("stats", shortcutStatsPreviousRow, terminalShortcut("Up", shortcutKey{typeCode: tea.KeyUp}), terminalShortcut("k", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'k'})),
+	scopedKeysShortcut("stats", shortcutStatsNextRow, terminalShortcut("Down", shortcutKey{typeCode: tea.KeyDown}), terminalShortcut("j", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'j'})),
+	scopedRuneShortcut("stats", shortcutStatsOverview, "o", 'o'),
+	scopedRuneShortcut("stats", shortcutStatsAliases, "a", 'a'),
+	scopedRuneShortcut("stats", shortcutStatsCommands, "c", 'c'),
+	scopedRuneShortcut("stats", shortcutStatsGrowth, "g", 'g'),
+	scopedRuneShortcut("stats", shortcutStatsPeriod1, "1", '1'),
+	scopedRuneShortcut("stats", shortcutStatsPeriod2, "2", '2'),
+	scopedRuneShortcut("stats", shortcutStatsPeriod3, "3", '3'),
+	scopedRuneShortcut("stats", shortcutStatsPeriod4, "4", '4'),
+	scopedRuneShortcut("stats", shortcutStatsReload, "r", 'r'),
+	scopedRuneShortcut("diff", shortcutDiffClose, "q", 'q'),
+	scopedKeysShortcut("diff", shortcutDiffScrollDown, terminalShortcut("Down", shortcutKey{typeCode: tea.KeyDown}), terminalShortcut("j", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'j'})),
+	scopedKeysShortcut("diff", shortcutDiffScrollUp, terminalShortcut("Up", shortcutKey{typeCode: tea.KeyUp}), terminalShortcut("k", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'k'})),
+	scopedKeysShortcut("diff", shortcutDiffPageUp, terminalShortcut("PgUp", shortcutKey{typeCode: tea.KeyPgUp})),
+	scopedKeysShortcut("diff", shortcutDiffPageDown, terminalShortcut("PgDown", shortcutKey{typeCode: tea.KeyPgDown})),
+	scopedKeysShortcut("diff", shortcutDiffFirst, terminalShortcut("Home", shortcutKey{typeCode: tea.KeyHome})),
+	scopedKeysShortcut("diff", shortcutDiffLast, terminalShortcut("End", shortcutKey{typeCode: tea.KeyEnd})),
+	scopedRuneShortcut("diff", shortcutDiffNext, "n", 'n'),
+	scopedRuneShortcut("diff", shortcutDiffPrevious, "p", 'p'),
+	scopedRuneShortcut("diff", shortcutDiffLayout, "s", 's'),
+	scopedRuneShortcut("diff", shortcutDiffAliases, "a", 'a'),
+	scopedRuneShortcut("diff", shortcutDiffRestore, "r", 'r'),
+	scopedKeysShortcut("diff", shortcutDiffPanLeft, terminalShortcut("Left", shortcutKey{typeCode: tea.KeyLeft})),
+	scopedKeysShortcut("diff", shortcutDiffPanRight, terminalShortcut("Right", shortcutKey{typeCode: tea.KeyRight})),
+}
+
+func commonShortcut(action shortcutAction, label string, key tea.KeyType) shortcutDefinition {
+	choice := shortcutBindings(terminalShortcut(label, shortcutKey{typeCode: key}))
+	return shortcutDefinition{action: action, windows: choice, linux: choice, macos: choice}
+}
+
+func scopedKeysShortcut(scope string, action shortcutAction, bindings ...shortcutBinding) shortcutDefinition {
+	choice := shortcutBindings(bindings...)
+	return shortcutDefinition{action: action, scope: scope, windows: choice, linux: choice, macos: choice}
+}
+
+func scopedRuneShortcut(scope string, action shortcutAction, label string, key rune) shortcutDefinition {
+	choice := shortcutBindings(terminalShortcut(label, shortcutKey{typeCode: tea.KeyRunes, runeCode: key}))
+	return shortcutDefinition{action: action, scope: scope, windows: choice, linux: choice, macos: choice}
 }
 
 func parseShortcutProfile(value string) (ShortcutProfile, error) {
-	switch profile := ShortcutProfile(strings.ToLower(strings.TrimSpace(value))); profile {
-	case shortcutWindows, shortcutLinux, shortcutMacOS:
-		return profile, nil
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "windows":
+		return shortcutWindows, nil
+	case "linux":
+		return shortcutLinux, nil
+	case "macos":
+		return shortcutMacOS, nil
 	default:
-		return "", fmt.Errorf("shortcut style must be windows, linux, or macos")
+		return ShortcutProfile{}, fmt.Errorf("shortcut style must be windows, linux, or macos")
 	}
 }
 
 func resolvedShortcutProfile(config AppConfig) ShortcutProfile {
+	profile := defaultShortcutProfile()
 	if config.ShortcutProfile != "" {
-		if profile, err := parseShortcutProfile(config.ShortcutProfile); err == nil {
-			return profile
+		if selected, err := parseShortcutProfile(config.ShortcutProfile); err == nil {
+			profile = selected
 		}
 	}
-	return defaultShortcutProfile()
+	if len(config.Shortcuts) != 0 {
+		encoded, _ := json.Marshal(config.Shortcuts)
+		profile.overrides = string(encoded)
+	}
+	return profile
 }
 
 func defaultShortcutProfile() ShortcutProfile {
@@ -178,10 +298,10 @@ func detectShortcutProfile(goos string, getenv func(string) string, readFile fun
 }
 
 func shortcutProfileLabel(profile ShortcutProfile) string {
-	switch profile {
-	case shortcutWindows:
+	switch profile.name {
+	case "windows":
 		return "Windows"
-	case shortcutMacOS:
+	case "macos":
 		return "macOS"
 	default:
 		return "Linux"
@@ -193,8 +313,44 @@ func runShortcutsCommand(arguments []string) error {
 	if err != nil {
 		return err
 	}
+	if len(arguments) > 0 && (arguments[0] == "set" || arguments[0] == "reset" || arguments[0] == "reset-all") {
+		switch arguments[0] {
+		case "set":
+			if len(arguments) != 3 {
+				return errors.New("usage: al shortcuts set ACTION KEY")
+			}
+			if config.Shortcuts == nil {
+				config.Shortcuts = make(map[string]string)
+			}
+			config.Shortcuts[arguments[1]] = arguments[2]
+		case "reset":
+			if len(arguments) != 2 {
+				return errors.New("usage: al shortcuts reset ACTION")
+			}
+			if arguments[1] != "launcher" {
+				known := false
+				for _, name := range shortcutActionNames {
+					known = known || name == arguments[1]
+				}
+				if !known {
+					return fmt.Errorf("unknown action %q; run al shortcuts", arguments[1])
+				}
+			}
+			delete(config.Shortcuts, arguments[1])
+		case "reset-all":
+			if len(arguments) != 1 {
+				return errors.New("usage: al shortcuts reset-all")
+			}
+			config.Shortcuts = nil
+		}
+		if err := saveConfig(config); err != nil {
+			return err
+		}
+		fmt.Println("Shortcuts saved. Open Alias Lens again; reload your shell integration for a launcher change.")
+		return nil
+	}
 	if len(arguments) > 1 {
-		return errors.New("usage: al shortcuts [auto|windows|linux|macos|test]")
+		return errors.New("usage: al shortcuts [auto|windows|linux|macos|test|set ACTION KEY|reset ACTION|reset-all]")
 	}
 	if len(arguments) == 1 && arguments[0] != "test" {
 		if arguments[0] == "auto" {
@@ -210,7 +366,7 @@ func runShortcutsCommand(arguments []string) error {
 		if err != nil {
 			return err
 		}
-		config.ShortcutProfile = string(profile)
+		config.ShortcutProfile = profile.name
 		if err := saveConfig(config); err != nil {
 			return err
 		}
@@ -223,16 +379,21 @@ func runShortcutsCommand(arguments []string) error {
 	if config.ShortcutProfile != "" {
 		source = "your saved choice"
 	}
-	fmt.Printf("Shortcut style: %s (%s)\n", shortcutProfileLabel(profile), source)
+	fmt.Printf("%s: %s (%s)\n", cliAccent("Shortcut style"), shortcutProfileLabel(profile), source)
 	fmt.Println()
 	for _, row := range shortcutGuide(profile, false) {
-		fmt.Printf("  %-22s %s\n", row[0], row[1])
+		fmt.Printf("  %s %s\n", cliAccent(fmt.Sprintf("%-22s", row[0])), row[1])
+	}
+	fmt.Printf("  %-22s %s\n", launcherLabel(config), "Launch from the shell prompt (launcher)")
+	fmt.Println("\nConfigurable actions:")
+	for _, definition := range shortcutDefinitions {
+		fmt.Printf("  %-12s %s\n", shortcutActionName(definition.action), shortcutLabel(profile, definition.action))
 	}
 	fmt.Println()
-	if profile == shortcutMacOS {
+	if profile.name == shortcutMacOS.name {
 		fmt.Println("If your terminal keeps a Command shortcut, use the terminal-safe fallback shown beside it.")
 	}
-	if profile == shortcutMacOS {
+	if profile.name == shortcutMacOS.name {
 		fmt.Println("Your terminal normally uses Cmd+C to copy and Cmd+V to paste.")
 	} else {
 		fmt.Println("Your terminal may use Ctrl+Shift+C to copy and Ctrl+Shift+V to paste.")
@@ -255,12 +416,14 @@ func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
 	}
 	guide := [][2]string{
 		{"Type", "Search names, commands, and descriptions"},
-		{"↑↓ / PgUp PgDn", "Move through results"},
-		{"Enter", enterAction},
-		{"Tab", "Return the alias to the prompt for editing"},
+		{shortcutLabel(profile, shortcutMoveUp) + " / " + shortcutLabel(profile, shortcutMoveDown), "Move through results"},
+		{shortcutLabel(profile, shortcutPageUp) + " / " + shortcutLabel(profile, shortcutPageDown), "Move by page"},
+		{shortcutLabel(profile, shortcutFirst) + " / " + shortcutLabel(profile, shortcutLast), "Jump to first or last result"},
+		{shortcutLabel(profile, shortcutUse), enterAction},
+		{shortcutLabel(profile, shortcutPrompt), "Return the alias to the prompt for editing"},
 	}
 	if selectMode {
-		return append(guide, [2]string{shortcutLabel(profile, shortcutHelp) + " / Esc", "Close this guide"})
+		return append(guide, [2]string{shortcutLabel(profile, shortcutHelp) + " / " + shortcutLabel(profile, shortcutQuit), "Close this guide"})
 	}
 	return append(guide,
 		[2]string{shortcutLabel(profile, shortcutAdd), "Add an alias"},
@@ -272,10 +435,11 @@ func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
 		[2]string{shortcutLabel(profile, shortcutSettings), "Customize the TUI footer"},
 		[2]string{shortcutLabel(profile, shortcutHealth), "Show aliases that need attention"},
 		[2]string{shortcutLabel(profile, shortcutSync), "Open sync status and tracked files"},
-		[2]string{"Ctrl+G", "Save alias changes to the local repository"},
+		[2]string{shortcutLabel(profile, shortcutCommit), "Save alias changes to the local repository"},
 		[2]string{shortcutLabel(profile, shortcutThemes), "Choose a theme with live preview"},
 		[2]string{shortcutLabel(profile, shortcutRefresh), "Reload aliases and theme settings"},
-		[2]string{shortcutLabel(profile, shortcutHelp) + " / Esc", "Close this guide"},
+		[2]string{shortcutLabel(profile, shortcutQuit), "Quit or close a dialog"},
+		[2]string{shortcutLabel(profile, shortcutHelp) + " / " + shortcutLabel(profile, shortcutQuit), "Close this guide"},
 	)
 }
 
@@ -307,10 +471,20 @@ func primaryShortcutLabel(profile ShortcutProfile, action shortcutAction) string
 }
 
 func shortcutChoiceForProfile(definition shortcutDefinition, profile ShortcutProfile) shortcutChoice {
-	switch profile {
-	case shortcutWindows:
+	if profile.overrides != "" {
+		var overrides map[string]string
+		if json.Unmarshal([]byte(profile.overrides), &overrides) == nil {
+			if label, ok := overrides[shortcutActionName(definition.action)]; ok {
+				if binding, err := parseShortcutBindingForAction(definition.action, label); err == nil {
+					return shortcutBindings(binding)
+				}
+			}
+		}
+	}
+	switch profile.name {
+	case "windows":
 		return definition.windows
-	case shortcutMacOS:
+	case "macos":
 		return definition.macos
 	default:
 		return definition.linux

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 func runSearchCommand(arguments []string) error {
@@ -45,6 +47,13 @@ func runSearchCommand(arguments []string) error {
 		encoder.SetIndent("", "  ")
 		return encoder.Encode(results)
 	}
+	if cliStyled() {
+		fmt.Println(cliReportHeading("search"))
+		if len(results) == 0 {
+			fmt.Println(cliMuted("No aliases found."))
+			return nil
+		}
+	}
 	for _, alias := range results {
 		metadata := ""
 		if len(alias.Tags) > 0 {
@@ -54,7 +63,20 @@ func runSearchCommand(arguments []string) error {
 			}
 			metadata = "  #" + strings.Join(safeTags, " #")
 		}
-		fmt.Printf("%s\t%s\t%s%s\n", terminalSafeText(alias.Name), terminalSafeText(alias.Command), terminalSafeText(alias.Description), metadata)
+		if !cliStyled() {
+			fmt.Printf("%s\t%s\t%s%s\n", terminalSafeText(alias.Name), terminalSafeText(alias.Command), terminalSafeText(alias.Description), metadata)
+			continue
+		}
+		fmt.Println(cliAccent(terminalSafeText(alias.Name)) + cliMuted(metadata))
+		for _, line := range strings.Split(ansi.Wrap(terminalSafeText(alias.Command), cliColumns()-2, ""), "\n") {
+			fmt.Println("  " + line)
+		}
+		if alias.Description != "" {
+			for _, line := range strings.Split(ansi.Wrap(terminalSafeText(alias.Description), cliColumns()-2, ""), "\n") {
+				fmt.Println("  " + cliMuted(line))
+			}
+		}
+		fmt.Println()
 	}
 	return nil
 }

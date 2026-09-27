@@ -130,11 +130,11 @@ Press `?` inside the TUI for the full searchable keyboard guide.
 | `Ctrl+R` or `F5` | Reload aliases and settings |
 | `Esc` | Exit |
 
-The page shortcuts work from the alias list, help, stats, footer settings, themes, revisions, sync status, and alias health. Press the current page's shortcut again to return to the alias list.
+The page shortcuts work from the alias list, help, stats, the Footer page, themes, revisions, sync status, and alias health. Press the current page's shortcut again to return to the alias list.
 
 The table shows the Linux defaults. Windows uses `F5` as the primary refresh key. macOS uses Command shortcuts with the listed function keys and Control keys as terminal-safe fallbacks.
 
-`F1` through `F8` open Help, Stats, Settings, Themes, Refresh, Sync, Health, and Revisions in every profile. These keys keep a chosen profile usable when the terminal does not send its preferred modifier.
+`F1` through `F8` open Help, Stats, Footer, Themes, Refresh, Sync, Health, and Revisions in every profile. These keys keep a chosen profile usable when the terminal does not send its preferred modifier.
 
 Alias Lens chooses a familiar keyboard style for your computer: Windows on Windows and WSL, macOS on macOS, and Linux on Linux. See the active style or choose the one you already know:
 
@@ -144,9 +144,14 @@ al shortcuts auto
 al shortcuts macos
 al shortcuts windows
 al shortcuts linux
+al shortcuts set add Alt+N
+al shortcuts set stats.next-view Alt+V
+al shortcuts set launcher Ctrl+K
+al shortcuts reset add
+al shortcuts reset-all
 ```
 
-You can use any style on any computer. Run `al shortcuts auto` to remove a saved choice and return to the style for the current computer. The macOS style shows Command shortcuts with terminal-safe fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
+Run `al shortcuts` to see the action names and current keys. A saved key replaces that action's profile defaults. Open the TUI again to use a changed TUI key, or reload your shell integration to use a changed launcher key. You can use any style on any computer. Run `al shortcuts auto` to remove a saved style choice and return to the style for the current computer. The macOS style shows Command shortcuts with terminal-safe fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
 
 On Zsh and Bash 4+, `Ctrl+G` keeps its normal cancel behavior when the prompt contains text. Bash 3.2 does not install the picker binding; run `al` instead. Set `ALIAS_LENS_NOBIND=1` before the shell integration loads if you do not want the key binding.
 
@@ -252,6 +257,8 @@ al theme --check
 ```
 
 Moving through the picker previews each theme. Press `Enter` to save it or `Esc` to keep the previous theme.
+
+Human-facing commands use PTerm for colored headings, check results, and manual sync progress when run in a terminal. Redirected output, `NO_COLOR`, JSON, completion scripts, and shell integration stay plain.
 
 Press `F3` in the TUI to compose the footer. You can edit its message, choose a named icon, set its alignment and tone, and add a thin or dotted rule. The `ALIAS LENS` product name and interface stay fixed. The editor shows every choice for the active row. Use Left, Right, or Space to pick one, then select `Save changes` and press Enter. This path works in terminals that reserve `Ctrl+S` for flow control. Named footer icons use ordinary Unicode characters and do not require a Nerd Font.
 

@@ -21,18 +21,22 @@ type DoctorCheck struct {
 func runDoctor() error {
 	checks := doctorChecks()
 	failures := 0
+	if cliStyled() {
+		fmt.Println(cliReportHeading("doctor"))
+	}
 	for _, check := range checks {
-		marker := "OK"
 		if !check.OK {
-			marker = "FIX"
 			failures++
 		}
-		fmt.Printf("%-3s  %-18s %s\n", marker, check.Name, check.Message)
+		cliDoctorRow(check.OK, check.Name, check.Message)
 	}
 	if failures > 0 {
 		return fmt.Errorf("%d checks need attention", failures)
 	}
-	fmt.Println("Alias Lens is ready.")
+	if cliStyled() {
+		fmt.Println()
+	}
+	cliResult("Alias Lens is ready.")
 	return nil
 }
 
@@ -235,9 +239,9 @@ func runSetup(shellName string, repair bool) error {
 			return err
 		}
 		if repair {
-			fmt.Printf("Verified Alias Lens %s alias integration.\n", adapter.DisplayName())
+			cliResult(fmt.Sprintf("Verified Alias Lens %s alias integration.", adapter.DisplayName()))
 		} else {
-			fmt.Printf("Alias Lens %s integration is already installed.\n", adapter.DisplayName())
+			cliResult(fmt.Sprintf("Alias Lens %s integration is already installed.", adapter.DisplayName()))
 		}
 	} else {
 		if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
@@ -247,7 +251,7 @@ func runSetup(shellName string, repair bool) error {
 		if repair {
 			verb = "Repaired"
 		}
-		fmt.Printf("%s Alias Lens %s integration.\n", verb, adapter.DisplayName())
+		cliResult(fmt.Sprintf("%s Alias Lens %s integration.", verb, adapter.DisplayName()))
 	}
 	fmt.Println(shellSetupInstruction(adapter))
 	home := filepath.Dir(aliasPath)
@@ -269,21 +273,31 @@ func runSetup(shellName string, repair bool) error {
 }
 
 func shellActionsMessage(adapter ShellAdapter) string {
+	launcher := configuredLauncherLabel()
 	if adapter.Name() == "bash" {
 		if supported, known := bashCtrlGSupport(); known && !supported {
-			return "Enter and al use are enabled; run al because Ctrl+G requires Bash 4 or newer"
+			return "Enter and al use are enabled; run al because " + launcher + " requires Bash 4 or newer"
 		}
 	}
-	return "Enter, al use, and Ctrl+G are enabled"
+	return "Enter, al use, and " + launcher + " are enabled"
 }
 
 func shellSetupInstruction(adapter ShellAdapter) string {
+	launcher := configuredLauncherLabel()
 	if adapter.Name() == "bash" {
 		if supported, known := bashCtrlGSupport(); known && !supported {
-			return "Start a new bash shell, then run al. Ctrl+G requires Bash 4 or newer."
+			return "Start a new bash shell, then run al. " + launcher + " requires Bash 4 or newer."
 		}
 	}
-	return "Start a new " + adapter.Name() + " shell, then press Ctrl+G on an empty prompt."
+	return "Start a new " + adapter.Name() + " shell, then press " + launcher + " on an empty prompt."
+}
+
+func configuredLauncherLabel() string {
+	config, err := loadConfig()
+	if err != nil {
+		return "Ctrl+G"
+	}
+	return launcherLabel(config)
 }
 
 func bashCtrlGSupport() (supported, known bool) {

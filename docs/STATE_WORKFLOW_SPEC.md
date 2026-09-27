@@ -625,7 +625,7 @@ The first profile version uses these defaults:
 | Open themes | `F4` | `F4` | `Cmd+4` | `F4` |
 | Open health | `F7` | `F7` | `Cmd+7` | `F7` |
 | Open stats | `F2` | `F2` | `Cmd+2` | `F2` |
-| Open settings | `Ctrl+,` | `Ctrl+,` | `Cmd+,` | `F3` |
+| Open Footer | `Ctrl+,` | `Ctrl+,` | `Cmd+,` | `F3` |
 | Open help | `F1` or `?` | `Ctrl+?`, `F1`, or `?` | `Cmd+?`, `F1`, or `?` | `F1` or `?` |
 
 Copy and paste stay owned by the terminal:

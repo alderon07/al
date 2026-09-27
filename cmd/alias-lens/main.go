@@ -71,13 +71,13 @@ func runMain() int {
 			return 2
 		}
 		if err := runWeb(); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "repo":
 		if len(os.Args) == 2 {
 			if err := runRepoPicker(""); err != nil {
-				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				cliError(err)
 				return 1
 			}
 			return 0
@@ -88,13 +88,13 @@ func runMain() int {
 		}
 		if os.Args[2] == "github" || os.Args[2] == "bitbucket" || os.Args[2] == "gitlab" {
 			if err := runRepoPicker(os.Args[2]); err != nil {
-				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				cliError(err)
 				return 1
 			}
 			return 0
 		}
 		if err := configureRepository(os.Args[2]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 		config, err := loadConfig()
@@ -105,23 +105,23 @@ func runMain() int {
 		fmt.Printf("Alias Lens will sync only %s in %s\n", config.AliasFile, os.Args[2])
 	case "config":
 		if err := runConfigCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "data":
 		if err := runDataCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "context":
 		if err := runContextCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "catalog":
 		exitCode, err := runCatalogCommand(os.Args[2:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			if exitCode == 0 {
 				return 1
 			}
@@ -129,29 +129,29 @@ func runMain() int {
 		return exitCode
 	case "theme":
 		if err := runThemeCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "shortcuts":
 		if err := runShortcutsCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "status":
 		exitCode, err := runStatusCommand(os.Args[2:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 		}
 		return exitCode
 	case "plan":
 		exitCode, err := runPlanCommand(os.Args[2:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 		}
 		return exitCode
 	case "completion":
 		if err := runCompletionCommand(os.Args[2:], os.Stdout); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			if strings.HasPrefix(err.Error(), "usage:") || strings.HasPrefix(err.Error(), "unsupported shell") {
 				return 2
 			}
@@ -187,7 +187,7 @@ func runMain() int {
 			query = arguments[0]
 		}
 		if err := runAliasPicker(query, commandOnly, executeSelection); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "shell-init":
@@ -196,7 +196,7 @@ func runMain() int {
 			return 2
 		}
 		if err := printShellIntegration(os.Args[2]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "shell-entry":
@@ -205,22 +205,22 @@ func runMain() int {
 			return 2
 		}
 		if err := printShellEntry(os.Args[2]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "suggest":
 		if err := runHistorySuggestions(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "search":
 		if err := runSearchCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "stats":
 		if err := runStatsCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "record-use":
@@ -229,17 +229,17 @@ func runMain() int {
 			return 2
 		}
 		if err := recordAliasUse(os.Args[2]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "export":
 		if err := runExportCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "import":
 		if err := runImportCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "scan":
@@ -248,13 +248,13 @@ func runMain() int {
 			return 2
 		}
 		if err := runSecretScan(); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "check":
 		exitCode, err := runAliasCheck(os.Args[2:])
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			if exitCode == 0 {
 				return 1
 			}
@@ -262,7 +262,7 @@ func runMain() int {
 		return exitCode
 	case "meta":
 		if err := runMetadataCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "describe":
@@ -271,7 +271,7 @@ func runMain() int {
 			return 2
 		}
 		if err := addAliasDescriptions(); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "history":
@@ -280,7 +280,7 @@ func runMain() int {
 			return 2
 		}
 		if err := runRevisionHistory(); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "undo":
@@ -293,7 +293,7 @@ func runMain() int {
 			revision = os.Args[2]
 		}
 		if err := restoreRevision(revision); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "doctor":
@@ -302,17 +302,17 @@ func runMain() int {
 			return 2
 		}
 		if err := runDoctor(); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "setup":
 		if err := runSetupCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "autosync":
 		if err := runAutoSyncCommand(os.Args[2:]); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "watch":
@@ -322,7 +322,7 @@ func runMain() int {
 				err = ensureWatchProcess()
 			}
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				cliError(err)
 				return 1
 			}
 			return 0
@@ -334,13 +334,13 @@ func runMain() int {
 		}
 		if err := runWatch(daemon); err != nil {
 			if !daemon {
-				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				cliError(err)
 			}
 			return 1
 		}
 	case "track", "untrack":
 		if err := runTrackCommand(os.Args[2:], os.Args[1] == "untrack"); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	case "sync":
@@ -349,25 +349,25 @@ func runMain() int {
 			return 2
 		}
 		if len(os.Args) == 3 && os.Args[2] == "--pull" {
-			message, err := pullRepository()
+			message, err := withCLIProgress("Pulling aliases", pullRepository)
 			if err != nil {
-				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				cliError(err)
 				return 1
 			}
-			fmt.Println(message)
+			cliResult(message)
 			return 0
 		}
 		push := len(os.Args) == 3 && os.Args[2] == "--push"
-		message, err := syncRepository(push)
+		message, err := withCLIProgress("Syncing aliases", func() (string, error) { return syncRepository(push) })
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
-		fmt.Println(message)
+		cliResult(message)
 	case "diff":
 		if len(os.Args) == 3 && os.Args[2] == "--tui" {
 			if err := runTUIWithDiff(true); err != nil {
-				fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+				cliError(err)
 				return 1
 			}
 			return 0
@@ -377,7 +377,7 @@ func runMain() int {
 			return 2
 		}
 		if err := showRepositoryDiff(); err != nil {
-			fmt.Fprintln(os.Stderr, "Alias Lens:", err)
+			cliError(err)
 			return 1
 		}
 	default:
@@ -410,8 +410,43 @@ func printShellIntegration(name string) error {
 	if err != nil {
 		return err
 	}
-	_, err = os.Stdout.WriteString(adapter.Integration())
+	config, err := loadConfig()
+	if err != nil {
+		return err
+	}
+	integration, err := shellIntegrationForConfig(adapter, config)
+	if err != nil {
+		return err
+	}
+	_, err = os.Stdout.WriteString(integration)
 	return err
+}
+
+func shellIntegrationForConfig(adapter ShellAdapter, config AppConfig) (string, error) {
+	letter, err := parseLauncherKey(launcherLabel(config))
+	if err != nil {
+		return "", err
+	}
+	integration := adapter.Integration()
+	if adapter.Name() == "bash" {
+		integration = strings.ReplaceAll(integration, `\C-g`, `\C-`+strings.ToLower(letter))
+		binding := `bind '"\C-` + strings.ToLower(letter) + `":"\C-x\C-` + strings.ToLower(letter) + `\C-x\C-a"'`
+		if !strings.Contains(integration, binding) {
+			return "", fmt.Errorf("Bash integration is missing its launcher binding")
+		}
+		integration = strings.Replace(integration, binding, binding+"\n  _alias_lens_bound_key='\\C-"+strings.ToLower(letter)+"'", 1)
+		integration = "if [ -n \"${_alias_lens_bound_key-}\" ]; then\n  bind -r \"$_alias_lens_bound_key\"\n  unset _alias_lens_bound_key\nfi\n" + integration
+	} else {
+		integration = strings.ReplaceAll(integration, "^G", "^"+letter)
+		binding := "bindkey '^" + letter + "' _alias_lens_launch"
+		if !strings.Contains(integration, binding) {
+			return "", fmt.Errorf("Zsh integration is missing its launcher binding")
+		}
+		integration = strings.Replace(integration, binding, binding+"\n  _alias_lens_bound_key='^"+letter+"'", 1)
+		integration = "if [[ -n \"${_alias_lens_bound_key-}\" ]]; then\n  bindkey -r \"$_alias_lens_bound_key\"\n  unset _alias_lens_bound_key\nfi\n" + integration
+	}
+	integration = strings.ReplaceAll(integration, "Ctrl+G", launcherLabel(config))
+	return integration, nil
 }
 
 func runWeb() error {

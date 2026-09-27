@@ -58,12 +58,16 @@ func runAutoSyncCommand(arguments []string) error {
 	}
 	if arguments[0] == "status" {
 		state, _ := loadSyncState()
-		fmt.Printf("enabled: %t\nstatus: %s\n", config.AutoSync.Enabled, defaultString(state.Status, "not started"))
+		if cliStyled() {
+			cliHeading("Automatic sync")
+		}
+		cliKeyValue("enabled", fmt.Sprint(config.AutoSync.Enabled))
+		cliKeyValue("status", defaultString(state.Status, "not started"))
 		if state.Message != "" {
-			fmt.Println("message:", state.Message)
+			cliKeyValue("message", state.Message)
 		}
 		if !state.UpdatedAt.IsZero() {
-			fmt.Println("updated:", state.UpdatedAt.Local().Format(time.RFC3339))
+			cliKeyValue("updated", state.UpdatedAt.Local().Format(time.RFC3339))
 		}
 		for _, tracked := range config.TrackedFiles {
 			statePath, pathErr := trackedStatePath(tracked)
@@ -71,7 +75,7 @@ func runAutoSyncCommand(arguments []string) error {
 				continue
 			}
 			trackedState, _ := loadSyncStateAt(statePath)
-			fmt.Printf("tracked: %s -> %s [%s]\n", tracked.Source, tracked.RepositoryPath, defaultString(trackedState.Status, "waiting"))
+			fmt.Printf("%s: %s -> %s [%s]\n", cliAccent("tracked"), tracked.Source, tracked.RepositoryPath, defaultString(trackedState.Status, "waiting"))
 		}
 		return nil
 	}
@@ -86,9 +90,9 @@ func runAutoSyncCommand(arguments []string) error {
 		if err := ensureWatchProcess(); err != nil {
 			return err
 		}
-		fmt.Println("Automatic sync enabled.")
+		cliResult("Automatic sync enabled.")
 	} else {
-		fmt.Println("Automatic sync disabled. The current worker will stop on its next check.")
+		cliResult("Automatic sync disabled. The current worker will stop on its next check.")
 	}
 	return nil
 }

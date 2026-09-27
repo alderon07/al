@@ -61,8 +61,9 @@ func TestTerminalDiffPTYAtNarrowAndWideWidths(t *testing.T) {
 	if err := pty.Setsize(terminal, &pty.Winsize{Rows: 18, Cols: 48}); err != nil {
 		t.Fatal(err)
 	}
-	compact := waitForPTYText(t, output, compactOffset, "esc back")
-	if !strings.Contains(compact, "OLD   NEW   CHANGE") || !strings.Contains(compact, "esc back") {
+	compact := waitForPTYText(t, output, compactOffset, "back")
+	if !strings.Contains(compact, "OLD   NEW   CHANGE") ||
+		(!strings.Contains(compact, "q back") && !strings.Contains(compact, "esc back")) {
 		t.Fatalf("compact PTY diff lost its contents or controls:\n%q", compact)
 	}
 	offset := output.length()

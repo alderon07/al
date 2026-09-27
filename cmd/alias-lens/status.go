@@ -56,7 +56,7 @@ func runStatusCommand(arguments []string) (int, error) {
 			return 1, err
 		}
 	} else {
-		fmt.Print(workflowstate.RenderPlain(report))
+		fmt.Print(cliStatusText(workflowstate.RenderPlain(report)))
 	}
 	return workflowstate.ExitCode(report), nil
 }

@@ -12,6 +12,7 @@ import (
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 	"github.com/rivo/uniseg"
 )
@@ -326,6 +327,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		message = translateShortcut(message, m.shortcutProfile, m.activeTranslatedShortcuts()...)
 		m.cursorHidden = false
 		if _, shortcut := pageForShortcut(message, m.shortcutProfile); !shortcut {
 			m.lastShortcutAt = time.Time{}
@@ -387,7 +389,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.toggleSelectedContext(matches)
 			return m, nil
 		}
-		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type == tea.KeyCtrlD || m.query == "") {
+		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type != tea.KeyDelete || m.query == "") {
 			if len(matches) > 0 {
 				m.deleteName = matches[m.cursor].Name
 			}
@@ -443,7 +445,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.healthOnly = false
-			m.query += string(message.Runes)
+			m.query = appendSearchQuery(m.query, string(message.Runes))
 			m.cursor = 0
 		}
 	}
@@ -729,25 +731,33 @@ func (m model) View() string {
 		return m.trackedFilesView(frame, header)
 	}
 	search := lipgloss.NewStyle().
-		Width(contentWidth-3).
+		Width(searchFieldWidth(contentWidth)-2).
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(acidColor).
-		Render(acidStyle(markerPrefix(iconSearch)) + searchTextCursor(m.query, m.searchFocused() && !m.cursorHidden))
+		Render(acidStyle(markerPrefix(iconSearch)) + searchTextCursorAtWidth(m.query, m.searchFocused() && !m.cursorHidden, searchFieldWidth(contentWidth)))
 
-	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  tab edit at prompt  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  esc quit")
+	moveKeys := primaryShortcutLabel(m.shortcutProfile, shortcutMoveUp) + "/" + primaryShortcutLabel(m.shortcutProfile, shortcutMoveDown)
+	if moveKeys == "Up/Down" {
+		moveKeys = "↑↓"
+	}
+	useKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutUse))
+	promptKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutPrompt))
+	helpKey := primaryShortcutLabel(m.shortcutProfile, shortcutHelp)
+	quitKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit))
+	footer := dimStyle.Render(moveKeys+" move  ·  "+useKey+" ") + cyanStyle("select") + dimStyle.Render("  ·  "+promptKey+" edit at prompt  ·  "+helpKey+" ") + cyanStyle("help") + dimStyle.Render("  ·  "+quitKey+" quit")
 	if contentWidth < 96 {
-		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutHelp)+" help  ·  esc quit")
+		footer = dimStyle.Render(useKey+" ") + cyanStyle("select") + dimStyle.Render("  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 	}
 	if m.selectMode {
-		footer = dimStyle.Render("type · ↑↓ move · enter select · ? help · esc cancel")
+		footer = dimStyle.Render("type · " + moveKeys + " move · " + useKey + " select · " + helpKey + " help · " + quitKey + " cancel")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
+			footer = dimStyle.Render("type to search  ·  " + moveKeys + " move  ·  " + useKey + " select  ·  " + helpKey + " help  ·  " + quitKey + " cancel")
 		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("enter ") + cyanStyle("use") + dimStyle.Render("  ·  tab edit  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutHelp)+" help  ·  esc quit")
+		footer = dimStyle.Render(useKey+" ") + cyanStyle("use") + dimStyle.Render("  ·  "+promptKey+" edit  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("use") + dimStyle.Render("  ·  tab edit  ·  ? help  ·  esc quit")
+			footer = dimStyle.Render(moveKeys+" move  ·  "+useKey+" ") + cyanStyle("use") + dimStyle.Render("  ·  "+promptKey+" edit  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 		}
 	}
 	if contentWidth < 50 {
@@ -755,9 +765,9 @@ func (m model) View() string {
 		if m.executeMode {
 			action = "use"
 		}
-		footer = dimStyle.Render("enter ") + cyanStyle(action) + dimStyle.Render("  ·  ? help  ·  esc quit")
+		footer = dimStyle.Render(useKey+" ") + cyanStyle(action) + dimStyle.Render("  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 		if m.selectMode {
-			footer = dimStyle.Render("enter select  ·  ? help  ·  esc cancel")
+			footer = dimStyle.Render(useKey + " select  ·  " + helpKey + " help  ·  " + quitKey + " cancel")
 		}
 	}
 	if contentWidth >= 79 && !m.selectMode {
@@ -767,11 +777,11 @@ func (m model) View() string {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
 	if m.deleteName != "" {
-		footer = lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("Delete " + m.deleteName + "?  y confirm  ·  n cancel")
+		footer = lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("Delete " + m.deleteName + "?  " + shortcutLabel(m.shortcutProfile, shortcutConfirm) + " confirm  ·  " + shortcutLabel(m.shortcutProfile, shortcutDecline) + " cancel")
 	}
 
 	contentHeight := frame.contentHeight()
-	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footer)-frame.measureHeight(makerCredit(contentWidth))-4)
+	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footer)-frame.makerHeight()-4)
 	var body strings.Builder
 	bodyLeadHeight := 0
 	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
@@ -875,12 +885,12 @@ func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !acceptsTextInput(message) {
 			return m, nil
 		}
-		m.helpQuery += " "
+		m.helpQuery = appendSearchQuery(m.helpQuery, " ")
 	case tea.KeyRunes:
 		if !acceptsTextInput(message) {
 			return m, nil
 		}
-		m.helpQuery += string(message.Runes)
+		m.helpQuery = appendSearchQuery(m.helpQuery, string(message.Runes))
 	}
 	return m, nil
 }
@@ -890,12 +900,12 @@ func (m model) updateRunConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.runConfirm = nil
 		return m, tea.Quit
 	}
-	if message.Type == tea.KeyEsc || message.String() == "n" {
+	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutDecline) {
 		m.runConfirm = nil
 		m.status = "Canceled"
 		return m, nil
 	}
-	if message.String() != "y" {
+	if !matchesShortcut(message, m.shortcutProfile, shortcutConfirm) {
 		return m, nil
 	}
 	selected := *m.runConfirm
@@ -929,7 +939,7 @@ func (m model) runConfirmationView(frame tuiFrame, header string) string {
 		"\n" + dimStyle.Render("Alias ") + name + dimStyle.Render(" may make changes that are hard to undo.") +
 		"\n\n" + command +
 		"\n\n" + lipgloss.NewStyle().Foreground(coralColor).Render(wrapText(reason, contentWidth))
-	footer := aliasStyle.Render("y") + dimStyle.Render(" use alias  ·  ") + aliasStyle.Render("n") + dimStyle.Render(" or esc cancel")
+	footer := aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutConfirm)) + dimStyle.Render(" use alias  ·  ") + aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutDecline)) + dimStyle.Render(" or "+strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit))+" cancel")
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
 	return frame.renderWithFooter(page, footer)
 }
@@ -955,11 +965,11 @@ func (m model) helpView(frame tuiFrame, header string) string {
 	if contentWidth < 60 {
 		keyWidth = min(keyWidth, max(14, contentWidth/2))
 	}
-	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconHelp)) + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
+	search := lipgloss.NewStyle().Width(searchFieldWidth(contentWidth)-2).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconHelp)) + searchTextWithCursorAtWidth(m.helpQuery, "filter shortcuts…", true, searchFieldWidth(contentWidth)))
 	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
 	footerText := strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutHelp)) + " or esc close  ·  ctrl+c quit"
 	footerView := footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
-	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footerView)-frame.measureHeight(makerCredit(contentWidth))-4)
+	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footerView)-frame.makerHeight()-4)
 	var rows strings.Builder
 	visible := min(len(shortcuts), rowBudget)
 	for index, shortcut := range shortcuts[:visible] {
@@ -1001,7 +1011,7 @@ func pageNavigationHint(width int, profiles ...ShortcutProfile) string {
 		primaryShortcutLabel(profile, shortcutHealth),
 	}
 	formatHint := func() string {
-		return fmt.Sprintf("%s help  ·  %s stats  ·  %s settings  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
+		return fmt.Sprintf("%s help  ·  %s stats  ·  %s footer  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
 			labels[0], labels[1], labels[2], labels[3], labels[4], labels[5], labels[6])
 	}
 	navigation := formatHint()
@@ -1094,7 +1104,7 @@ func (m model) themePickerView(frame tuiFrame, header string) string {
 	if m.status != "" {
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render(truncate(m.status, contentWidth))
 	}
-	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(footer)-frame.measureHeight(makerCredit(contentWidth))-3)
+	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(footer)-frame.makerHeight()-3)
 	cursor := min(max(0, m.themeCursor), max(0, len(themes)-1))
 	visible := min(len(themes), rowBudget)
 	if len(themes) > visible && visible > 1 {
@@ -1287,7 +1297,7 @@ func (m model) trackedFilesView(frame tuiFrame, header string) string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  d compare aliases  ·  ctrl+g save to repo  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSync)) + " or esc aliases  ·  ctrl+c quit")
+	footer := dimStyle.Render("↑↓ move  ·  " + shortcutLabel(m.shortcutProfile, shortcutOpenDiff) + " compare aliases  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutCommit)) + " save to repo  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSync)) + " or " + strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit)) + " aliases")
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
@@ -1451,12 +1461,12 @@ func (m model) updateDeleteConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd)
 	if message.Type == tea.KeyCtrlC {
 		return m, tea.Quit
 	}
-	if message.Type == tea.KeyEsc || message.String() == "n" {
+	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutDecline) {
 		m.status = "Delete canceled"
 		m.deleteName = ""
 		return m, nil
 	}
-	if message.String() != "y" {
+	if !matchesShortcut(message, m.shortcutProfile, shortcutConfirm) {
 		return m, nil
 	}
 	name := m.deleteName
@@ -1900,19 +1910,46 @@ func searchTextCursor(query string, visible bool) string {
 	return searchTextWithCursor(query, "search aliases…", visible)
 }
 
+func searchTextCursorAtWidth(query string, visible bool, fieldWidth int) string {
+	return searchTextWithCursorAtWidth(query, "search aliases…", visible, fieldWidth)
+}
+
 func searchTextWithPlaceholder(query, placeholder string) string {
 	return searchTextWithCursor(query, placeholder, true)
 }
 
 func searchTextWithCursor(query, placeholder string, visible bool) string {
+	return searchTextWithCursorAtWidth(query, placeholder, visible, mainTUISearchMaxWidth)
+}
+
+func searchTextWithCursorAtWidth(query, placeholder string, visible bool, fieldWidth int) string {
 	cursor := " "
 	if visible {
 		cursor = acidStyle("█")
 	}
+	available := max(1, fieldWidth-5-lipgloss.Width(markerPrefix(iconSearch)))
 	if query == "" {
-		return dimStyle.Render(placeholder) + cursor
+		return dimStyle.Render(ansi.Truncate(placeholder, available, "…")) + cursor
 	}
-	return lipgloss.NewStyle().Foreground(inkColor).Render(query) + cursor
+	return lipgloss.NewStyle().Foreground(inkColor).Render(ansi.TruncateLeft(terminalSafeText(query), available, "…")) + cursor
+}
+
+const maxSearchQueryRunes = 256
+
+func appendSearchQuery(current, input string) string {
+	remaining := maxSearchQueryRunes - utf8.RuneCountInString(current)
+	if remaining <= 0 {
+		return current
+	}
+	var addition strings.Builder
+	for _, character := range input {
+		if remaining == 0 {
+			break
+		}
+		addition.WriteRune(character)
+		remaining--
+	}
+	return current + addition.String()
 }
 
 func truncate(value string, width int) string {
