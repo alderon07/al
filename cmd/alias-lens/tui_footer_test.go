@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
@@ -225,6 +227,26 @@ func TestRepositoryPickerShortcutsSitAboveDottedRule(t *testing.T) {
 }
 
 func TestMainPagesShareContentColumnAndFullWidthFooter(t *testing.T) {
+	previousRenderer := lipgloss.DefaultRenderer()
+	t.Cleanup(func() { lipgloss.SetDefaultRenderer(previousRenderer) })
+	for _, profile := range []struct {
+		name  string
+		value termenv.Profile
+	}{
+		{name: "truecolor", value: termenv.TrueColor},
+		{name: "ansi256", value: termenv.ANSI256},
+	} {
+		t.Run(profile.name, func(t *testing.T) {
+			t.Setenv("NO_COLOR", "")
+			renderer := lipgloss.NewRenderer(os.Stdout)
+			renderer.SetColorProfile(profile.value)
+			lipgloss.SetDefaultRenderer(renderer)
+			assertMainPagesShareContentColumnAndFullWidthFooter(t)
+		})
+	}
+}
+
+func assertMainPagesShareContentColumnAndFullWidthFooter(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	applyTheme(builtInTheme("phosphor"))
 	applyFooterConfig(FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "center", Tone: "quiet", Rule: "thin"})
@@ -258,7 +280,7 @@ func TestMainPagesShareContentColumnAndFullWidthFooter(t *testing.T) {
 		pageHeaderColumn := -1
 		for _, line := range strings.Split(view, "\n") {
 			if column := strings.Index(line, "ALIAS LENS"); column >= 0 {
-				pageHeaderColumn = column
+				pageHeaderColumn = lipgloss.Width(line[:column])
 				break
 			}
 		}

@@ -92,6 +92,7 @@ func (m model) wideAliasRow(raw Alias, active bool, width int) string {
 func (m model) aliasDetailCard(raw Alias, width, height int) string {
 	width = min(width, wideAliasDetailMaxWidth)
 	content := m.aliasDetailContent(raw, max(8, width-4), height)
+	content = fillUnstyledBackground(content, panelColor)
 	style := lipgloss.NewStyle().
 		Width(max(1, width-1)).
 		Padding(0, 1).

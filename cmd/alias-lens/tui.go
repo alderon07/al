@@ -110,10 +110,7 @@ type model struct {
 }
 
 func (m model) TerminalBackground() string {
-	if !themeCanvasAvailable() {
-		return ""
-	}
-	return m.theme.Background
+	return ""
 }
 
 func themeCanvasAvailable() bool {
@@ -2127,8 +2124,8 @@ func applyTheme(theme Theme) {
 	violetColor = lipgloss.Color(theme.Files)
 	inkColor = lipgloss.Color(theme.Text)
 	mutedColor = lipgloss.Color(theme.Muted)
-	pageColor = lipgloss.Color(theme.Background)
-	panelColor = lipgloss.Color(theme.Panel)
+	pageColor = terminalBackgroundColor(theme.Background)
+	panelColor = terminalBackgroundColor(theme.Panel)
 	activeColor = lipgloss.Color(theme.Selected)
 	lineColor = lipgloss.Color(theme.Border)
 

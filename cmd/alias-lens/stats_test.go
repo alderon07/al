@@ -94,7 +94,7 @@ func TestStatsDashboardFillsWideTerminal(t *testing.T) {
 	}
 }
 
-func TestStatsDashboardPaintsLastViewportRow(t *testing.T) {
+func TestStatsDashboardLeavesLastViewportRowAtTerminalBackground(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	previousRenderer := lipgloss.DefaultRenderer()
 	renderer := lipgloss.NewRenderer(os.Stdout)
@@ -120,21 +120,21 @@ func TestStatsDashboardPaintsLastViewportRow(t *testing.T) {
 			if embedded {
 				model.appHeader = "ALIAS LENS"
 			}
-			if got := model.TerminalBackground(); got != background.Background {
-				t.Fatalf("embedded=%t: terminal background = %q, want %q", embedded, got, background.Background)
+			if got := model.TerminalBackground(); got != "" {
+				t.Fatalf("embedded=%t: terminal background = %q, want no terminal mutation", embedded, got)
 			}
 			lines := strings.Split(model.View(), "\n")
 			last := lines[len(lines)-1]
 			if got := lipgloss.Width(last); got != size.width {
 				t.Fatalf("embedded=%t size=%dx%d: last row width = %d", embedded, size.width, size.height, got)
 			}
-			if !strings.Contains(last, backgroundPrefix) {
-				t.Fatalf("embedded=%t size=%dx%d: last row does not paint the page background: %q", embedded, size.width, size.height, last)
+			if strings.Contains(last, backgroundPrefix) {
+				t.Fatalf("embedded=%t size=%dx%d: last row paints a separate page background: %q", embedded, size.width, size.height, last)
 			}
 		}
 	}
-	if got := (model{theme: background, statsOpen: true}).TerminalBackground(); got != background.Background {
-		t.Fatalf("main TUI terminal background = %q, want %q", got, background.Background)
+	if got := (model{theme: background, statsOpen: true}).TerminalBackground(); got != "" {
+		t.Fatalf("main TUI terminal background = %q, want no terminal mutation", got)
 	}
 }
 
@@ -346,7 +346,7 @@ func TestEmbeddedStatsRefreshPreservesViewAndPeriod(t *testing.T) {
 	}
 }
 
-func TestStatsDashboardUsesEachThemeCanvasInsteadOfPanel(t *testing.T) {
+func TestStatsDashboardUsesTerminalCanvasForEveryTheme(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	previousRenderer := lipgloss.DefaultRenderer()
 	renderer := lipgloss.NewRenderer(os.Stdout)
@@ -373,8 +373,8 @@ func TestStatsDashboardUsesEachThemeCanvasInsteadOfPanel(t *testing.T) {
 		if strings.Contains(view, backgroundPrefix(theme.Panel)) {
 			t.Fatalf("%s stats still paint the panel background", theme.Name)
 		}
-		if count := strings.Count(view, backgroundPrefix(theme.Background)); count == 0 {
-			t.Fatalf("%s stats omitted the canvas background", theme.Name)
+		if strings.Contains(view, backgroundPrefix(theme.Background)) {
+			t.Fatalf("%s stats paint a separate canvas background", theme.Name)
 		}
 		if lipgloss.Width(strings.Split(view, "\n")[0]) != 100 {
 			t.Fatalf("%s canvas background fix changed the dashboard width", theme.Name)
