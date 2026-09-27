@@ -1820,14 +1820,10 @@ func aliasWindow(aliases []Alias, cursor, width, budget int) (int, int) {
 		end := start
 		for end < len(aliases) {
 			cardHeight := lipgloss.Height(renderAlias(aliases[end], end == cursor, width))
-			separatorHeight := 0
-			if end > start {
-				separatorHeight = 1
-			}
-			if used+separatorHeight+cardHeight > budget && end > start {
+			if used+cardHeight > budget && end > start {
 				break
 			}
-			used += separatorHeight + cardHeight
+			used += cardHeight
 			end++
 		}
 		if cursor < end {

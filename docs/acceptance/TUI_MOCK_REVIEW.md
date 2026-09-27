@@ -19,3 +19,9 @@ The mocks also show usage, sync, and health figures that cannot be assumed from 
 - Focus and warning states remain distinguishable without relying on color alone.
 - The footer and maker credit remain in the viewport at 48x18, 80x24, and 120x36.
 - `make fmt check` passes and the compiled UI is checked in a PTY at narrow and wide widths.
+
+## Tall terminal acceptance criteria
+
+- The alias list uses the vertical space available above the fixed footer instead of reserving a blank row between compact alias entries.
+- A taller terminal shows more aliases from the same selection than a shorter terminal when more aliases exist.
+- The selected alias, visible range, controls, and maker credit remain inside the viewport after resizing.
