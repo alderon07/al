@@ -15,7 +15,7 @@ func TestWideAliasBrowserShowsSelectedDetailsAndKeepsListVisible(t *testing.T) {
 	current := model{
 		aliases: []Alias{
 			{Name: "first", Command: "printf first", Category: "tools"},
-			{Name: "second", Command: "printf second argument", Description: "Shows the second item", Category: "tools", Tags: []string{"daily"}, Platforms: []string{"linux"}, Issues: []string{"review command"}},
+			{Name: "second", Command: "printf second argument", Description: "Shows the second item", Category: "tools", Tags: []string{"daily"}, Platforms: []string{"linux"}, Issues: []string{"review command"}, Favorite: true},
 		},
 		query:           "second",
 		width:           132,
@@ -23,7 +23,7 @@ func TestWideAliasBrowserShowsSelectedDetailsAndKeepsListVisible(t *testing.T) {
 		shortcutProfile: shortcutLinux,
 	}
 	view := ansi.Strip(current.View())
-	for _, want := range []string{"Selected alias", "second", "printf second argument", "Shows the second item", "daily", "linux", "review command", "No local mark"} {
+	for _, want := range []string{"Selected alias", "▶", "TOOLS", "FAV", "ISSUE", "COMMAND", "DESCRIPTION", "TAGS", "PLATFORMS", "second", "printf second argument", "Shows the second item", "daily", "linux", "review command", "No local mark"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("wide view missing %q:\n%s", want, view)
 		}
@@ -86,5 +86,28 @@ func TestWideAliasBrowserEscapesCommandControlText(t *testing.T) {
 	view := current.View()
 	if strings.Contains(view, "\x1b[2J'") || !strings.Contains(view, `\x1b[2J`) {
 		t.Fatalf("wide detail rendered raw control text: %q", view)
+	}
+}
+
+func TestWideAliasBrowserAlignsUnicodeContent(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	alias := Alias{
+		Name:        "部署e\u0301🚀",
+		Command:     "printf '界界界界界界界界界界界界界界界界界界界界界界界界'",
+		Description: "Inspect a multilingual command without breaking cell alignment",
+		Category:    "工具",
+	}
+	current := model{aliases: []Alias{alias}, width: 132, height: 36, shortcutProfile: shortcutLinux}
+	view := ansi.Strip(current.View())
+	for _, want := range []string{alias.Name, alias.Command, strings.ToUpper(alias.Category)} {
+		if !strings.Contains(view, want) {
+			t.Errorf("wide Unicode view missing %q:\n%s", want, view)
+		}
+	}
+	if got := lipgloss.Width(current.View()); got != 132 {
+		t.Fatalf("wide Unicode view width = %d, want 132", got)
+	}
+	if got := lipgloss.Height(current.View()); got != 36 {
+		t.Fatalf("wide Unicode view height = %d, want 36", got)
 	}
 }

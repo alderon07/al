@@ -15,34 +15,9 @@ func (m model) wideAliasBrowser(aliases []Alias, cursor, width, height int) stri
 	start := max(0, min(cursor-rowsVisible+1, len(aliases)-rowsVisible))
 	end := min(len(aliases), start+rowsVisible)
 
-	listLines := []string{titleStyle.Render(padRight("Aliases", listWidth)), ""}
+	listLines := []string{titleStyle.Render("Aliases"), ""}
 	for index := start; index < end; index++ {
-		alias := terminalSafeAlias(aliases[index])
-		flags := ""
-		if alias.Favorite {
-			flags += " *"
-		}
-		if len(alias.Issues) > 0 {
-			flags += " !"
-		}
-		if m.context.match(aliases[index]) > 0 {
-			flags += " @"
-		}
-		category := ""
-		if alias.Category != "" {
-			category = "  " + ansi.Truncate(alias.Category, 14, "…")
-		}
-		nameWidth := max(4, listWidth-3-lipgloss.Width(flags)-lipgloss.Width(category))
-		marker := "  "
-		if index == cursor {
-			marker = "▶ "
-		}
-		row := padRight(marker+ansi.Truncate(alias.Name, nameWidth, "…")+category+flags, listWidth)
-		style := lipgloss.NewStyle().Foreground(inkColor)
-		if index == cursor {
-			style = style.Foreground(acidColor).Background(activeColor).Bold(true)
-		}
-		listLines = append(listLines, style.Render(row))
+		listLines = append(listLines, m.wideAliasRow(aliases[index], index == cursor, listWidth))
 	}
 	for len(listLines) < height-1 {
 		listLines = append(listLines, strings.Repeat(" ", listWidth))
@@ -53,7 +28,7 @@ func (m model) wideAliasBrowser(aliases []Alias, cursor, width, height int) stri
 	}
 	listLines = append(listLines, dimStyle.Render(padRight(summary, listWidth)))
 
-	detailLines := m.aliasDetailLines(aliases[cursor], detailWidth, height)
+	detailLines := strings.Split(m.aliasDetailCard(aliases[cursor], detailWidth, height), "\n")
 	if len(detailLines) > height {
 		detailLines = append(detailLines[:height-1], dimStyle.Render("More details hidden; enlarge terminal"))
 	}
@@ -62,33 +37,73 @@ func (m model) wideAliasBrowser(aliases []Alias, cursor, width, height int) stri
 	}
 	rows := make([]string, height)
 	for index := range rows {
-		rows[index] = listLines[index] + dimStyle.Render(" │ ") + padRight(detailLines[index], detailWidth)
+		rows[index] = padRight(listLines[index], listWidth) + "   " + padRight(detailLines[index], detailWidth)
 	}
 	return strings.Join(rows, "\n")
 }
 
-func (m model) aliasDetailLines(raw Alias, width, height int) []string {
+func (m model) wideAliasRow(raw Alias, active bool, width int) string {
 	alias := terminalSafeAlias(raw)
-	if height < 8 {
-		lines := []string{titleStyle.Render("Selected alias")}
-		appendDetailText(&lines, aliasStyle.Render(alias.Name), width)
-		lines = append(lines, dimStyle.Render("Command"))
-		appendDetailText(&lines, lipgloss.NewStyle().Foreground(cyanColor).Render(alias.Command), width)
-		return lines
+	marker := "  "
+	if active {
+		marker = "▶ "
 	}
-	lines := []string{titleStyle.Render("Selected alias"), ""}
-	appendDetailText(&lines, aliasStyle.Render(alias.Name), width)
+
+	suffix := ""
+	if alias.Category != "" {
+		suffix += "  " + categoryBadge(alias.Category)
+	}
+	if alias.Favorite {
+		suffix += "  " + lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("FAV")
+	}
+	if m.context.match(raw) > 0 {
+		suffix += "  " + lipgloss.NewStyle().Bold(true).Foreground(cyanColor).Render("HERE")
+	}
+	if len(alias.Issues) > 0 {
+		suffix += "  " + lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("ISSUE")
+	}
+	nameWidth := max(4, width-4-lipgloss.Width(suffix))
+	content := marker + aliasStyle.Render(ansi.Truncate(alias.Name, nameWidth, "…")) + suffix
+	border := lineColor
+	if active {
+		border = acidColor
+	}
+	return lipgloss.NewStyle().
+		Width(max(1, width-1)).
+		Border(lipgloss.ThickBorder(), false, false, false, true).
+		BorderForeground(border).
+		Render(content)
+}
+
+func (m model) aliasDetailCard(raw Alias, width, height int) string {
+	content := m.aliasDetailContent(raw, max(8, width-4), height)
+	card := lipgloss.NewStyle().
+		Width(max(1, width-1)).
+		Padding(0, 1).
+		Background(panelColor).
+		Border(lipgloss.ThickBorder(), false, false, false, true).
+		BorderForeground(acidColor).
+		Render(content)
+	return titleStyle.Render("Selected alias") + "\n\n" + card
+}
+
+func (m model) aliasDetailContent(raw Alias, width, height int) string {
+	alias := terminalSafeAlias(raw)
+	name := aliasStyle.Render(alias.Name)
+	if alias.Category != "" {
+		name += "  " + categoryBadge(alias.Category)
+	}
+	if height < 8 {
+		return name + "\n" + lipgloss.NewStyle().Foreground(cyanColor).Render(wrapText(alias.Command, width))
+	}
+
 	kind := "Alias"
 	if alias.Type == "function" {
 		kind = "Function"
 	}
-	if alias.Category != "" {
-		kind += "  ·  " + alias.Category
-	}
 	if alias.Favorite {
 		kind += "  ·  Favorite"
 	}
-	appendDetailText(&lines, dimStyle.Render(kind), width)
 	context := "No local mark"
 	switch m.context.match(raw) {
 	case 1:
@@ -96,26 +111,36 @@ func (m model) aliasDetailLines(raw Alias, width, height int) []string {
 	case 2:
 		context = "Marked for this folder"
 	}
-	appendDetailText(&lines, dimStyle.Render(context), width)
+
+	lines := []string{name, dimStyle.Render(kind + "  ·  " + context)}
 	if len(alias.Issues) > 0 {
-		lines = append(lines, "", lipgloss.NewStyle().Foreground(coralColor).Render("Needs attention"))
-		appendDetailText(&lines, strings.Join(alias.Issues, " · "), width)
+		lines = append(lines, "", lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("NEEDS ATTENTION"))
+		appendDetailText(&lines, lipgloss.NewStyle().Foreground(coralColor).Render(strings.Join(alias.Issues, " · ")), width)
 	}
-	lines = append(lines, "", dimStyle.Render("Command"))
+	lines = append(lines, "", dimStyle.Render("COMMAND"))
 	appendDetailText(&lines, lipgloss.NewStyle().Foreground(cyanColor).Render(alias.Command), width)
 	if alias.Description != "" {
-		lines = append(lines, "", dimStyle.Render("Description"))
-		appendDetailText(&lines, alias.Description, width)
+		lines = append(lines, "", dimStyle.Render("DESCRIPTION"))
+		appendDetailText(&lines, lipgloss.NewStyle().Foreground(inkColor).Render(alias.Description), width)
 	}
 	if len(alias.Tags) > 0 {
-		lines = append(lines, "", dimStyle.Render("Tags"))
-		appendDetailText(&lines, strings.Join(alias.Tags, ", "), width)
+		lines = append(lines, "", dimStyle.Render("TAGS"))
+		appendDetailText(&lines, lipgloss.NewStyle().Foreground(amberColor).Render("#"+strings.Join(alias.Tags, "  #")), width)
 	}
 	if len(alias.Platforms) > 0 {
-		lines = append(lines, "", dimStyle.Render("Platforms"))
-		appendDetailText(&lines, strings.Join(alias.Platforms, ", "), width)
+		lines = append(lines, "", dimStyle.Render("PLATFORMS"))
+		appendDetailText(&lines, lipgloss.NewStyle().Foreground(violetColor).Render(strings.Join(alias.Platforms, "  ·  ")), width)
 	}
-	return lines
+	return strings.Join(lines, "\n")
+}
+
+func categoryBadge(category string) string {
+	return lipgloss.NewStyle().
+		Bold(true).
+		Foreground(pageColor).
+		Background(colorForCategory(category)).
+		Padding(0, 1).
+		Render(strings.ToUpper(category))
 }
 
 func appendDetailText(lines *[]string, value string, width int) {

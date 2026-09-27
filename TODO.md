@@ -69,6 +69,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ### Screen review acceptance criteria
 
+- [x] Restyle the wide alias browser under `docs/acceptance/WIDE_ALIAS_BROWSER.md` so its compact rows and selected detail card use the same theme language as the standard alias cards.
 - [x] At wide terminal widths, browse compact alias rows beside a read-only detail pane for the selected alias. Wrap its command and show its description, tags, context, and health details without executing it.
 - [x] Keep the existing single-column alias cards at narrow widths. Resizing and moving the cursor keep selection, search, visible range, and footer usable without clipping.
 
