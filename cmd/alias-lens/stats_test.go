@@ -114,6 +114,16 @@ func TestStatsDashboardShowsExactAliasCoverageMap(t *testing.T) {
 	}
 }
 
+func TestAliasCoverageMapHasOneDotPerAliasAtSeventy(t *testing.T) {
+	view := renderCoverageMap(15, 70, builtInTheme("phosphor"))
+	if got := strings.Count(view, "●"); got != 16 {
+		t.Fatalf("filled dot count = %d, want 15 chart dots and one legend dot", got)
+	}
+	if got := strings.Count(view, "○"); got != 56 {
+		t.Fatalf("empty dot count = %d, want 55 chart dots and one legend dot", got)
+	}
+}
+
 func TestAliasCoverageMapScalesLargeCollections(t *testing.T) {
 	view := renderCoverageMap(75, 150, builtInTheme("phosphor"))
 	if !strings.Contains(view, "Alias coverage  50%") || !strings.Contains(view, "scaled to 100 dots") {

@@ -69,9 +69,9 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ### Screen review acceptance criteria
 
-- [ ] The picker can reach every ranked alias and always shows the visible range and total.
-- [ ] Contextual and global footer hints share one line, with each action appearing once.
-- [ ] The revision diff footer names horizontal panning, and panning exposes the clipped command tail.
+- [x] The picker can reach every ranked alias and always shows the visible range and total.
+- [x] Contextual and global footer hints share one line, with each action appearing once.
+- [x] The revision diff footer names horizontal panning, and panning exposes the clipped command tail.
 
 - [x] Add a searchable keyboard guide opened with `?`.
 - [x] Replace unclear bitmap chrome with selectable symbols or ASCII, focused brand art, and an editable appearance screen.
