@@ -5,7 +5,7 @@
 - Code for reliability, maintainability, and operability.
 - Go Best Practices https://go.dev/doc/effective_go
 - Always code with the mindset that we'll expand the current feature in one way or another. So write modular/extensible code.
-- This isn't being used by anyone but me rn. So no need for unnecessary migrations
+- This isn't being used by anyone but me rn. So, no need for unnecessary migrations.
 
 ## Product rules
 
@@ -65,10 +65,11 @@ Keep shell behavior behind `ShellAdapter`. Bash owns `.bash_aliases`, `.bash_his
 - Add tests for parsers, filesystem writes, Git path isolation, credential handling, and migrations.
 - Use temporary directories in tests. Tests must never read or modify real shell alias files or the configured dotfiles repository.
 - Always write acceptance criteria before writing any code.
+- Never write comments.
 
 ## Testing
-- PTY testing is mandatory, not optional
-- Always verify a change works with evidence before reporting success
+- PTY testing is mandatory, not optional.
+- Always verify a change works with evidence before reporting success.
 
 ## Verify a change
 
