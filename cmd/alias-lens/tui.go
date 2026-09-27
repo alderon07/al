@@ -842,12 +842,19 @@ func (m model) View() string {
 	if m.aliasMode == aliasModeCommand {
 		searchPlaceholder = "press / to search aliases…"
 	}
+	searchFocused := m.searchFocused()
+	searchPrefix := markerPrefix(iconSearch)
+	searchBorder := lineColor
+	if searchFocused {
+		searchPrefix += "SEARCH "
+		searchBorder = acidColor
+	}
 	search := lipgloss.NewStyle().
 		Width(searchFieldWidth(contentWidth)-2).
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(acidColor).
-		Render(acidStyle(markerPrefix(iconSearch)) + searchTextWithCursorAtWidth(m.query, searchPlaceholder, m.searchFocused() && !m.cursorHidden, searchFieldWidth(contentWidth)))
+		BorderForeground(searchBorder).
+		Render(acidStyle(searchPrefix) + searchTextWithCursorAtWidth(m.query, searchPlaceholder, searchFocused && !m.cursorHidden, searchFieldWidth(contentWidth)-lipgloss.Width(searchPrefix)+lipgloss.Width(markerPrefix(iconSearch))))
 
 	moveKeys := primaryShortcutLabel(m.shortcutProfile, shortcutMoveUp) + "/" + primaryShortcutLabel(m.shortcutProfile, shortcutMoveDown)
 	if moveKeys == "Up/Down" {
@@ -913,7 +920,7 @@ func (m model) View() string {
 		body.WriteByte('\n')
 		bodyLeadHeight = lipgloss.Height(lead)
 	} else if strings.TrimSpace(m.query) == "" {
-		label := "SUGGESTED FOR YOU"
+		label := "ALIASES"
 		if contentWidth >= 68 {
 			if m.context.Working.Repository != "" {
 				label += "  ·  PROJECT " + truncate(terminalSafeText(filepath.Base(m.context.Working.Repository)), max(8, contentWidth-42))
@@ -947,9 +954,7 @@ func (m model) View() string {
 				body.WriteString("\n\n")
 			}
 		}
-		if strings.TrimSpace(m.query) != "" {
-			body.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(matches))))
-		}
+		body.WriteString("\n" + dimStyle.Render(fmt.Sprintf("Showing %d-%d of %d · ↑↓ browse · / search", start+1, end, len(matches))))
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", body.String())
 	return frame.renderWithFooter(page, footer)
@@ -1094,7 +1099,8 @@ func (m model) helpView(frame tuiFrame, header string) string {
 	if contentWidth < 60 {
 		keyWidth = min(keyWidth, max(14, contentWidth/2))
 	}
-	search := lipgloss.NewStyle().Width(searchFieldWidth(contentWidth)-2).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconHelp)) + searchTextWithCursorAtWidth(m.helpQuery, "filter shortcuts…", true, searchFieldWidth(contentWidth)))
+	searchPrefix := markerPrefix(iconHelp) + "FILTER "
+	search := lipgloss.NewStyle().Width(searchFieldWidth(contentWidth)-2).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(searchPrefix) + searchTextWithCursorAtWidth(m.helpQuery, "filter shortcuts…", true, searchFieldWidth(contentWidth)-lipgloss.Width(searchPrefix)+lipgloss.Width(markerPrefix(iconSearch))))
 	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
 	footerText := "tab configure shortcuts  ·  esc close"
 	footerView := footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
@@ -1832,9 +1838,8 @@ func suggestedAliasesForContext(aliases []Alias, context contextRanking) []Alias
 		}
 		return rankedAliases[i].score > rankedAliases[j].score
 	})
-	limit := min(12, len(rankedAliases))
-	result := make([]Alias, limit)
-	for index := range limit {
+	result := make([]Alias, len(rankedAliases))
+	for index := range rankedAliases {
 		result[index] = rankedAliases[index].alias
 	}
 	return result
@@ -2070,7 +2075,11 @@ func searchTextWithCursorAtWidth(query, placeholder string, visible bool, fieldW
 	if query == "" {
 		return dimStyle.Render(ansi.Truncate(placeholder, available, "…")) + cursor
 	}
-	return lipgloss.NewStyle().Foreground(inkColor).Render(ansi.TruncateLeft(terminalSafeText(query), available, "…")) + cursor
+	visibleQuery := terminalSafeText(query)
+	if overflow := lipgloss.Width(visibleQuery) - available; overflow > 0 {
+		visibleQuery = ansi.TruncateLeft(visibleQuery, overflow+1, "…")
+	}
+	return lipgloss.NewStyle().Foreground(inkColor).Render(visibleQuery) + cursor
 }
 
 const maxSearchQueryRunes = 256

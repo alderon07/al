@@ -92,6 +92,29 @@ func TestSearchFieldWidthAndLongQuery(t *testing.T) {
 	}
 }
 
+func TestShortSearchQueriesAppearInField(t *testing.T) {
+	for _, test := range []struct {
+		name        string
+		query       string
+		placeholder string
+	}{
+		{"alias picker", "sdfs", "search aliases…"},
+		{"keyboard guide", "dffd", "filter shortcuts…"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			for _, contentWidth := range []int{40, 108} {
+				fieldWidth := searchFieldWidth(contentWidth)
+				search := lipgloss.NewStyle().Width(fieldWidth-2).Padding(0, 1).Border(lipgloss.RoundedBorder()).Render(
+					markerPrefix(iconSearch) + searchTextWithCursorAtWidth(test.query, test.placeholder, true, fieldWidth),
+				)
+				if !strings.Contains(search, test.query+"█") {
+					t.Errorf("content width %d: query missing from search field: %q", contentWidth, search)
+				}
+			}
+		})
+	}
+}
+
 func TestSearchQueryHasBoundedLength(t *testing.T) {
 	query := appendSearchQuery("", strings.Repeat("a", maxSearchQueryRunes+20))
 	query = appendSearchQuery(query, "extra")

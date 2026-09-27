@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/creack/pty/v2"
 )
 
@@ -148,13 +149,60 @@ func TestSingleLetterModesInPTY(t *testing.T) {
 	if err := pty.Setsize(terminal, &pty.Winsize{Rows: 36, Cols: 120}); err != nil {
 		t.Fatal(err)
 	}
-	waitForPTYText(t, output, offset, "zz")
+	redraw := waitForPTYText(t, output, offset, `No alias matched "zz"`)
+	assertPTYSearchQueryBeforeEmptyState(t, redraw, "SEARCH zz", `No alias matched "zz"`)
 	offset = output.length()
 	_, _ = terminal.Write([]byte{27})
 	waitForPTYText(t, output, offset, "command mode")
 	offset = output.length()
 	_, _ = terminal.Write([]byte("s"))
 	waitForPTYText(t, output, offset, "Alias rhythm")
+}
+
+func TestKeyboardGuideSearchQueryInPTY(t *testing.T) {
+	command := exec.Command(os.Args[0], "-test.run=^TestShortcutEditorPTYHelper$")
+	command.Env = append(os.Environ(), "ALIAS_LENS_SHORTCUT_EDITOR_HELPER=1", "HOME="+t.TempDir(), "TERM=xterm-256color", "NO_COLOR=1")
+	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output := &synchronizedBuffer{}
+	go func() { _, _ = io.Copy(output, terminal) }()
+	t.Cleanup(func() {
+		_, _ = terminal.Write([]byte{3})
+		_ = terminal.Close()
+		if command.Process != nil {
+			_ = command.Process.Kill()
+		}
+		_ = command.Wait()
+	})
+	waitForPTYText(t, output, 0, "command mode")
+	offset := output.length()
+	_, _ = terminal.Write([]byte("h"))
+	waitForPTYText(t, output, offset, "Keyboard guide")
+	for _, character := range "dffd" {
+		offset = output.length()
+		_, _ = terminal.Write([]byte(string(character)))
+		waitForPTYText(t, output, offset, string(character)+"█")
+	}
+	for _, size := range []struct{ columns, rows uint16 }{{48, 18}, {120, 36}} {
+		offset = output.length()
+		if err := pty.Setsize(terminal, &pty.Winsize{Rows: size.rows, Cols: size.columns}); err != nil {
+			t.Fatal(err)
+		}
+		redraw := waitForPTYText(t, output, offset, `No shortcut matched "dffd"`)
+		assertPTYSearchQueryBeforeEmptyState(t, redraw, "FILTER dffd", `No shortcut matched "dffd"`)
+	}
+}
+
+func assertPTYSearchQueryBeforeEmptyState(t *testing.T, redraw, query, emptyState string) {
+	t.Helper()
+	plain := ansi.Strip(redraw)
+	queryIndex := strings.Index(plain, query)
+	emptyIndex := strings.Index(plain, emptyState)
+	if queryIndex < 0 || emptyIndex < 0 || queryIndex >= emptyIndex {
+		t.Fatalf("search field did not show %q before empty state: %q", query, plain)
+	}
 }
 
 func TestShortcutEditorPTYHelper(t *testing.T) {
