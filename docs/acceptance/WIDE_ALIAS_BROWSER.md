@@ -16,8 +16,11 @@ This change updates the populated alias browser at terminal widths of 120 cells 
 - `WIDE-08`: The Phosphor true-color view, ANSI-256 view, and `NO_COLOR=1` view preserve labels, focus, and warnings. A real PTY check covers wide and narrow widths.
 - `WIDE-09`: A styled row that exactly fills its column keeps its complete ANSI sequences and text. A row that exceeds its column truncates by visible terminal cells without leaking foreground or background color into the detail pane or later rows.
 - `WIDE-10`: At a given wide viewport width, category badges begin in one list column for short, long, selected, and Unicode alias names. Long names truncate in the list, remain complete in the selected detail pane, and do not push status markers or the detail pane outside the viewport.
-- `WIDE-11`: The wide overview reports the total alias count, how many alias commands have exact shell-history matches, the total number of those matches, and how many aliases need attention. It does not use category or favorite counts as headline stats.
-- `WIDE-12`: The selected-alias detail reports its exact shell-history match count, including zero, and calls the value a history match rather than an alias run. Narrow layouts keep their existing overview.
+- `WIDE-11`: The overview below search shows the existing favorite, category, and attention counts at wide and narrow widths.
+- `WIDE-12`: With room in the selected-alias card, a Usage section shows all-time, today, and last-seven-day alias uses from the active shell history, the latest dated run or an honest unknown/never state, and the separate exact-command history match count. It updates with selection.
+- `WIDE-13`: The selected-alias card stops at 72 cells on roomy terminals. It uses the available detail width when that is smaller, wraps long text inside the card, and leaves the rest of the pane in the page background.
+- `WIDE-14`: The two-cell gap between the selected alias name and its category badge uses the card panel background in true-color output. The detail card still renders without color.
+- `WIDE-15`: Missing or unreadable history never looks like measured zero usage. Reloading aliases or stats refreshes the selected usage. Short wide terminals keep the selected command and footer visible even when the Usage section does not fit.
 
 ## Test mapping
 
@@ -27,7 +30,9 @@ This change updates the populated alias browser at terminal widths of 120 cells 
 - `WIDE-08`: `make fmt check` plus recorded PTY evidence for the compiled binary.
 - `WIDE-09`: Exact-width and overflow ANSI regressions in `accessibility_test.go`, plus a color PTY check of the compiled wide browser.
 - `WIDE-10`: Category column and long-name assertions in `tui_alias_panes_test.go`, plus a wide PTY inspection with aliases of different name lengths.
-- `WIDE-11` and `WIDE-12`: Usage-summary and selected-detail assertions in `tui_alias_panes_test.go`.
+- `WIDE-11` and `WIDE-12`: Overview and selected-usage assertions in `tui_alias_panes_test.go`.
+- `WIDE-13` and `WIDE-14`: Card-width and styled-gap assertions in `tui_alias_panes_test.go`, plus wide and narrow PTY checks.
+- `WIDE-15`: Missing-history, refresh, and short-viewport assertions in `tui_alias_panes_test.go`, plus a compiled PTY check.
 
 ## Design decision
 
@@ -37,7 +42,7 @@ User problem: The current wide view uses a full-row highlight and full-height di
 
 Evidence from the current interface: The supplied 1127x1244 screenshot shows 46 visually uniform rows, a gray selected bar, category names without badges, state punctuation without labels, and a divider continuing through a large empty area.
 
-Proposed change: Keep one-line rows, add themed left borders and category badges, render the selected details inside a content-height card, and use wide-only summary space for shell-history and health figures.
+Proposed change: Keep one-line rows, add themed left borders and category badges, render the selected details inside a content-height card, and show selected-alias usage below its details while keeping the familiar overview below search.
 
 Traits kept unchanged: Dark working field, Phosphor accent, cyan commands, command-first content, keyboard footer, human footer, keyboard behavior, and narrow alias cards.
 

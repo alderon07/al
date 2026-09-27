@@ -26,6 +26,36 @@ type statsData struct {
 	Events  []usageEvent
 }
 
+type aliasUsageSummary struct {
+	All     int
+	Today   int
+	Week    int
+	LastRun time.Time
+}
+
+func summarizeAliasUses(events []usageEvent, now time.Time) map[string]aliasUsageSummary {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	week := now.AddDate(0, 0, -7)
+	summaries := make(map[string]aliasUsageSummary)
+	for _, event := range events {
+		summary := summaries[event.Name]
+		summary.All++
+		if !event.Time.IsZero() {
+			if !event.Time.Before(today) {
+				summary.Today++
+			}
+			if !event.Time.Before(week) {
+				summary.Week++
+			}
+			if event.Time.After(summary.LastRun) {
+				summary.LastRun = event.Time
+			}
+		}
+		summaries[event.Name] = summary
+	}
+	return summaries
+}
+
 func hasUntimestampedUsage(events []usageEvent) bool {
 	for _, event := range events {
 		if event.Time.IsZero() {

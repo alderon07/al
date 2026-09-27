@@ -1,14 +1,58 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
+
+func TestWideAliasDetailCardKeepsPanelBounded(t *testing.T) {
+	alias := Alias{
+		Name:        "gs",
+		Category:    "git",
+		Command:     "git status --short --branch --show-stash",
+		Description: "Show changed files and the current branch with enough words to wrap inside the selected alias card",
+	}
+	for _, width := range []int{63, 102} {
+		card := (model{}).aliasDetailCard(alias, width, 20)
+		limit := min(width, wideAliasDetailMaxWidth)
+		for _, line := range strings.Split(card, "\n") {
+			if got := lipgloss.Width(line); got > limit {
+				t.Fatalf("detail card at %d cells has %d-cell line, limit %d", width, got, limit)
+			}
+		}
+		if plain := ansi.Strip(card); width == 102 && (!strings.Contains(plain, "Show changed files and the current branch") || !strings.Contains(plain, "inside the selected alias card")) {
+			t.Fatalf("wide card lost the selected description: %q", plain)
+		}
+	}
+}
+
+func TestWideAliasDetailNameGapUsesPanelBackground(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
+	previousRenderer := lipgloss.DefaultRenderer()
+	renderer := lipgloss.NewRenderer(os.Stdout)
+	renderer.SetColorProfile(termenv.TrueColor)
+	lipgloss.SetDefaultRenderer(renderer)
+	defer lipgloss.SetDefaultRenderer(previousRenderer)
+
+	marker := lipgloss.NewStyle().Background(panelColor).Render("x")
+	panelPrefix := marker[:strings.IndexByte(marker, 'x')]
+	content := (model{}).aliasDetailContent(Alias{Name: "gs", Category: "git", Command: "git status"}, 60, 20)
+	if !strings.Contains(content, panelPrefix+"  ") {
+		t.Fatalf("name/category gap does not use the panel background: %q", content)
+	}
+	if !strings.Contains(ansi.Strip(content), "gs   GIT") {
+		t.Fatalf("name/category spacing changed: %q", ansi.Strip(content))
+	}
+}
 
 func TestWideAliasBrowserShowsSelectedDetailsAndKeepsListVisible(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
@@ -36,38 +80,67 @@ func TestWideAliasBrowserShowsSelectedDetailsAndKeepsListVisible(t *testing.T) {
 	}
 }
 
-func TestWideAliasBrowserShowsHistoryAndHealthStats(t *testing.T) {
+func TestWideAliasBrowserKeepsOverviewAndShowsSelectedUsage(t *testing.T) {
 	current := model{
 		aliases: []Alias{
 			{Name: "daily", Command: "printf daily", Usage: 8},
 			{Name: "sometimes", Command: "printf sometimes", Usage: 3, Issues: []string{"review command"}},
 			{Name: "unused", Command: "printf unused"},
 		},
+		browserUsageReady: true,
+		browserUsage: map[string]aliasUsageSummary{
+			"daily": {All: 4, Today: 1, Week: 3, LastRun: time.Now().Add(-2 * time.Hour)},
+		},
 		width: 132, height: 36, shortcutProfile: shortcutLinux,
 	}
 	view := ansi.Strip(current.View())
-	for _, want := range []string{"3 aliases", "2 seen in history", "11 history matches", "1 needs attention", "8 history matches"} {
+	for _, want := range []string{"0 favorites", "0 categories", "1 needs attention", "USAGE", "All time  4", "Today  1", "Last 7 days  3", "Last used  2h ago", "Exact command matches  8"} {
 		if !strings.Contains(view, want) {
-			t.Errorf("wide stats missing %q:\n%s", want, view)
+			t.Errorf("wide view missing %q:\n%s", want, view)
 		}
 	}
-	for _, unwanted := range []string{"favorites", "categories"} {
+	for _, unwanted := range []string{"seen in history", "11 history matches"} {
 		if strings.Contains(view, unwanted) {
 			t.Errorf("wide overview still shows %q:\n%s", unwanted, view)
 		}
 	}
 
-	current.cursor = 2
-	if view := ansi.Strip(current.View()); !strings.Contains(view, "0 history matches") {
-		t.Fatalf("unused selected alias does not show a zero count:\n%s", view)
+	current.query = "unused"
+	if view := ansi.Strip(current.View()); !strings.Contains(view, "All time  0") || !strings.Contains(view, "Last used  never") || !strings.Contains(view, "Exact command matches  0") {
+		t.Fatalf("changing selection did not update usage:\n%s", view)
 	}
 
 	current.width = 80
 	view = ansi.Strip(current.View())
-	for _, want := range []string{"0 favorites", "0 categories", "1 needs attention"} {
-		if !strings.Contains(view, want) {
-			t.Errorf("narrow overview missing %q:\n%s", want, view)
-		}
+	if strings.Contains(view, "USAGE  ·  SHELL HISTORY") {
+		t.Fatalf("narrow cards gained the selected usage section:\n%s", view)
+	}
+}
+
+func TestSelectedAliasUsageHandlesMissingUndatedAndUnreadableHistory(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	t.Setenv(historyFileEnvironment, "")
+	current := model{aliases: []Alias{{Name: "gs", Command: "git status"}}, width: 132, height: 36}
+	current.refreshBrowserUsage()
+	if view := ansi.Strip(current.View()); !strings.Contains(view, "No shell history file yet") || strings.Contains(view, "All time  0") {
+		t.Fatalf("missing history looked like a measured zero:\n%s", view)
+	}
+
+	history := filepath.Join(home, ".bash_history")
+	if err := os.WriteFile(history, []byte("gs\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	current.refreshBrowserUsage()
+	if view := ansi.Strip(current.View()); !strings.Contains(view, "All time  1") || !strings.Contains(view, "Last used  unknown") {
+		t.Fatalf("undated history lost its use or invented a date:\n%s", view)
+	}
+
+	t.Setenv(historyFileEnvironment, home)
+	current.refreshBrowserUsage()
+	if view := ansi.Strip(current.View()); !strings.Contains(view, "Shell history unavailable") || strings.Contains(view, "All time  0") {
+		t.Fatalf("unreadable history looked like a measured zero:\n%s", view)
 	}
 }
 

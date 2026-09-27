@@ -452,6 +452,24 @@ func TestUsageCountsRespectPeriodBoundary(t *testing.T) {
 	}
 }
 
+func TestSelectedAliasUsageUsesDatedHistoryWindows(t *testing.T) {
+	now := time.Date(2026, time.September, 27, 15, 0, 0, 0, time.UTC)
+	events := []usageEvent{
+		{Name: "gs", Time: now.Add(-time.Hour)},
+		{Name: "gs", Time: now.Add(-6 * 24 * time.Hour)},
+		{Name: "gs", Time: now.Add(-8 * 24 * time.Hour)},
+		{Name: "gs"},
+		{Name: "gl", Time: now.Add(-time.Hour)},
+	}
+	summaries := summarizeAliasUses(events, now)
+	if got := summaries["gs"]; got.All != 4 || got.Today != 1 || got.Week != 2 || !got.LastRun.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("selected alias usage = %#v", got)
+	}
+	if got := summaries["gl"]; got.All != 1 || got.Today != 1 || got.Week != 1 {
+		t.Fatalf("other alias usage = %#v", got)
+	}
+}
+
 func TestZshHistoryUsageIncludesDirectAliasesAndTimestamps(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".zsh_history")
 	contents := ": 1789441200:0;ll -a\n: 1789441210:0;git status\n: 1789441220:0;gs\n"

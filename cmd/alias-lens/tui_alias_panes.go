@@ -3,10 +3,13 @@ package main
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
+
+const wideAliasDetailMaxWidth = 72
 
 func (m model) wideAliasBrowser(aliases []Alias, cursor, width, height int) string {
 	listWidth := min(50, max(38, width*2/5))
@@ -87,6 +90,7 @@ func (m model) wideAliasRow(raw Alias, active bool, width int) string {
 }
 
 func (m model) aliasDetailCard(raw Alias, width, height int) string {
+	width = min(width, wideAliasDetailMaxWidth)
 	content := m.aliasDetailContent(raw, max(8, width-4), height)
 	card := lipgloss.NewStyle().
 		Width(max(1, width-1)).
@@ -100,15 +104,12 @@ func (m model) aliasDetailCard(raw Alias, width, height int) string {
 
 func (m model) aliasDetailContent(raw Alias, width, height int) string {
 	alias := terminalSafeAlias(raw)
-	name := aliasStyle.Render(alias.Name)
+	name := aliasStyle.Background(panelColor).Render(alias.Name)
 	if alias.Category != "" {
-		name += "  " + categoryBadge(alias.Category)
+		name += lipgloss.NewStyle().Background(panelColor).Render("  ") + categoryBadge(alias.Category)
 	}
-	usage := historyMatchCount(alias.Usage)
 	if height < 8 {
-		availableNameWidth := max(4, width-lipgloss.Width(usage)-2)
-		nameLine := aliasStyle.Render(ansi.Truncate(alias.Name, availableNameWidth, "…")) + "  " + dimStyle.Render(usage)
-		return nameLine + "\n" + lipgloss.NewStyle().Foreground(cyanColor).Render(wrapText(alias.Command, width))
+		return name + "\n" + lipgloss.NewStyle().Foreground(cyanColor).Render(wrapText(alias.Command, width))
 	}
 
 	kind := "Alias"
@@ -126,7 +127,7 @@ func (m model) aliasDetailContent(raw Alias, width, height int) string {
 		context = "Marked for this folder"
 	}
 
-	lines := []string{name, dimStyle.Render(kind + "  ·  " + context + "  ·  " + usage)}
+	lines := []string{name, dimStyle.Render(kind + "  ·  " + context)}
 	if len(alias.Issues) > 0 {
 		lines = append(lines, "", lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("NEEDS ATTENTION"))
 		appendDetailText(&lines, lipgloss.NewStyle().Foreground(coralColor).Render(strings.Join(alias.Issues, " · ")), width)
@@ -136,6 +137,9 @@ func (m model) aliasDetailContent(raw Alias, width, height int) string {
 	if alias.Description != "" {
 		lines = append(lines, "", dimStyle.Render("DESCRIPTION"))
 		appendDetailText(&lines, lipgloss.NewStyle().Foreground(inkColor).Render(alias.Description), width)
+	}
+	if height >= 15 {
+		lines = append(lines, m.aliasUsageDetail(raw)...)
 	}
 	if len(alias.Tags) > 0 {
 		lines = append(lines, "", dimStyle.Render("TAGS"))
@@ -148,35 +152,24 @@ func (m model) aliasDetailContent(raw Alias, width, height int) string {
 	return strings.Join(lines, "\n")
 }
 
-func wideAliasOverview(aliases []Alias) string {
-	seen := 0
-	matches := 0
-	affected := 0
-	for _, alias := range aliases {
-		if alias.Usage > 0 {
-			seen++
-			matches += alias.Usage
+func (m model) aliasUsageDetail(alias Alias) []string {
+	lines := []string{"", dimStyle.Render("USAGE  ·  SHELL HISTORY")}
+	if !m.browserUsageReady || m.browserUsageState != "" {
+		state := m.browserUsageState
+		if state == "" {
+			state = "Shell history unavailable"
 		}
-		if len(alias.Issues) > 0 {
-			affected++
-		}
+		return append(lines, dimStyle.Render(state))
 	}
-	attention := fmt.Sprintf("%d need attention", affected)
-	if affected == 1 {
-		attention = "1 needs attention"
+	summary := m.browserUsage[alias.Name]
+	lines = append(lines, lipgloss.NewStyle().Foreground(inkColor).Render(fmt.Sprintf("All time  %d   Today  %d   Last 7 days  %d", summary.All, summary.Today, summary.Week)))
+	lastUsed := "never"
+	if summary.All > 0 {
+		lastUsed = lastRunLabel(summary.LastRun, time.Now())
 	}
-	attentionStyle := dimStyle
-	if affected > 0 {
-		attentionStyle = lipgloss.NewStyle().Foreground(coralColor)
-	}
-	return dimStyle.Render(fmt.Sprintf("%d aliases  │  %d seen in history  │  %s  │  ", len(aliases), seen, historyMatchCount(matches))) + attentionStyle.Render(attention)
-}
-
-func historyMatchCount(count int) string {
-	if count == 1 {
-		return "1 history match"
-	}
-	return fmt.Sprintf("%d history matches", count)
+	lines = append(lines, dimStyle.Render("Last used  ")+lipgloss.NewStyle().Foreground(inkColor).Render(lastUsed))
+	lines = append(lines, dimStyle.Render("Exact command matches  ")+lipgloss.NewStyle().Foreground(inkColor).Render(fmt.Sprint(alias.Usage)))
+	return lines
 }
 
 func categoryBadge(category string) string {

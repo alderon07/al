@@ -316,6 +316,31 @@ func (m *model) refreshStatsData() {
 		return
 	}
 	m.statsData = data
+	m.refreshBrowserUsage()
+}
+
+func (m *model) refreshBrowserUsage() {
+	m.browserUsage = nil
+	m.browserUsageState = "Shell history unavailable"
+	m.browserUsageReady = true
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	adapter := activeShellAdapter()
+	path := historyPathFor(adapter, home)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		m.browserUsageState = "No shell history file yet"
+		return
+	} else if err != nil {
+		return
+	}
+	events, err := historyUsageEventsFromShell(path, adapter.Name(), m.aliases)
+	if err != nil {
+		return
+	}
+	m.browserUsage = summarizeAliasUses(events, time.Now())
+	m.browserUsageState = ""
 }
 
 func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {

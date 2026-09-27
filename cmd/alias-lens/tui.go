@@ -64,6 +64,9 @@ type model struct {
 	statsSelected     int
 	statsNow          time.Time
 	statsErr          string
+	browserUsage      map[string]aliasUsageSummary
+	browserUsageState string
+	browserUsageReady bool
 	tourVisible       bool
 	adding            bool
 	field             int
@@ -205,6 +208,9 @@ func runTUIWithDiff(repositoryDiff bool) error {
 	}
 	applyTheme(theme)
 	initial := model{aliases: aliases, context: ranking, width: 80, height: 24, theme: theme, status: status, executeMode: !repositoryDiff, tourVisible: !repositoryDiff && tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), shortcutLauncher: launcherLabel(config), aliasMode: aliasModeCommand, executableWatch: watchRunningExecutable()}
+	if !repositoryDiff {
+		initial.refreshBrowserUsage()
+	}
 	if repositoryDiff {
 		if err := initial.openRepositoryDiff(); err != nil {
 			return err
@@ -285,6 +291,7 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 	}
 	applyTheme(theme)
 	initial := model{aliases: aliases, context: ranking, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config), shortcutLauncher: launcherLabel(config), aliasMode: aliasModeSearch, executableWatch: watchRunningExecutable()}
+	initial.refreshBrowserUsage()
 	if contextErr != nil {
 		initial.status = "Context ranking unavailable: " + contextErr.Error()
 	}
@@ -560,6 +567,9 @@ func (m *model) reloadAliasesAndTheme() {
 		m.status = "Could not reload aliases: " + err.Error()
 	} else {
 		m.aliases = aliases
+		if m.browserUsageReady {
+			m.refreshBrowserUsage()
+		}
 		m.cursor = 0
 		m.status = fmt.Sprintf("Reloaded %d aliases", len(aliases))
 	}
@@ -966,11 +976,7 @@ func (m model) View() string {
 
 	overview := ""
 	if len(m.aliases) > 0 && contentWidth >= 68 && height >= 24 {
-		if wideAliasBrowser {
-			overview = wideAliasOverview(m.aliases)
-		} else {
-			overview = aliasOverview(m.aliases)
-		}
+		overview = aliasOverview(m.aliases)
 	}
 	contentHeight := frame.contentHeight()
 	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(overview)-frame.measureHeight(footer)-frame.makerHeight()-4)
@@ -1689,6 +1695,9 @@ func (m model) saveAliasForm() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.aliases = aliases
+	if m.browserUsageReady {
+		m.refreshBrowserUsage()
+	}
 	m.query = strings.TrimSpace(m.form[0])
 	m.cursor = 0
 	m.adding = false
@@ -1725,6 +1734,9 @@ func (m model) updateDeleteConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd)
 		m.status = "Deleted, but reload failed: " + err.Error()
 	} else {
 		m.aliases = aliases
+		if m.browserUsageReady {
+			m.refreshBrowserUsage()
+		}
 		m.cursor = 0
 		m.status = "Deleted " + name + " · backup saved"
 	}
