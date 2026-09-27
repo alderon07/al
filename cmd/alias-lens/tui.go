@@ -475,6 +475,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.toggleSelectedContext(matches)
 			return m, nil
 		}
+		if !m.selectMode && matchesShortcut(message, m.shortcutProfile, shortcutFavorite) {
+			m.toggleSelectedFavorite(matches)
+			return m, nil
+		}
 		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type != tea.KeyDelete || m.query == "") {
 			if len(matches) > 0 {
 				m.deleteName = matches[m.cursor].Name
@@ -609,6 +613,50 @@ func (m *model) toggleSelectedContext(matches []Alias) {
 		m.status = "Marked " + selected.Name + " for this " + map[string]string{contextRepository: "project", contextDirectory: "folder"}[kind]
 	} else {
 		m.status = "Removed the local context mark from " + selected.Name
+	}
+	for index, alias := range m.currentAliases() {
+		if alias.Name == selected.Name && alias.Command == selected.Command && alias.Type == selected.Type {
+			m.cursor = index
+			break
+		}
+	}
+}
+
+func (m *model) toggleSelectedFavorite(matches []Alias) {
+	if len(matches) == 0 {
+		return
+	}
+	selected := matches[min(m.cursor, len(matches)-1)]
+	count := 0
+	for _, alias := range m.aliases {
+		if alias.Name == selected.Name {
+			count++
+		}
+	}
+	if count > 1 {
+		m.status = "Duplicate alias name; run al check before changing its favorite status"
+		return
+	}
+	metadata := metadataForAlias(selected)
+	metadata.Favorite = !metadata.Favorite
+	path, err := aliasesPath()
+	if err == nil {
+		err = setEntryMetadata(path, selected.Name, metadata)
+	}
+	if err != nil {
+		m.status = "Could not change favorite: " + err.Error()
+		return
+	}
+	for index := range m.aliases {
+		if m.aliases[index].Name == selected.Name && m.aliases[index].Command == selected.Command && m.aliases[index].Type == selected.Type {
+			m.aliases[index].Favorite = metadata.Favorite
+			break
+		}
+	}
+	if metadata.Favorite {
+		m.status = "Marked " + selected.Name + " as a favorite"
+	} else {
+		m.status = "Removed " + selected.Name + " from favorites"
 	}
 	for index, alias := range m.currentAliases() {
 		if alias.Name == selected.Name && alias.Command == selected.Command && alias.Type == selected.Type {
@@ -841,6 +889,11 @@ func (m model) View() string {
 	if m.trackedOnly {
 		return m.trackedFilesView(frame, header)
 	}
+	wideAliasBrowser := m.width >= 120 && len(matches) > 0 && !m.healthOnly
+	if wideAliasBrowser {
+		frame = newFullWidthTUIFrame(m.width, m.height, mainTUIHorizontalPadding)
+		contentWidth = frame.contentWidth
+	}
 	searchPlaceholder := "search aliases…"
 	if m.aliasMode == aliasModeCommand {
 		searchPlaceholder = "press / to search aliases…"
@@ -883,7 +936,7 @@ func (m model) View() string {
 		}
 	}
 	if m.aliasMode == aliasModeCommand && !m.selectMode {
-		footer = dimStyle.Render("command mode  ·  / search  ·  " + useKey + " use  ·  " + helpKey + " help  ·  " + quitKey + " quit")
+		footer = dimStyle.Render("command mode  ·  / search  ·  " + primaryShortcutLabel(m.shortcutProfile, shortcutFavorite) + " favorite  ·  " + useKey + " use  ·  " + helpKey + " help  ·  " + quitKey + " quit")
 	} else if m.aliasMode == aliasModeSearch && !m.selectMode {
 		footer = dimStyle.Render("search mode  ·  type to filter  ·  esc commands  ·  " + useKey + " use")
 	}
@@ -896,7 +949,7 @@ func (m model) View() string {
 		if m.selectMode {
 			footer = dimStyle.Render(useKey + " select  ·  " + helpKey + " help  ·  " + quitKey + " cancel")
 		} else if m.aliasMode == aliasModeCommand {
-			footer = dimStyle.Render("/ search  ·  " + helpKey + " help  ·  " + quitKey + " quit")
+			footer = dimStyle.Render("/ search  ·  " + primaryShortcutLabel(m.shortcutProfile, shortcutFavorite) + " favorite  ·  " + helpKey + " help")
 		} else if m.aliasMode == aliasModeSearch {
 			footer = dimStyle.Render("type to search  ·  esc commands")
 		}
@@ -919,7 +972,9 @@ func (m model) View() string {
 	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(overview)-frame.measureHeight(footer)-frame.makerHeight()-4)
 	var body strings.Builder
 	bodyLeadHeight := 0
-	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
+	if wideAliasBrowser {
+		body.WriteString(m.wideAliasBrowser(matches, cursor, contentWidth, bodyBudget))
+	} else if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
 		body.WriteString(m.emptyStateView(contentWidth, height))
 	} else if m.healthOnly {
 		lead := pixelIconLabel(iconHealth, "ALIAS HEALTH", lipgloss.NewStyle().Bold(true).Foreground(coralColor))
@@ -940,29 +995,31 @@ func (m model) View() string {
 		body.WriteByte('\n')
 		bodyLeadHeight = lipgloss.Height(lead)
 	}
-	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
-		// The empty state above replaces the normal search result list.
-	} else if m.healthOnly && len(matches) == 0 {
-		body.WriteString(statusStyle.Render("No health issues found."))
-	} else if len(matches) == 0 {
-		body.WriteString(titleStyle.Render(fmt.Sprintf("No alias matched %q", m.query)))
-		if close := closestAliases(m.aliases, m.query); len(close) > 0 {
-			body.WriteString("\n" + dimStyle.Render("Did you mean ") + aliasStyle.Render(strings.Join(close, "  ")) + dimStyle.Render(" ?"))
-		}
-	} else {
-		aliasBudget := max(3, bodyBudget-bodyLeadHeight-1)
-		start, end := aliasWindow(matches, cursor, contentWidth, aliasBudget)
-		for index := start; index < end; index++ {
-			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth, m.context.match(matches[index]) > 0))
-			if index < end-1 {
-				body.WriteByte('\n')
+	if !wideAliasBrowser {
+		if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
+			// The empty state above replaces the normal search result list.
+		} else if m.healthOnly && len(matches) == 0 {
+			body.WriteString(statusStyle.Render("No health issues found."))
+		} else if len(matches) == 0 {
+			body.WriteString(titleStyle.Render(fmt.Sprintf("No alias matched %q", m.query)))
+			if close := closestAliases(m.aliases, m.query); len(close) > 0 {
+				body.WriteString("\n" + dimStyle.Render("Did you mean ") + aliasStyle.Render(strings.Join(close, "  ")) + dimStyle.Render(" ?"))
 			}
+		} else {
+			aliasBudget := max(3, bodyBudget-bodyLeadHeight-1)
+			start, end := aliasWindow(matches, cursor, contentWidth, aliasBudget)
+			for index := start; index < end; index++ {
+				body.WriteString(renderAlias(matches[index], index == cursor, contentWidth, m.context.match(matches[index]) > 0))
+				if index < end-1 {
+					body.WriteByte('\n')
+				}
+			}
+			summary := fmt.Sprintf("Showing %d-%d of %d · ↑↓ browse · / search", start+1, end, len(matches))
+			if strings.TrimSpace(m.query) == "" && len(matches) < len(m.aliases) {
+				summary = fmt.Sprintf("Showing %d-%d of %d suggestions · / search all %d aliases", start+1, end, len(matches), len(m.aliases))
+			}
+			body.WriteString("\n" + dimStyle.Render(summary))
 		}
-		summary := fmt.Sprintf("Showing %d-%d of %d · ↑↓ browse · / search", start+1, end, len(matches))
-		if strings.TrimSpace(m.query) == "" && len(matches) < len(m.aliases) {
-			summary = fmt.Sprintf("Showing %d-%d of %d suggestions · / search all %d aliases", start+1, end, len(matches), len(m.aliases))
-		}
-		body.WriteString("\n" + dimStyle.Render(summary))
 	}
 	sections := []string{header, "", title, search}
 	if overview != "" {

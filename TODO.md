@@ -69,6 +69,9 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ### Screen review acceptance criteria
 
+- [x] At wide terminal widths, browse compact alias rows beside a read-only detail pane for the selected alias. Wrap its command and show its description, tags, context, and health details without executing it.
+- [x] Keep the existing single-column alias cards at narrow widths. Resizing and moving the cursor keep selection, search, visible range, and footer usable without clipping.
+
 - [x] The picker can reach every ranked alias and always shows the visible range and total.
 - [x] Contextual and global footer hints share one line, with each action appearing once.
 - [x] The revision diff footer names horizontal panning, and panning exposes the clipped command tail.
@@ -84,6 +87,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ## Finish the alias workflow
 
+- [x] Let the TUI mark and unmark the selected alias as a favorite with `f` in command mode. Show the action in the keyboard guide and footer, preserve other metadata, save through the backed-up alias writer, and keep the same alias selected after suggestions reorder. Verify both states and search-mode typing in tests and a PTY.
 - [x] Explain that the category badge is inferred from the command by default.
 - [x] Make the description, category, and tags editable in the add and edit form.
 - [x] Preserve platform and favorite metadata when the TUI edits an alias.

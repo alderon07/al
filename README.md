@@ -92,6 +92,8 @@ Open Alias Lens with `Ctrl+G` on Zsh or Bash 4+, or run `al` on any supported sh
 
 The idle screen brings useful aliases back into view. Select one and press `Enter` to run it in the current shell. Press `Tab` to return the alias to the prompt without running it, then edit it or add arguments. New and edited aliases work without restarting the shell.
 
+On terminals at least 120 columns wide, the browser shows compact alias rows beside details for the selected alias. The detail pane wraps its command and shows its description, tags, platform, local context mark, and any health warnings. Narrow terminals keep the single-column cards. Moving through the list only previews text; `Enter` is still required to use an alias.
+
 Use the CLI when you already know what you want:
 
 ```bash
@@ -164,6 +166,7 @@ On Zsh and Bash 4+, `Ctrl+G` keeps its normal cancel behavior when the prompt co
 ## Add context to cryptic names
 
 Alias Lens edits the command, name, description, category, and tags from one form. Tags become search terms, and favorites appear first in suggestions.
+In the TUI, move to an alias and press `f` in command mode to mark or unmark it as a favorite. Press `Esc` to leave search mode before using `f`.
 
 ```bash
 al meta gs tags=git,daily favorite=true

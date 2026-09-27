@@ -13,7 +13,7 @@ var shortcutActionNames = map[shortcutAction]string{
 	shortcutHelp: "help", shortcutStats: "stats", shortcutSettings: "settings",
 	shortcutThemes: "themes", shortcutRevisions: "revisions", shortcutSync: "sync",
 	shortcutHealth: "health", shortcutAdd: "add", shortcutEdit: "edit",
-	shortcutContext: "context", shortcutDelete: "delete", shortcutRefresh: "refresh",
+	shortcutContext: "context", shortcutFavorite: "favorite", shortcutDelete: "delete", shortcutRefresh: "refresh",
 	shortcutSave:   "save",
 	shortcutMoveUp: "up", shortcutMoveDown: "down", shortcutPageUp: "page-up",
 	shortcutPageDown: "page-down", shortcutFirst: "first", shortcutLast: "last",
