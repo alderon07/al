@@ -16,8 +16,9 @@ type usageEvent struct {
 }
 
 type statsRow struct {
-	Alias Alias
-	Count int
+	Alias   Alias
+	Count   int
+	LastRun time.Time
 }
 
 type statsData struct {
@@ -113,10 +114,19 @@ func rankedStatsRows(data statsData, period string, now time.Time) ([]statsRow, 
 		return nil, err
 	}
 	counts := usageCountsSince(data.Events, since)
+	lastRuns := make(map[string]time.Time, len(counts))
+	for _, event := range data.Events {
+		if event.Time.IsZero() || (!since.IsZero() && event.Time.Before(since)) {
+			continue
+		}
+		if event.Time.After(lastRuns[event.Name]) {
+			lastRuns[event.Name] = event.Time
+		}
+	}
 	rows := make([]statsRow, 0, len(data.Aliases))
 	for _, alias := range data.Aliases {
 		if count := counts[alias.Name]; count > 0 {
-			rows = append(rows, statsRow{Alias: alias, Count: count})
+			rows = append(rows, statsRow{Alias: alias, Count: count, LastRun: lastRuns[alias.Name]})
 		}
 	}
 	sort.Slice(rows, func(i, j int) bool {

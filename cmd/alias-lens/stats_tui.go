@@ -24,7 +24,7 @@ var statsViews = []struct {
 	{"o", "overview"},
 	{"a", "activity"},
 	{"c", "cleanup"},
-	{"g", "groups"},
+	{"g", "categories"},
 }
 
 type statsModel struct {
@@ -198,7 +198,11 @@ func (m statsModel) View() string {
 	}
 	var viewTabs []string
 	for index, view := range statsViews {
-		label := view.key + " " + view.label
+		label := view.label
+		if inner < 60 && index < 3 {
+			label = []string{"over", "act", "clean"}[index]
+		}
+		label = view.key + " " + label
 		if index == m.viewIndex {
 			viewTabs = append(viewTabs, accent.Render("["+label+"]"))
 		} else {
@@ -255,7 +259,7 @@ func (m statsModel) View() string {
 		case 3:
 			bodyContent = renderGroupShare(m.data, period, m.now, inner, styles)
 		default:
-			bodyContent = renderStatsOverview(m, rows, inner, styles)
+			bodyContent = renderStatsOverview(m, rows, max(1, inner-4), styles)
 		}
 	}
 

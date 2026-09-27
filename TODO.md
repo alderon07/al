@@ -94,6 +94,8 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Add a themed interactive stats dashboard with plain output for scripts.
 - [x] Make the stats dashboard accessible inside the main alias browser with F2.
 - [x] Use terminal history as the only source for alias usage counts.
+- [x] Show each overview row's latest dated run in the selected period; show unknown when history has no date, and keep the column visible at narrow widths.
+- [x] Label the stats category breakdown as Categories in its tab, heading, and empty state.
 - [x] Export aliases and stats as JSON, YAML, or CSV.
 - [x] Show the expanded command in the terminal after a picker launch.
 - [x] Make `Ctrl+G` launch the picker from an empty Zsh or Bash 4+ prompt; Bash 3.2 uses `al`.

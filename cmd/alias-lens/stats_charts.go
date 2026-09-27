@@ -38,18 +38,18 @@ func renderStatsOverview(m statsModel, rows []statsRow, inner int, styles statsC
 		}
 	} else {
 		visible := len(rows)
-		if limit := m.height - 16; limit > 0 && visible > limit {
+		if limit := m.height - 17; limit > 0 && visible > limit {
 			visible = limit
 		}
 		if m.selected >= visible {
 			m.selected = visible - 1
 		}
 		maxCount := rows[0].Count
-		nameWidth := 16
-		barWidth := bodyWidth - nameWidth - 17
-		if barWidth < 8 {
-			barWidth = 8
-		}
+		nameWidth := min(16, max(8, bodyWidth-31))
+		barWidth := max(8, bodyWidth-nameWidth-23)
+		body.WriteString(strings.Repeat(" ", max(0, bodyWidth-15)))
+		body.WriteString(styles.muted.Render("RUNS  LAST RUN"))
+		body.WriteByte('\n')
 		for index, row := range rows[:visible] {
 			filled := row.Count * barWidth / maxCount
 			if filled < 1 {
@@ -64,7 +64,8 @@ func renderStatsOverview(m statsModel, rows []statsRow, inner int, styles statsC
 				barColor = styles.theme.Accent
 			}
 			bar := lipgloss.NewStyle().Foreground(lipgloss.Color(barColor)).Render(strings.Repeat("━", filled)) + styles.muted.Render(strings.Repeat("─", barWidth-filled))
-			body.WriteString(fmt.Sprintf("%s%2d  %s %s %4d", marker, index+1, nameStyle.Render(fmt.Sprintf("%-*s", nameWidth, truncate(row.Alias.Name, nameWidth))), bar, row.Count))
+			lastRun := styles.muted.Render(fmt.Sprintf("%-9s", lastRunLabel(row.LastRun, m.now)))
+			body.WriteString(fmt.Sprintf("%s%2d  %s %s %4d  %s", marker, index+1, nameStyle.Render(fmt.Sprintf("%-*s", nameWidth, truncate(row.Alias.Name, nameWidth))), bar, row.Count, lastRun))
 			body.WriteString("\n")
 		}
 		selected := rows[m.selected].Alias
@@ -86,9 +87,33 @@ func renderStatsOverview(m statsModel, rows []statsRow, inner int, styles statsC
 		if wideCoverage {
 			return lipgloss.JoinHorizontal(lipgloss.Top, lipgloss.NewStyle().Width(bodyWidth).Render(bodyContent), strings.Repeat(" ", 3), sidebar)
 		}
-		return sidebar + "\n\n" + bodyContent
+		return bodyContent + "\n\n" + sidebar
 	}
 	return bodyContent
+}
+
+func lastRunLabel(lastRun, now time.Time) string {
+	if lastRun.IsZero() {
+		return "unknown"
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	age := now.Sub(lastRun)
+	switch {
+	case age < time.Minute:
+		return "just now"
+	case age < time.Hour:
+		return fmt.Sprintf("%dm ago", int(age/time.Minute))
+	case age < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(age/time.Hour))
+	case age < 30*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(age/(24*time.Hour)))
+	case age < 365*24*time.Hour:
+		return fmt.Sprintf("%dmo ago", int(age/(30*24*time.Hour)))
+	default:
+		return fmt.Sprintf("%dy ago", int(age/(365*24*time.Hour)))
+	}
 }
 
 func renderCoverageMap(used, total int, theme Theme) string {
@@ -457,11 +482,11 @@ func renderGroupShare(data statsData, period string, now time.Time, width int, s
 		return groups[i].count > groups[j].count
 	})
 	var body strings.Builder
-	body.WriteString(styles.text.Bold(true).Render("Usage by group"))
+	body.WriteString(styles.text.Bold(true).Render("Usage by category"))
 	body.WriteString(styles.muted.Render(fmt.Sprintf("  %s · %d runs", period, total)))
 	body.WriteString("\n\n")
 	if len(groups) == 0 {
-		body.WriteString(styles.accent.Render("No grouped activity in this period."))
+		body.WriteString(styles.accent.Render("No category activity in this period."))
 		body.WriteString("\n")
 		body.WriteString(styles.muted.Render("Add categories or tags to see where your aliases do the most work."))
 		return body.String()

@@ -221,7 +221,8 @@ al stats today
 al stats --plain week
 ```
 
-Counts come from your active terminal history. Time periods need shell-history timestamps.
+Counts come from your active terminal history. The overview's Last run column shows the latest dated use in the selected period, or `unknown` when that history has no date. Time periods need shell-history timestamps.
+Press `g` in stats for the Categories view. It uses each alias's category, then its first tag, then `untagged`.
 
 Export aliases or stats as JSON, YAML, or CSV:
 

@@ -32,6 +32,51 @@ func TestStatsDashboardFitsTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestStatsOverviewShowsLastRunAtNarrowAndWideWidths(t *testing.T) {
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.Local)
+	data := statsData{
+		Aliases: []Alias{{Name: "dated", Command: "echo dated"}, {Name: "undated", Command: "echo undated"}},
+		Events: []usageEvent{
+			{Name: "dated", Time: now.Add(-3 * time.Hour)},
+			{Name: "dated", Time: now.Add(-2 * time.Hour)},
+			{Name: "undated"},
+		},
+	}
+	for _, width := range []int{48, 80, 120} {
+		view := (statsModel{data: data, width: width, height: 24, theme: defaultTheme(), now: now}).View()
+		for _, label := range []string{"LAST RUN", "2h ago", "unknown"} {
+			if !strings.Contains(view, label) {
+				t.Fatalf("%d-column overview missing %q:\n%s", width, label, view)
+			}
+		}
+		for _, line := range strings.Split(view, "\n") {
+			if lipgloss.Width(line) > width {
+				t.Fatalf("%d-column overview rendered a %d-cell line:\n%s", width, lipgloss.Width(line), view)
+			}
+		}
+	}
+}
+
+func TestStatsLastRunRespectsSelectedPeriod(t *testing.T) {
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.Local)
+	data := statsData{
+		Aliases: []Alias{{Name: "ll"}},
+		Events: []usageEvent{
+			{Name: "ll"},
+			{Name: "ll", Time: now.AddDate(0, 0, -2)},
+			{Name: "ll", Time: now.Add(-time.Hour)},
+		},
+	}
+	all, err := rankedStatsRows(data, "all", now)
+	if err != nil || len(all) != 1 || all[0].Count != 3 || !all[0].LastRun.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("all-time row = %#v, %v", all, err)
+	}
+	today, err := rankedStatsRows(data, "today", now)
+	if err != nil || len(today) != 1 || today[0].Count != 1 || !today[0].LastRun.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("today row = %#v, %v", today, err)
+	}
+}
+
 func TestStatsDashboardFillsWideTerminal(t *testing.T) {
 	view := (statsModel{
 		data:   statsData{Aliases: []Alias{{Name: "ll", Command: "ls -al"}}, Events: []usageEvent{{Name: "ll", Time: time.Now()}}},
@@ -213,7 +258,10 @@ func TestStatsViewKeysOpenEachChart(t *testing.T) {
 		theme:  builtInTheme("phosphor"),
 		now:    time.Now(),
 	}
-	for key, expected := range map[string]string{"a": "Seven-day activity", "c": "Unused for a month", "g": "Usage by group", "o": "Alias coverage"} {
+	if view := m.View(); !strings.Contains(view, "g categories") || strings.Contains(view, "g groups") {
+		t.Fatalf("stats tab did not use the categories label:\n%s", view)
+	}
+	for key, expected := range map[string]string{"a": "Seven-day activity", "c": "Unused for a month", "g": "Usage by category", "o": "Alias coverage"} {
 		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
 		m = updated.(statsModel)
 		if view := m.View(); !strings.Contains(view, expected) {
