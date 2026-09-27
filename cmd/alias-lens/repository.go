@@ -384,7 +384,7 @@ func pushRepository(config AppConfig) error {
 	}
 	refspec := plan.Snapshot + ":" + plan.Destination
 	lease := "--force-with-lease=" + plan.Destination + ":" + plan.RemoteBase
-	if output, err := gitOutput("-C", config.Repository, "push", "--porcelain", lease, "--", plan.Remote, refspec); err != nil {
+	if output, err := gitOutput("-C", config.Repository, "push", "--porcelain", "--no-follow-tags", lease, "--", plan.Remote, refspec); err != nil {
 		return fmt.Errorf("git push failed: %s", cleanCommandOutput(output))
 	}
 	return nil
@@ -422,6 +422,9 @@ func prepareRepositoryPush(config AppConfig) (repositoryPushPlan, error) {
 		return repositoryPushPlan{}, fmt.Errorf("resolve refreshed upstream for branch %s: %w", branch, err)
 	}
 	upstream := strings.TrimSpace(string(upstreamOutput))
+	if _, err := gitReviewOutputBounded(1024, config.Repository, "merge-base", "--is-ancestor", upstream, snapshot); err != nil {
+		return repositoryPushPlan{}, fmt.Errorf("push blocked because the remote branch diverged from the local branch; reconcile the branch, then retry")
+	}
 	if err := validateOutgoingRepositoryHistory(config, upstream, snapshot); err != nil {
 		return repositoryPushPlan{}, err
 	}
@@ -451,14 +454,20 @@ func validateOutgoingRepositoryHistory(config AppConfig, upstream, snapshot stri
 			if !ok {
 				return fmt.Errorf("push blocked because outgoing commit %s changes untracked path %s; publish that commit separately, then retry", revision, terminalSafeText(path))
 			}
-			object := revision + ":" + path
-			typeOutput, typeErr := gitReviewOutputBounded(1024, config.Repository, "cat-file", "-t", object)
-			if typeErr != nil {
+			treeOutput, treeErr := gitReviewOutputBounded(8<<20, config.Repository, "ls-tree", "-z", revision, "--", ":(literal)"+path)
+			if treeErr != nil {
+				return fmt.Errorf("inspect outgoing file %s: %w", terminalSafeText(path), treeErr)
+			}
+			if len(treeOutput) == 0 {
 				continue
 			}
-			if strings.TrimSpace(string(typeOutput)) != "blob" {
+			entry := bytes.TrimSuffix(treeOutput, []byte{0})
+			metadata, entryPath, found := bytes.Cut(entry, []byte{'\t'})
+			fields := strings.Fields(string(metadata))
+			if !found || string(entryPath) != path || len(fields) != 3 || fields[1] != "blob" || (fields[0] != "100644" && fields[0] != "100755") {
 				return fmt.Errorf("push blocked because %s is not a regular file in outgoing commit %s", terminalSafeText(path), revision)
 			}
+			object := revision + ":" + path
 			contents, showErr := gitReviewOutputBounded(limit, config.Repository, "show", object)
 			if showErr != nil {
 				return fmt.Errorf("inspect outgoing file %s: %w", terminalSafeText(path), showErr)

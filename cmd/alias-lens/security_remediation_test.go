@@ -241,6 +241,76 @@ func TestRepositoryPushValidatesEveryOutgoingPathAndBlob(t *testing.T) {
 		}
 	})
 
+	t.Run("does not publish followed tags", func(t *testing.T) {
+		repository, bare := setupPushRepository(t)
+		path := filepath.Join(repository, ".bash_aliases")
+		if err := os.WriteFile(path, []byte("alias safe='true'\nalias status='git status'\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		runGit(t, repository, "add", ".bash_aliases")
+		runGit(t, repository, "commit", "-m", "allowed")
+		runGit(t, repository, "tag", "-a", "private-tag", "-m", "private tag message")
+		runGit(t, repository, "config", "push.followTags", "true")
+		if err := pushRepository(AppConfig{Repository: repository, AliasFile: ".bash_aliases"}); err != nil {
+			t.Fatal(err)
+		}
+		if output, err := gitOutput("-C", bare, "show-ref", "--verify", "refs/tags/private-tag"); err == nil {
+			t.Fatalf("unreviewed annotated tag was published: %s", output)
+		}
+		local := strings.TrimSpace(runGit(t, repository, "rev-parse", "HEAD"))
+		remote := strings.TrimSpace(runGit(t, bare, "rev-parse", "refs/heads/main"))
+		if local != remote {
+			t.Fatalf("remote main = %s, want exact snapshot %s", remote, local)
+		}
+	})
+
+	t.Run("rejects diverged upstream", func(t *testing.T) {
+		repository, _ := setupPushRepository(t)
+		baseline := strings.TrimSpace(runGit(t, repository, "rev-parse", "HEAD"))
+		path := filepath.Join(repository, ".bash_aliases")
+		if err := os.WriteFile(path, []byte("alias remote='true'\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		runGit(t, repository, "add", ".bash_aliases")
+		runGit(t, repository, "commit", "-m", "remote")
+		runGit(t, repository, "push", "origin", "main")
+		runGit(t, repository, "reset", "--hard", baseline)
+		if err := os.WriteFile(path, []byte("alias local='true'\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		runGit(t, repository, "add", ".bash_aliases")
+		runGit(t, repository, "commit", "-m", "local")
+		_, err := prepareRepositoryPush(AppConfig{Repository: repository, AliasFile: ".bash_aliases"})
+		if err == nil || !strings.Contains(err.Error(), "diverged") {
+			t.Fatalf("diverged upstream was accepted: %v", err)
+		}
+	})
+
+	t.Run("rejects symlink entry", func(t *testing.T) {
+		repository, _ := setupPushRepository(t)
+		object := strings.TrimSpace(runGit(t, repository, "hash-object", "-w", ".bash_aliases"))
+		runGit(t, repository, "update-index", "--add", "--cacheinfo", "120000,"+object+",.bash_aliases")
+		runGit(t, repository, "commit", "-m", "symlink entry")
+		_, err := prepareRepositoryPush(AppConfig{Repository: repository, AliasFile: ".bash_aliases"})
+		if err == nil || !strings.Contains(err.Error(), "not a regular file") {
+			t.Fatalf("symlink entry was accepted: %v", err)
+		}
+	})
+
+	t.Run("reviews literal paths with glob characters", func(t *testing.T) {
+		repository, _ := setupPushRepository(t)
+		path := "alias[1]"
+		if err := os.WriteFile(filepath.Join(repository, path), []byte("API_TOKEN=not-a-real-token-but-still-private\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		runGit(t, repository, "add", "--", path)
+		runGit(t, repository, "commit", "-m", "literal path")
+		_, err := prepareRepositoryPush(AppConfig{Repository: repository, AliasFile: path})
+		if err == nil || !strings.Contains(err.Error(), "may contain a secret") {
+			t.Fatalf("literal path secret was accepted: %v", err)
+		}
+	})
+
 	t.Run("refreshes stale upstream before review", func(t *testing.T) {
 		repository, bare := setupPushRepository(t)
 		baseline := strings.TrimSpace(runGit(t, repository, "rev-parse", "HEAD"))
