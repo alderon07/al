@@ -2265,8 +2265,8 @@ func wrapText(value string, width int) string {
 
 func padRight(value string, width int) string {
 	cellWidth := lipgloss.Width(value)
-	if cellWidth >= width {
-		return truncate(value, width)
+	if cellWidth > width {
+		return ansi.Truncate(value, width, "…")
 	}
 	return value + strings.Repeat(" ", width-cellWidth)
 }
