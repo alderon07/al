@@ -15,6 +15,7 @@ This change updates the populated alias browser at terminal widths of 120 cells 
 - `WIDE-07`: Resizing below 120 columns returns to the existing single-column cards without changing the selected alias or search query.
 - `WIDE-08`: The Phosphor true-color view, ANSI-256 view, and `NO_COLOR=1` view preserve labels, focus, and warnings. A real PTY check covers wide and narrow widths.
 - `WIDE-09`: A styled row that exactly fills its column keeps its complete ANSI sequences and text. A row that exceeds its column truncates by visible terminal cells without leaking foreground or background color into the detail pane or later rows.
+- `WIDE-10`: At a given wide viewport width, category badges begin in one list column for short, long, selected, and Unicode alias names. Long names truncate in the list, remain complete in the selected detail pane, and do not push status markers or the detail pane outside the viewport.
 
 ## Test mapping
 
@@ -23,6 +24,7 @@ This change updates the populated alias browser at terminal widths of 120 cells 
 - `WIDE-06` and `WIDE-07`: viewport and resize tests in `tui_alias_panes_test.go`.
 - `WIDE-08`: `make fmt check` plus recorded PTY evidence for the compiled binary.
 - `WIDE-09`: Exact-width and overflow ANSI regressions in `accessibility_test.go`, plus a color PTY check of the compiled wide browser.
+- `WIDE-10`: Category column and long-name assertions in `tui_alias_panes_test.go`, plus a wide PTY inspection with aliases of different name lengths.
 
 ## Design decision
 

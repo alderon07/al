@@ -36,6 +36,43 @@ func TestWideAliasBrowserShowsSelectedDetailsAndKeepsListVisible(t *testing.T) {
 	}
 }
 
+func TestWideAliasRowsAlignCategoryBadges(t *testing.T) {
+	current := model{}
+	aliases := []Alias{
+		{Name: "gs", Command: "git status", Category: "git"},
+		{Name: "gchanged", Command: "git diff", Category: "git", Favorite: true},
+		{Name: "部署e\u0301🚀", Command: "git branch", Category: "git", Issues: []string{"review command"}},
+		{Name: "long-alias-name-beyond-the-list-column", Command: "git log", Category: "git"},
+	}
+	for _, width := range []int{38, 50} {
+		categoryColumn := -1
+		for index, alias := range aliases {
+			row := current.wideAliasRow(alias, index == 1, width)
+			plain := ansi.Strip(row)
+			badge := strings.Index(plain, "GIT")
+			if badge < 0 {
+				t.Fatalf("width %d row %q lost its category: %q", width, alias.Name, plain)
+			}
+			column := lipgloss.Width(plain[:badge])
+			if categoryColumn < 0 {
+				categoryColumn = column
+			} else if column != categoryColumn {
+				t.Errorf("width %d row %q category starts at %d, want %d", width, alias.Name, column, categoryColumn)
+			}
+			if got := lipgloss.Width(row); got != width {
+				t.Errorf("width %d row %q occupies %d cells", width, alias.Name, got)
+			}
+		}
+	}
+	long := aliases[len(aliases)-1]
+	if row := ansi.Strip(current.wideAliasRow(long, false, 38)); !strings.Contains(row, "…") || strings.Contains(row, long.Name) {
+		t.Fatalf("long list name was not truncated: %q", row)
+	}
+	if detail := ansi.Strip(current.aliasDetailCard(long, 60, 20)); !strings.Contains(detail, long.Name) {
+		t.Fatalf("selected detail lost the full alias name: %q", detail)
+	}
+}
+
 func TestAliasBrowserReturnsToCardsWhenNarrowed(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	current := model{

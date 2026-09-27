@@ -49,21 +49,26 @@ func (m model) wideAliasRow(raw Alias, active bool, width int) string {
 		marker = "▶ "
 	}
 
+	nameWidth := min(10, max(8, width/4))
 	suffix := ""
 	if alias.Category != "" {
-		suffix += "  " + categoryBadge(alias.Category)
+		suffix += "  " + categoryBadge(ansi.Truncate(alias.Category, 6, "…"))
 	}
+	var status []string
 	if alias.Favorite {
-		suffix += "  " + lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("FAV")
+		status = append(status, lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("FAV"))
 	}
 	if m.context.match(raw) > 0 {
-		suffix += "  " + lipgloss.NewStyle().Bold(true).Foreground(cyanColor).Render("HERE")
+		status = append(status, lipgloss.NewStyle().Bold(true).Foreground(cyanColor).Render("HERE"))
 	}
 	if len(alias.Issues) > 0 {
-		suffix += "  " + lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("ISSUE")
+		status = append(status, lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("ISSUE"))
 	}
-	nameWidth := max(4, width-4-lipgloss.Width(suffix))
-	content := marker + aliasStyle.Render(ansi.Truncate(alias.Name, nameWidth, "…")) + suffix
+	if len(status) > 0 {
+		suffix += "  " + strings.Join(status, " ")
+	}
+	name := padRight(ansi.Truncate(alias.Name, nameWidth, "…"), nameWidth)
+	content := ansi.Truncate(marker+aliasStyle.Render(name)+suffix, width-1, "…")
 	border := lineColor
 	if active {
 		border = acidColor
