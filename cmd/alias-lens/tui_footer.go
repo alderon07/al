@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/rivo/uniseg"
 	"strings"
 	"unicode"
@@ -467,7 +468,20 @@ func footerWithNavigation(footer string, width int, profiles ...ShortcutProfile)
 	if navigation == "" {
 		return footer
 	}
-	return footer + "\n\n" + dimStyle.Render(navigation)
+	plain := ansi.Strip(footer)
+	separator := "  │  "
+	for _, hint := range strings.Split(navigation, "  ·  ") {
+		if strings.Contains(plain, hint) {
+			continue
+		}
+		candidate := footer + dimStyle.Render(separator+hint)
+		if lipgloss.Width(candidate) > width {
+			break
+		}
+		footer = candidate
+		separator = "  ·  "
+	}
+	return footer
 }
 
 func pageWithMaker(page string, width, height int) string {

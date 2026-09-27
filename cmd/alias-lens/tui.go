@@ -943,10 +943,7 @@ func (m model) View() string {
 			body.WriteString("\n" + dimStyle.Render("Did you mean ") + aliasStyle.Render(strings.Join(close, "  ")) + dimStyle.Render(" ?"))
 		}
 	} else {
-		aliasBudget := max(3, bodyBudget-bodyLeadHeight)
-		if strings.TrimSpace(m.query) != "" {
-			aliasBudget = max(3, aliasBudget-1)
-		}
+		aliasBudget := max(3, bodyBudget-bodyLeadHeight-1)
 		start, end := aliasWindow(matches, cursor, contentWidth, aliasBudget)
 		for index := start; index < end; index++ {
 			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth, m.context.match(matches[index]) > 0))
@@ -954,7 +951,11 @@ func (m model) View() string {
 				body.WriteString("\n\n")
 			}
 		}
-		body.WriteString("\n" + dimStyle.Render(fmt.Sprintf("Showing %d-%d of %d · ↑↓ browse · / search", start+1, end, len(matches))))
+		summary := fmt.Sprintf("Showing %d-%d of %d · ↑↓ browse · / search", start+1, end, len(matches))
+		if strings.TrimSpace(m.query) == "" && len(matches) < len(m.aliases) {
+			summary = fmt.Sprintf("Showing %d-%d of %d suggestions · / search all %d aliases", start+1, end, len(matches), len(m.aliases))
+		}
+		body.WriteString("\n" + dimStyle.Render(summary))
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", body.String())
 	return frame.renderWithFooter(page, footer)

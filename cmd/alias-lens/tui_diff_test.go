@@ -57,6 +57,27 @@ func TestTerminalDiffShowsCommentsOnlyAndExactMatch(t *testing.T) {
 	}
 }
 
+func TestRevisionDiffCanPanToClippedCommandTail(t *testing.T) {
+	old := []byte("alias long='echo before'\n")
+	newer := []byte("alias long='echo " + strings.Repeat("middle", 20) + " tail-marker'\n")
+	view, err := buildTerminalDiff("Preview restore", "Current", "Revision", old, newer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	view.revisionID = "test"
+	m := model{width: 120, height: 28, diff: view}
+	if !strings.Contains(m.View(), "pan") {
+		t.Fatal("revision diff does not advertise horizontal panning")
+	}
+	for range 15 {
+		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m = updated.(model)
+	}
+	if !strings.Contains(m.View(), "tail-marker") {
+		t.Fatalf("panning did not expose the command tail:\n%s", m.View())
+	}
+}
+
 func TestTerminalDiffJumpsBetweenHunks(t *testing.T) {
 	old := []byte("# first\n" + strings.Repeat("# unchanged\n", 12) + "# last\n")
 	newer := []byte("# changed first\n" + strings.Repeat("# unchanged\n", 12) + "# changed last\n")

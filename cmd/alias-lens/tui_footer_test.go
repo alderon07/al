@@ -36,11 +36,11 @@ func TestMakerCreditIsPinnedToTheLastPageRow(t *testing.T) {
 	assertMakerCredit(t, lines[len(lines)-1])
 }
 
-func TestFooterControlsAndNavigationHaveOneBlankRowBetweenThem(t *testing.T) {
-	footer := footerWithNavigation("controls", 100, shortcutLinux)
-	lines := strings.Split(footer, "\n")
-	if len(lines) != 3 || lines[0] != "controls" || lines[1] != "" || !strings.Contains(lines[2], " help") {
-		t.Fatalf("footer rows are not separated by one blank row:\n%s", footer)
+func TestFooterMergesControlsAndNavigationWithoutRepeatingHelp(t *testing.T) {
+	footer := footerWithNavigation("enter use  ·  h help  ·  esc quit", 100, shortcutLinux)
+	plain := ansi.Strip(footer)
+	if strings.Contains(plain, "\n") || strings.Count(plain, "h help") != 1 || !strings.Contains(plain, "│") {
+		t.Fatalf("footer did not merge contextual and global hints: %q", plain)
 	}
 }
 
@@ -172,10 +172,8 @@ func TestShortcutsSitImmediatelyAboveDottedRule(t *testing.T) {
 				if strings.TrimSpace(ansi.Strip(lines[ruleRow-1])) == "" {
 					t.Fatalf("blank row between shortcuts and dotted rule:\n%s", view)
 				}
-				if page.name == "aliases" && size.width == 120 {
-					if strings.TrimSpace(ansi.Strip(lines[ruleRow-2])) != "" || !strings.Contains(lines[ruleRow-3], "esc quit") {
-						t.Fatalf("alias controls and navigation lost their blank separator:\n%s", view)
-					}
+				if page.name == "aliases" && size.width == 120 && !strings.Contains(lines[ruleRow-1], "esc quit") {
+					t.Fatalf("alias controls missing above rule:\n%s", view)
 				}
 				if !strings.Contains(lines[ruleRow+1], "Made by Naqi") {
 					t.Fatalf("credit is not directly below dotted rule:\n%s", view)

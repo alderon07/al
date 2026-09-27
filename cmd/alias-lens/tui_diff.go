@@ -355,7 +355,7 @@ func (m model) diffView(frame tuiFrame, header string) string {
 	backKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit))
 	footerText := scrollKeys + " scroll · " + changeKeys + " change · " + panKeys + " pan · " + shortcutLabel(m.shortcutProfile, shortcutDiffLayout) + " layout · " + shortcutLabel(m.shortcutProfile, shortcutDiffAliases) + " commands · " + backKey + " back"
 	if view.revisionID != "" {
-		footerText = scrollKeys + " scroll · " + changeKeys + " change · " + shortcutLabel(m.shortcutProfile, shortcutDiffLayout) + " layout · " + shortcutLabel(m.shortcutProfile, shortcutDiffAliases) + " commands · " + shortcutLabel(m.shortcutProfile, shortcutDiffRestore) + " restore · " + backKey + " back"
+		footerText = scrollKeys + " scroll · " + changeKeys + " change · " + panKeys + " pan · " + shortcutLabel(m.shortcutProfile, shortcutDiffLayout) + " layout · " + shortcutLabel(m.shortcutProfile, shortcutDiffAliases) + " commands · " + shortcutLabel(m.shortcutProfile, shortcutDiffRestore) + " restore · " + backKey + " back"
 	}
 	if view.confirmRestore {
 		footerText = "Restore this revision? " + shortcutLabel(m.shortcutProfile, shortcutConfirm) + " confirm · " + shortcutLabel(m.shortcutProfile, shortcutDecline) + " or " + strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit)) + " cancel"

@@ -5,11 +5,28 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
+
+func TestDefaultPickerCanReachPastFirstTwelveAliases(t *testing.T) {
+	aliases := make([]Alias, 20)
+	for index := range aliases {
+		name := "a" + strconv.Itoa(index)
+		aliases[index] = Alias{Name: name, Command: "echo " + name, Description: name}
+	}
+	ranked := suggestedAliases(aliases)
+	if len(ranked) != len(aliases) {
+		t.Fatalf("default picker has %d of %d aliases", len(ranked), len(aliases))
+	}
+	view := (model{aliases: aliases, cursor: 19, width: 100, height: 30}).View()
+	if !strings.Contains(view, "of 20") || !strings.Contains(view, ranked[19].Name) {
+		t.Fatalf("picker did not expose the last alias and range:\n%s", view)
+	}
+}
 
 func TestContextRankingKeepsTextRelevanceAndBoostsSuggestions(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "project")
