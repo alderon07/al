@@ -790,11 +790,14 @@ func (m model) View() string {
 		notice := wrapText("Alias Lens was updated. Close this screen, then enter al again.", contentWidth)
 		header += "\n" + lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(notice)
 	}
-	title := pixelIconLabel(iconSearch, "Find the shortcut before you forget it.", titleStyle) + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
+	title := titleStyle.Render("Aliases")
 	if m.selectMode {
-		title = pixelIconLabel(iconAlias, "Choose an alias to use in your shell.", titleStyle) + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
+		title = titleStyle.Render("Choose an alias")
 	} else if m.executeMode {
-		title = pixelIconLabel(iconCommand, "Choose an alias to use.", titleStyle) + "\n" + dimStyle.Render("Press Enter to use it. Press Esc to leave without choosing anything.")
+		title = titleStyle.Render("Choose an alias to use.")
+		if contentWidth >= 78 {
+			title += "  " + dimStyle.Render("Press Enter to use it. Esc leaves without choosing.")
+		}
 	}
 	if len(m.aliases) == 0 {
 		title = pixelIconLabel(iconAlias, "Set up your first shortcut.", titleStyle) + "\n" + dimStyle.Render("Create an alias here or add one to the active alias file.")
@@ -908,8 +911,12 @@ func (m model) View() string {
 		footer = lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("Delete " + m.deleteName + "?  " + shortcutLabel(m.shortcutProfile, shortcutConfirm) + " confirm  ·  " + shortcutLabel(m.shortcutProfile, shortcutDecline) + " cancel")
 	}
 
+	overview := ""
+	if len(m.aliases) > 0 && contentWidth >= 68 && height >= 24 {
+		overview = aliasOverview(m.aliases)
+	}
 	contentHeight := frame.contentHeight()
-	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footer)-frame.makerHeight()-4)
+	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(overview)-frame.measureHeight(footer)-frame.makerHeight()-4)
 	var body strings.Builder
 	bodyLeadHeight := 0
 	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
@@ -948,7 +955,7 @@ func (m model) View() string {
 		for index := start; index < end; index++ {
 			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth, m.context.match(matches[index]) > 0))
 			if index < end-1 {
-				body.WriteString("\n\n")
+				body.WriteByte('\n')
 			}
 		}
 		summary := fmt.Sprintf("Showing %d-%d of %d · ↑↓ browse · / search", start+1, end, len(matches))
@@ -957,8 +964,39 @@ func (m model) View() string {
 		}
 		body.WriteString("\n" + dimStyle.Render(summary))
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", body.String())
+	sections := []string{header, "", title, search}
+	if overview != "" {
+		sections = append(sections, overview)
+	}
+	sections = append(sections, "", body.String())
+	page := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	return frame.renderWithFooter(page, footer)
+}
+
+func aliasOverview(aliases []Alias) string {
+	favorites := 0
+	affected := 0
+	categories := make(map[string]struct{})
+	for _, alias := range aliases {
+		if alias.Favorite {
+			favorites++
+		}
+		if len(alias.Issues) > 0 {
+			affected++
+		}
+		if alias.Category != "" {
+			categories[alias.Category] = struct{}{}
+		}
+	}
+	attention := fmt.Sprintf("%d need attention", affected)
+	if affected == 1 {
+		attention = "1 needs attention"
+	}
+	attentionStyle := dimStyle
+	if affected > 0 {
+		attentionStyle = lipgloss.NewStyle().Foreground(coralColor)
+	}
+	return dimStyle.Render(fmt.Sprintf("%d favorites  │  %d categories  │  ", favorites, len(categories))) + attentionStyle.Render(attention)
 }
 
 func (m *model) startAddForm() {
@@ -1727,10 +1765,18 @@ func renderAlias(alias Alias, active bool, width int, contextual ...bool) string
 	if len(alias.Tags) > 0 {
 		lineOne += "  " + dimStyle.Render("#"+strings.Join(alias.Tags, " #"))
 	}
-	description := lipgloss.NewStyle().Foreground(inkColor).Render(wrapText(alias.Description, cardWidth-6))
 	lineTwo := lipgloss.NewStyle().Foreground(cyanColor).Render(markerPrefix(iconCommand) + truncate(alias.Command, cardWidth-8))
+	content := lineOne + "\n" + lineTwo
+	if alias.Description != "" {
+		space := cardWidth - lipgloss.Width(lineOne) - 5
+		if space >= 12 {
+			content = lineOne + dimStyle.Render("  "+truncate(alias.Description, space)) + "\n" + lineTwo
+		} else {
+			content += "\n" + lipgloss.NewStyle().Foreground(inkColor).Render(wrapText(alias.Description, cardWidth-6))
+		}
+	}
 	if len(alias.Issues) > 0 {
-		lineTwo += "\n" + lipgloss.NewStyle().Foreground(coralColor).Render(markerPrefix(iconHealth)+strings.Join(alias.Issues, " · "))
+		content += "\n" + lipgloss.NewStyle().Foreground(coralColor).Render(markerPrefix(iconHealth)+strings.Join(alias.Issues, " · "))
 	}
 
 	borderColor := lineColor
@@ -1742,7 +1788,7 @@ func renderAlias(alias Alias, active bool, width int, contextual ...bool) string
 		Padding(0, 1).
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(borderColor).
-		Render(lineOne + "\n" + description + "\n" + lineTwo)
+		Render(content)
 }
 
 func terminalSafeAlias(alias Alias) Alias {
