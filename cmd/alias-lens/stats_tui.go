@@ -81,7 +81,7 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 func (m statsModel) Init() tea.Cmd { return nil }
 
 func (m statsModel) TerminalBackground() string {
-	if noColorRequested() {
+	if !themeCanvasAvailable() {
 		return ""
 	}
 	return m.theme.Background
@@ -179,8 +179,13 @@ func (m statsModel) View() string {
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Accent)).Bold(true)
 	text := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text))
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Muted))
-	panel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background)).Padding(1, 2).Width(inner)
-	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background))
+	panel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Padding(1, 2).Width(inner)
+	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text))
+	if themeCanvasAvailable() {
+		background := lipgloss.Color(m.theme.Background)
+		panel = panel.Background(background)
+		page = page.Background(background)
+	}
 
 	total := 0
 	for _, row := range rows {

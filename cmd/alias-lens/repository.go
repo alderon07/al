@@ -44,6 +44,15 @@ func syncRepository(push bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if !push {
+		state, stateErr := loadSyncState()
+		if stateErr != nil {
+			return "", fmt.Errorf("read sync status: %w", stateErr)
+		}
+		if state.Status == "conflict" {
+			return "", fmt.Errorf("sync conflict is unresolved; repository was not changed; run al diff, then use al sync --pull to import remote-only aliases or al sync --push to keep the local alias file")
+		}
+	}
 	return syncRepositoryFiles(config, sourcePath, push)
 }
 
@@ -197,9 +206,13 @@ func showRepositoryDiffTo(output io.Writer) error {
 		fmt.Fprintln(output, "The commands and functions match, but comments, metadata, ordering, whitespace, or unparsed syntax differ.")
 		fmt.Fprintf(output, "  local:   %s\n", source)
 		fmt.Fprintf(output, "  tracked: %s\n", target)
-		fmt.Fprintln(output, "Run al sync to keep the local file. To combine both files, compare them and choose which lines to keep.")
+		fmt.Fprintln(output, "Neither file was changed. Review both files, then run al sync --push to publish the active file or edit the active file before pushing.")
 		return nil
 	}
+	fmt.Fprintln(output, "Alias files differ. Neither file was changed.")
+	fmt.Fprintf(output, "  active:     %s\n", source)
+	fmt.Fprintf(output, "  repository: %s\n", target)
+	fmt.Fprintf(output, "Summary: %d local-only, %d repository-only, %d changed.\n\n", len(localOnly), len(remoteOnly), len(conflicts))
 	for _, name := range localOnly {
 		fmt.Fprintln(output, "LOCAL ONLY ", name)
 	}
@@ -209,7 +222,40 @@ func showRepositoryDiffTo(output io.Writer) error {
 	for _, conflict := range conflicts {
 		fmt.Fprintf(output, "CHANGED    %s\n  local:  %s\n  remote: %s\n", conflict.Name, terminalSafeText(conflict.Local), terminalSafeText(conflict.Remote))
 	}
+	writeRepositoryDiffGuidance(output, len(localOnly), len(remoteOnly), len(conflicts))
 	return nil
+}
+
+func writeRepositoryDiffGuidance(output io.Writer, localOnly, remoteOnly, changed int) {
+	fmt.Fprintln(output)
+	if changed > 0 {
+		fmt.Fprintf(output, "Alias Lens cannot choose between commands for %d changed alias", changed)
+		if changed != 1 {
+			fmt.Fprint(output, "es")
+		}
+		fmt.Fprintln(output, ".")
+		fmt.Fprintln(output, "Edit the active alias file to keep the command you want for each CHANGED alias.")
+		if remoteOnly > 0 {
+			fmt.Fprintln(output, "Copy any REMOTE ONLY aliases you want to keep into the active file.")
+		}
+		fmt.Fprintln(output, "Run al diff again to review the result, then run al sync --push to publish the resolved active file.")
+		return
+	}
+	if localOnly > 0 && remoteOnly > 0 {
+		fmt.Fprintln(output, "To keep aliases from both files:")
+		fmt.Fprintln(output, "  1. Run al sync --pull to import repository-only aliases into the active file.")
+		fmt.Fprintln(output, "  2. Run al diff again. Copy any remaining REMOTE ONLY functions or entries you want into the active file.")
+		fmt.Fprintln(output, "  3. Run al sync --push to publish the resolved active file.")
+		return
+	}
+	if remoteOnly > 0 {
+		fmt.Fprintln(output, "To bring repository entries into the active file:")
+		fmt.Fprintln(output, "  1. Run al sync --pull to import repository-only aliases.")
+		fmt.Fprintln(output, "  2. Run al diff again. Copy any remaining REMOTE ONLY functions or entries you want into the active file.")
+		fmt.Fprintln(output, "  3. Run al sync --push to publish the resolved active file.")
+		return
+	}
+	fmt.Fprintln(output, "Run al sync --push to publish the local-only aliases from the active file.")
 }
 
 func pullRepository() (string, error) {

@@ -149,6 +149,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
     - [ ] Shut down WSL, reopen it, and rerun the verifier.
 - [ ] Approve and deliver the state, planning, and portability work in `docs/STATE_WORKFLOW_SPEC.md` after the phase 4 WSL gate.
   - [x] Add the observational status and shared operation-plan foundation.
+  - [ ] Review `docs/acceptance/CATALOG_LIFECYCLE.md`, then implement and verify the complete opt-in Bash and Zsh catalog workflow.
   - [ ] Route catalog enablement and rollback through the approved transaction plan.
   - [ ] Add semantic catalog diff, three-way reconciliation, and native-approval gates.
   - [x] Add versioned machine profiles and catalog conditions.

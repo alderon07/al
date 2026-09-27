@@ -65,6 +65,108 @@ func TestRepositorySyncPreservesUnrelatedStagedFiles(t *testing.T) {
 	}
 }
 
+func TestPlainSyncRefusesRecordedConflictWithoutChangingFilesOrGit(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	repository := filepath.Join(home, "dotfiles")
+	if err := os.Mkdir(repository, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repository, "init")
+	runGit(t, repository, "config", "user.email", "alias-lens@example.test")
+	runGit(t, repository, "config", "user.name", "Alias Lens Test")
+	local := []byte("alias keep='printf local'\n")
+	remote := []byte("alias frog='printf remote'\nalias keep='printf base'\n")
+	aliasPath := filepath.Join(home, ".bash_aliases")
+	repositoryAliasPath := filepath.Join(repository, ".bash_aliases")
+	if err := os.WriteFile(aliasPath, local, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(repositoryAliasPath, remote, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repository, "add", ".bash_aliases")
+	runGit(t, repository, "commit", "-m", "Add remote aliases")
+	config := defaultConfig()
+	config.Repository = repository
+	if err := saveConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeSyncStatus("conflict", "both local and remote aliases changed; run al diff", contentHash(local), contentHash(remote)); err != nil {
+		t.Fatal(err)
+	}
+	head := strings.TrimSpace(runGit(t, repository, "rev-parse", "HEAD"))
+
+	_, err := syncRepository(false)
+	if err == nil {
+		t.Fatal("plain sync accepted an unresolved conflict")
+	}
+	for _, expected := range []string{"repository was not changed", "al diff", "al sync --pull", "al sync --push"} {
+		if !strings.Contains(err.Error(), expected) {
+			t.Fatalf("sync error does not contain %q: %v", expected, err)
+		}
+	}
+	if after, readErr := os.ReadFile(aliasPath); readErr != nil || string(after) != string(local) {
+		t.Fatalf("live aliases = %q, %v", after, readErr)
+	}
+	if after, readErr := os.ReadFile(repositoryAliasPath); readErr != nil || string(after) != string(remote) {
+		t.Fatalf("repository aliases = %q, %v", after, readErr)
+	}
+	if afterHead := strings.TrimSpace(runGit(t, repository, "rev-parse", "HEAD")); afterHead != head {
+		t.Fatalf("HEAD changed from %s to %s", head, afterHead)
+	}
+	if status := strings.TrimSpace(runGit(t, repository, "status", "--porcelain")); status != "" {
+		t.Fatalf("repository changed: %q", status)
+	}
+}
+
+func TestExplicitPushCanResolveRecordedConflict(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv(activeShellEnvironment, "bash")
+	remoteRepository := filepath.Join(home, "remote.git")
+	repository := filepath.Join(home, "dotfiles")
+	runGit(t, home, "init", "--bare", remoteRepository)
+	runGit(t, home, "clone", remoteRepository, repository)
+	runGit(t, repository, "config", "user.email", "alias-lens@example.test")
+	runGit(t, repository, "config", "user.name", "Alias Lens Test")
+	remote := []byte("alias frog='printf remote'\n")
+	repositoryAliasPath := filepath.Join(repository, ".bash_aliases")
+	if err := os.WriteFile(repositoryAliasPath, remote, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, repository, "add", ".bash_aliases")
+	runGit(t, repository, "commit", "-m", "Add remote aliases")
+	runGit(t, repository, "push", "--set-upstream", "origin", "HEAD")
+	local := []byte("alias keep='printf local'\n")
+	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), local, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	config := defaultConfig()
+	config.Repository = repository
+	if err := saveConfig(config); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeSyncStatus("conflict", "both local and remote aliases changed; run al diff", contentHash(local), contentHash(remote)); err != nil {
+		t.Fatal(err)
+	}
+
+	message, err := syncRepository(true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message != "Aliases committed and pushed" {
+		t.Fatalf("sync message = %q", message)
+	}
+	if after, readErr := os.ReadFile(repositoryAliasPath); readErr != nil || string(after) != string(local) {
+		t.Fatalf("repository aliases = %q, %v", after, readErr)
+	}
+	if pushed := runGit(t, remoteRepository, "show", "HEAD:.bash_aliases"); pushed != string(local) {
+		t.Fatalf("pushed aliases = %q", pushed)
+	}
+}
+
 func TestPushFailureLeavesCompleteRepositoryCopy(t *testing.T) {
 	directory := t.TempDir()
 	repository := filepath.Join(directory, "dotfiles")

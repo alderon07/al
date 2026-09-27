@@ -21,6 +21,8 @@ This change updates the populated alias browser at terminal widths of 120 cells 
 - `WIDE-13`: The selected-alias card stops at 72 cells on roomy terminals. It uses the available detail width when that is smaller, wraps long text inside the card, and leaves the rest of the pane in the page background.
 - `WIDE-14`: The two-cell gap between the selected alias name and its category badge uses the card panel background in true-color output. The detail card still renders without color.
 - `WIDE-15`: Missing or unreadable history never looks like measured zero usage. Reloading aliases or stats refreshes the selected usage. Short wide terminals keep the selected command and footer visible even when the Usage section does not fit.
+- `WIDE-16`: At 256-color and true-color depth, the alias browser and stats views paint the same theme canvas through the last viewport row. The selected-alias card alone uses the theme panel color.
+- `WIDE-17`: At 16-color depth or with `NO_COLOR=1`, neither view requests a terminal-wide RGB background or paints a dark panel that could map to an unrelated ANSI color. Text, borders, badges, and selected-alias details remain legible.
 
 ## Test mapping
 
@@ -33,6 +35,7 @@ This change updates the populated alias browser at terminal widths of 120 cells 
 - `WIDE-11` and `WIDE-12`: Overview and selected-usage assertions in `tui_alias_panes_test.go`.
 - `WIDE-13` and `WIDE-14`: Card-width and styled-gap assertions in `tui_alias_panes_test.go`, plus wide and narrow PTY checks.
 - `WIDE-15`: Missing-history, refresh, and short-viewport assertions in `tui_alias_panes_test.go`, plus a compiled PTY check.
+- `WIDE-16` and `WIDE-17`: Color-profile assertions in `tui_theme_canvas_test.go` and `stats_test.go`, plus compiled PTY checks at narrow and wide widths.
 
 ## Design decision
 

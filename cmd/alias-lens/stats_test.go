@@ -347,6 +347,7 @@ func TestEmbeddedStatsRefreshPreservesViewAndPeriod(t *testing.T) {
 }
 
 func TestStatsDashboardUsesEachThemeCanvasInsteadOfPanel(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	previousRenderer := lipgloss.DefaultRenderer()
 	renderer := lipgloss.NewRenderer(os.Stdout)
 	renderer.SetColorProfile(termenv.TrueColor)

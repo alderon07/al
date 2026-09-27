@@ -110,10 +110,14 @@ type model struct {
 }
 
 func (m model) TerminalBackground() string {
-	if noColorRequested() {
+	if !themeCanvasAvailable() {
 		return ""
 	}
 	return m.theme.Background
+}
+
+func themeCanvasAvailable() bool {
+	return !noColorRequested() && lipgloss.ColorProfile() <= termenv.ANSI256
 }
 
 type cursorBlinkMsg struct{}

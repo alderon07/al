@@ -92,21 +92,29 @@ func (m model) wideAliasRow(raw Alias, active bool, width int) string {
 func (m model) aliasDetailCard(raw Alias, width, height int) string {
 	width = min(width, wideAliasDetailMaxWidth)
 	content := m.aliasDetailContent(raw, max(8, width-4), height)
-	card := lipgloss.NewStyle().
+	style := lipgloss.NewStyle().
 		Width(max(1, width-1)).
 		Padding(0, 1).
-		Background(panelColor).
 		Border(lipgloss.ThickBorder(), false, false, false, true).
-		BorderForeground(acidColor).
-		Render(content)
+		BorderForeground(acidColor)
+	if themeCanvasAvailable() {
+		style = style.Background(panelColor)
+	}
+	card := style.Render(content)
 	return titleStyle.Render("Selected alias") + "\n\n" + card
 }
 
 func (m model) aliasDetailContent(raw Alias, width, height int) string {
 	alias := terminalSafeAlias(raw)
-	name := aliasStyle.Background(panelColor).Render(alias.Name)
+	nameStyle := aliasStyle
+	gapStyle := lipgloss.NewStyle()
+	if themeCanvasAvailable() {
+		nameStyle = nameStyle.Background(panelColor)
+		gapStyle = gapStyle.Background(panelColor)
+	}
+	name := nameStyle.Render(alias.Name)
 	if alias.Category != "" {
-		name += lipgloss.NewStyle().Background(panelColor).Render("  ") + categoryBadge(alias.Category)
+		name += gapStyle.Render("  ") + categoryBadge(alias.Category)
 	}
 	if height < 8 {
 		return name + "\n" + lipgloss.NewStyle().Foreground(cyanColor).Render(wrapText(alias.Command, width))

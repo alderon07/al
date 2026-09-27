@@ -65,7 +65,11 @@ func (frame tuiFrame) measureFooterHeight(content string) int {
 }
 
 func (frame tuiFrame) render(page string) string {
-	return frame.renderStyled(page, lipgloss.NewStyle())
+	style := lipgloss.NewStyle()
+	if themeCanvasAvailable() {
+		style = style.Background(pageColor)
+	}
+	return frame.renderStyled(page, style)
 }
 
 func (frame tuiFrame) renderStyled(page string, style lipgloss.Style) string {
