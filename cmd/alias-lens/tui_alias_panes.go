@@ -56,10 +56,16 @@ func (m model) wideAliasRow(raw Alias, active bool, width int) string {
 	}
 	var status []string
 	if alias.Favorite {
-		status = append(status, lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render("FAV"))
+		if marker := interfaceMarker(iconFavorite); marker != "" {
+			status = append(status, lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(marker))
+		}
 	}
 	if m.context.match(raw) > 0 {
-		status = append(status, lipgloss.NewStyle().Bold(true).Foreground(cyanColor).Render("HERE"))
+		marker := interfaceMarker(iconContext)
+		if marker == "" {
+			marker = "LOCAL"
+		}
+		status = append(status, lipgloss.NewStyle().Bold(true).Foreground(cyanColor).Render(marker))
 	}
 	if len(alias.Issues) > 0 {
 		status = append(status, lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("ISSUE"))
@@ -98,8 +104,11 @@ func (m model) aliasDetailContent(raw Alias, width, height int) string {
 	if alias.Category != "" {
 		name += "  " + categoryBadge(alias.Category)
 	}
+	usage := historyMatchCount(alias.Usage)
 	if height < 8 {
-		return name + "\n" + lipgloss.NewStyle().Foreground(cyanColor).Render(wrapText(alias.Command, width))
+		availableNameWidth := max(4, width-lipgloss.Width(usage)-2)
+		nameLine := aliasStyle.Render(ansi.Truncate(alias.Name, availableNameWidth, "…")) + "  " + dimStyle.Render(usage)
+		return nameLine + "\n" + lipgloss.NewStyle().Foreground(cyanColor).Render(wrapText(alias.Command, width))
 	}
 
 	kind := "Alias"
@@ -117,7 +126,7 @@ func (m model) aliasDetailContent(raw Alias, width, height int) string {
 		context = "Marked for this folder"
 	}
 
-	lines := []string{name, dimStyle.Render(kind + "  ·  " + context)}
+	lines := []string{name, dimStyle.Render(kind + "  ·  " + context + "  ·  " + usage)}
 	if len(alias.Issues) > 0 {
 		lines = append(lines, "", lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("NEEDS ATTENTION"))
 		appendDetailText(&lines, lipgloss.NewStyle().Foreground(coralColor).Render(strings.Join(alias.Issues, " · ")), width)
@@ -137,6 +146,37 @@ func (m model) aliasDetailContent(raw Alias, width, height int) string {
 		appendDetailText(&lines, lipgloss.NewStyle().Foreground(violetColor).Render(strings.Join(alias.Platforms, "  ·  ")), width)
 	}
 	return strings.Join(lines, "\n")
+}
+
+func wideAliasOverview(aliases []Alias) string {
+	seen := 0
+	matches := 0
+	affected := 0
+	for _, alias := range aliases {
+		if alias.Usage > 0 {
+			seen++
+			matches += alias.Usage
+		}
+		if len(alias.Issues) > 0 {
+			affected++
+		}
+	}
+	attention := fmt.Sprintf("%d need attention", affected)
+	if affected == 1 {
+		attention = "1 needs attention"
+	}
+	attentionStyle := dimStyle
+	if affected > 0 {
+		attentionStyle = lipgloss.NewStyle().Foreground(coralColor)
+	}
+	return dimStyle.Render(fmt.Sprintf("%d aliases  │  %d seen in history  │  %s  │  ", len(aliases), seen, historyMatchCount(matches))) + attentionStyle.Render(attention)
+}
+
+func historyMatchCount(count int) string {
+	if count == 1 {
+		return "1 history match"
+	}
+	return fmt.Sprintf("%d history matches", count)
 }
 
 func categoryBadge(category string) string {

@@ -216,7 +216,7 @@ func TestTUIContextShortcutTogglesSelectedAlias(t *testing.T) {
 	m := model{aliases: []Alias{alias}, context: ranking, width: 90, height: 24, shortcutProfile: shortcutLinux}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	marked := updated.(model)
-	if marked.context.match(alias) != 1 || !strings.Contains(marked.View(), "HERE") {
+	if marked.context.match(alias) != 1 || !strings.Contains(marked.View(), "LOCAL") || strings.Contains(marked.View(), "HERE") {
 		t.Fatalf("TUI did not show context mark: %s", marked.View())
 	}
 	updated, _ = marked.Update(tea.KeyMsg{Type: tea.KeyCtrlB})

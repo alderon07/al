@@ -966,7 +966,11 @@ func (m model) View() string {
 
 	overview := ""
 	if len(m.aliases) > 0 && contentWidth >= 68 && height >= 24 {
-		overview = aliasOverview(m.aliases)
+		if wideAliasBrowser {
+			overview = wideAliasOverview(m.aliases)
+		} else {
+			overview = aliasOverview(m.aliases)
+		}
 	}
 	contentHeight := frame.contentHeight()
 	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(overview)-frame.measureHeight(footer)-frame.makerHeight()-4)
@@ -1817,7 +1821,7 @@ func renderAlias(alias Alias, active bool, width int, contextual ...bool) string
 		}
 	}
 	if len(contextual) > 0 && contextual[0] {
-		lineOne += "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("HERE")
+		lineOne += "  " + lipgloss.NewStyle().Foreground(cyanColor).Render(markerPrefix(iconContext)+"LOCAL")
 	}
 	if len(alias.Tags) > 0 {
 		lineOne += "  " + dimStyle.Render("#"+strings.Join(alias.Tags, " #"))

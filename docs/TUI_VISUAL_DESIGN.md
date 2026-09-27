@@ -218,7 +218,7 @@ Markers aid scanning. They never replace words, arrows, or keyboard labels. The 
 | --- | --- | --- |
 | `ICON-01` | Marker choices | Every semantic marker provides a symbol and ASCII form and can be hidden. |
 | `ICON-02` | Label spacing | Put exactly one plain space between a heading marker and its text label. |
-| `ICON-03` | Text alternative | A semantic marker must share its line with a label, except a favorite mark whose alias metadata exposes the same state. |
+| `ICON-03` | Text alternative | A semantic marker must share its line with a label, except a favorite mark whose alias metadata exposes the same state and a wide-list context mark whose selected detail names the project or folder. |
 | `ICON-04` | Compatibility | Built-in symbols use ordinary Unicode. Nerd Font and private-use glyphs are forbidden. |
 | `ICON-05` | Density | A normal heading may contain one marker. A card may contain command, function, favorite, and health markers only when those states exist. |
 | `ICON-06` | Full art | Use the multirow brand mark only in a spacious welcome or empty state. |

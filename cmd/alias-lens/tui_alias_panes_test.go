@@ -23,7 +23,7 @@ func TestWideAliasBrowserShowsSelectedDetailsAndKeepsListVisible(t *testing.T) {
 		shortcutProfile: shortcutLinux,
 	}
 	view := ansi.Strip(current.View())
-	for _, want := range []string{"Selected alias", "▶", "TOOLS", "FAV", "ISSUE", "COMMAND", "DESCRIPTION", "TAGS", "PLATFORMS", "second", "printf second argument", "Shows the second item", "daily", "linux", "review command", "No local mark"} {
+	for _, want := range []string{"Selected alias", "▶", "TOOLS", "♥︎", "ISSUE", "COMMAND", "DESCRIPTION", "TAGS", "PLATFORMS", "second", "printf second argument", "Shows the second item", "daily", "linux", "review command", "No local mark"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("wide view missing %q:\n%s", want, view)
 		}
@@ -33,6 +33,91 @@ func TestWideAliasBrowserShowsSelectedDetailsAndKeepsListVisible(t *testing.T) {
 	}
 	if got := lipgloss.Height(current.View()); got != 36 {
 		t.Fatalf("wide view height = %d, want 36", got)
+	}
+}
+
+func TestWideAliasBrowserShowsHistoryAndHealthStats(t *testing.T) {
+	current := model{
+		aliases: []Alias{
+			{Name: "daily", Command: "printf daily", Usage: 8},
+			{Name: "sometimes", Command: "printf sometimes", Usage: 3, Issues: []string{"review command"}},
+			{Name: "unused", Command: "printf unused"},
+		},
+		width: 132, height: 36, shortcutProfile: shortcutLinux,
+	}
+	view := ansi.Strip(current.View())
+	for _, want := range []string{"3 aliases", "2 seen in history", "11 history matches", "1 needs attention", "8 history matches"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("wide stats missing %q:\n%s", want, view)
+		}
+	}
+	for _, unwanted := range []string{"favorites", "categories"} {
+		if strings.Contains(view, unwanted) {
+			t.Errorf("wide overview still shows %q:\n%s", unwanted, view)
+		}
+	}
+
+	current.cursor = 2
+	if view := ansi.Strip(current.View()); !strings.Contains(view, "0 history matches") {
+		t.Fatalf("unused selected alias does not show a zero count:\n%s", view)
+	}
+
+	current.width = 80
+	view = ansi.Strip(current.View())
+	for _, want := range []string{"0 favorites", "0 categories", "1 needs attention"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("narrow overview missing %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestAliasStatusMarkersFollowAppearance(t *testing.T) {
+	t.Cleanup(func() { applyAppearanceConfig(defaultAppearanceConfig()) })
+	alias := Alias{Name: "gs", Command: "git status", Category: "git", Favorite: true, Issues: []string{"review command"}}
+	ranking := contextRanking{
+		Shell:   "bash",
+		Working: workingContext{Directory: "/project"},
+		bindings: map[string][]contextBinding{
+			aliasContextKey("bash", alias): {{Kind: contextDirectory, Path: "/project"}},
+		},
+	}
+	current := model{context: ranking}
+	for _, test := range []struct {
+		style   string
+		heart   string
+		context string
+	}{
+		{style: "symbols", heart: "♥︎", context: "⌖"},
+		{style: "ascii", heart: "*", context: "@"},
+		{style: "none", context: "LOCAL"},
+	} {
+		t.Run(test.style, func(t *testing.T) {
+			appearance := defaultAppearanceConfig()
+			appearance.MarkerStyle = test.style
+			applyAppearanceConfig(appearance)
+			for _, width := range []int{38, 50} {
+				row := ansi.Strip(current.wideAliasRow(alias, true, width))
+				if !strings.Contains(row, test.context) || !strings.Contains(row, "ISSUE") || strings.Contains(row, "FAV") || strings.Contains(row, "HERE") {
+					t.Fatalf("%s wide row at %d cells lost a status mark: %q", test.style, width, row)
+				}
+				if test.heart != "" && !strings.Contains(row, test.heart) {
+					t.Fatalf("%s wide row at %d cells lost the favorite mark: %q", test.style, width, row)
+				}
+				if got := lipgloss.Width(current.wideAliasRow(alias, true, width)); got != width {
+					t.Fatalf("%s wide row width = %d, want %d", test.style, got, width)
+				}
+			}
+			card := ansi.Strip(renderAlias(alias, true, 80, true))
+			if !strings.Contains(card, "LOCAL") || strings.Contains(card, "HERE") {
+				t.Fatalf("%s narrow card lost the context explanation: %q", test.style, card)
+			}
+			if test.heart != "" && !strings.Contains(card, test.heart) {
+				t.Fatalf("%s narrow card lost the favorite mark: %q", test.style, card)
+			}
+		})
+	}
+	if detail := ansi.Strip(current.aliasDetailCard(alias, 60, 20)); !strings.Contains(detail, "Favorite") || !strings.Contains(detail, "Marked for this folder") {
+		t.Fatalf("selected detail lost the full status labels: %q", detail)
 	}
 }
 

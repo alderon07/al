@@ -12,6 +12,7 @@ func TestPixelIconsHaveOneFixedWidthRow(t *testing.T) {
 		iconAlias,
 		iconBrand,
 		iconCommand,
+		iconContext,
 		iconEdit,
 		iconFavorite,
 		iconFunction,
