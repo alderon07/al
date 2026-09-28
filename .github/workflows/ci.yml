@@ -122,7 +122,7 @@ jobs:
           go mod verify
           go mod tidy -diff
       - name: Check workflow syntax
-        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+        run: go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.11 .github/workflows/*.yml
       - name: Run race tests
         run: go test -race -count=1 -skip PTY ./...
       - name: Check GoReleaser configuration
