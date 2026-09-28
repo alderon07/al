@@ -138,14 +138,14 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Complete the phase 3 Bash and Zsh adapter refactor within the approved acceptance criteria.
   - [x] Route rendering, parsing, history, syntax checks, startup discovery, and integration contracts through `ShellAdapter`.
   - [x] Pin integration output and CI shell environments.
-  - [x] Add PTY execution and key-binding coverage for Bash and Zsh. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
-  - [x] Run the baseline-versus-candidate setup and command-output matrix. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
-  - [x] Record the required WSL 2 terminal evidence. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
+  - [x] Add PTY execution and key-binding coverage for Bash and Zsh.
+  - [x] Run the baseline-versus-candidate setup and command-output matrix.
+  - [x] Record the required phase 3 WSL 2 terminal evidence.
 - [ ] Add phase 4 read-only shadow generation after phases 2 and 3 pass.
   - [x] Add the read-only `al catalog shadow` pipeline, bounded native validation, redacted reports, and resource limits.
   - [x] Add Linux and macOS CI matrices, deterministic report hashes, and a disposable WSL verification script.
-  - [ ] Record the WSL 2 release-candidate run from `docs/testing/PHASE4_MANUAL_CHECKLIST.md`.
-    - [x] Record the clean pre-restart WSL 2 run and matching report hashes.
+  - [ ] Record the WSL 2 release-candidate run from `docs/testing/RELEASE_WSL.md`.
+    - [ ] Record the clean pre-restart WSL 2 run and matching report hashes for the release commit.
     - [ ] Shut down WSL, reopen it, and rerun the verifier.
 - [ ] Approve and deliver the state, planning, and portability work in `docs/STATE_WORKFLOW_SPEC.md` after the phase 4 WSL gate.
   - [x] Add the observational status and shared operation-plan foundation.

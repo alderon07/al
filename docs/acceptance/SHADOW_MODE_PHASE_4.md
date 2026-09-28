@@ -1,6 +1,6 @@
 # Phase 4 shadow-mode acceptance criteria
 
-Status: approved on 2026-09-17. Implementation remains blocked by the entry gate.
+Status: implemented. The release candidate still needs the WSL shutdown-and-reopen check in `docs/testing/RELEASE_WSL.md`.
 
 ## Scope
 
@@ -319,4 +319,4 @@ Reports may contain a safe entry name, finding kind, and line number. They never
 
 ## Approval record
 
-Sol/high completed four read-only reviews. The first review rejected mutating read paths, ambiguous identity and ranges, underspecified reports and hashes, weak validator bounds, and late secret scanning. Later reviews tightened config reads, metadata grammar, private fingerprints, validator trust and attribution, resource outcomes, report writes, exact body comparison, and process caps. The final review on 2026-09-17 approved SA4-001 through SA4-014 with no unresolved P0 or P1 findings. Phase 4 remains blocked until every entry-gate condition passes.
+Sol/high completed four read-only reviews. The first review rejected mutating read paths, ambiguous identity and ranges, underspecified reports and hashes, weak validator bounds, and late secret scanning. Later reviews tightened config reads, metadata grammar, private fingerprints, validator trust and attribution, resource outcomes, report writes, exact body comparison, and process caps. The final review on 2026-09-17 approved SA4-001 through SA4-014 with no unresolved P0 or P1 findings. The implementation now passes the automated gate. The current release still requires the WSL restart evidence in `docs/testing/RELEASE_WSL.md`.

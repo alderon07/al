@@ -8,7 +8,7 @@ Run `al data paths` to print the paths for the active shell and current configur
 | --- | --- | --- | --- |
 | `~/.bash_aliases` or `~/.zsh_aliases` | User aliases, functions, descriptions, and `# al:` metadata | Existing mode; new files use `0600` | Edit or remove manually after `al setup --remove` |
 | `<alias file>.alias-lens.bak` | Latest alias contents from before a write | `0600` | Remove manually |
-| `~/.config/alias-lens/config.json` | Data format version, shell, local machine profiles, shortcut choice, repository path, provider settings without tokens, sync settings, and tracked paths | Directory `0700`, file `0600` | Remove manually after disabling sync |
+| `~/.config/alias-lens/config.json` | Data format version, shell, local machine profiles, shortcut profile and overrides, repository path, provider settings without tokens, sync settings, and tracked paths | Directory `0700`, file `0600` | Remove manually after disabling sync |
 | `~/.config/alias-lens/catalog.json` | Portable commands, native Bash or Zsh definitions, descriptions, tags, platforms, and conditions | `0600` | Remove manually after catalog rollback |
 | `~/.config/alias-lens/contexts.json` and `contexts.lock` | Explicit alias marks, local project or folder paths, command digests, and a persistent mutation lock | Directory `0700`, files `0600` | Run `al context remove NAME --all` for each marked alias, or remove both files manually |
 | `~/.config/alias-lens/completion.bash` and `completion.zsh` | Generated command and option suggestions; no command implementations | `0600` | Use `al completion remove bash` or `al completion remove zsh` |

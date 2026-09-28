@@ -9,7 +9,7 @@ Starting with 1.0, the following user commands keep their meaning throughout the
 - Alias work: `pick`, `use`, `search`, `context`, `suggest`, `stats`, `export`, `import`, `meta`, and `describe`.
 - Safety and recovery: `check`, `scan`, `history`, `undo`, `doctor`, and `setup`.
 - Configuration and sync: `repo`, `config`, `data`, `track`, `untrack`, `sync`, `diff`, `autosync`, and `watch`.
-- Interface and system commands: `status`, `plan`, `theme`, `catalog preview`, `catalog import`, `catalog shadow`, `catalog diff`, `completion`, `shell-init`, `--web`, and `--version`.
+- Interface and system commands: `status`, `plan`, `theme`, `shortcuts`, `catalog preview`, `catalog import`, `catalog shadow`, `catalog diff`, `completion`, `shell-init`, `--web`, and `--version`.
 
 The stable flags are `pick --command`, `search --json`, `search --global`, `context add --repo`, `context add --directory`, `context remove --all`, `stats --plain`, `export --format`, `export --period`, `export --output`, `import --apply`, `check --strict`, `setup --repair`, `setup --remove`, `sync --push`, `sync --pull`, `theme --check`, `status --json`, `catalog shadow --shell`, `catalog shadow --json`, `catalog diff --json`, `catalog diff --show-code`, `catalog diff --web`, `catalog diff --from`, and `catalog diff --shell`. A minor release can add a command, flag, accepted value, or optional output field. It cannot change the meaning of an existing one.
 
@@ -23,7 +23,7 @@ Alias exports contain top-level `kind`, `exported_at`, and `aliases` fields. Eac
 
 ## Stable configuration
 
-Configuration schema version 2 contains `version`, `repository`, `alias_file`, `shell`, `profiles`, `shortcut_profile`, `providers`, `auto_sync`, `tracked_files`, `appearance`, and `footer`. Provider entries contain `enabled`, `host`, `protocol`, and `workspaces`. Automatic sync contains `enabled` and `interval_seconds`. Tracked-file entries contain `source` and `repository_path`.
+Configuration schema version 2 contains `version`, `repository`, `alias_file`, `shell`, `profiles`, `shortcut_profile`, `shortcuts`, `providers`, `auto_sync`, `tracked_files`, `appearance`, and `footer`. Provider entries contain `enabled`, `host`, `protocol`, and `workspaces`. Automatic sync contains `enabled` and `interval_seconds`. Tracked-file entries contain `source` and `repository_path`.
 
 Alias Lens refuses any configuration schema other than the current version. This keeps pre-1.0 development formats out of the runtime. A future released migration must preserve user settings and back up the exact original bytes.
 

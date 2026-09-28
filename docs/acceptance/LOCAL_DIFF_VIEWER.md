@@ -1,6 +1,6 @@
 # Local catalog diff viewer acceptance criteria
 
-Status: approved for implementation by the user on 2026-09-19. Native terminal and browser evidence can be recorded after implementation. This approval does not close the phase 4 WSL restart gate.
+Status: implemented. Current native terminal and browser checks live in the platform release checklists under `docs/testing/`.
 
 ## Scope
 

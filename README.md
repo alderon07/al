@@ -86,6 +86,8 @@ See [Local data and privacy](docs/PRIVACY.md) for every file Alias Lens creates 
 
 Alias Lens is available under the [Apache License 2.0](LICENSE).
 
+Read the [1.x compatibility policy](docs/COMPATIBILITY.md) before relying on command output or configuration fields in scripts.
+
 ## Find the shortcut before you forget it
 
 Open Alias Lens with `Ctrl+G` on Zsh or Bash 4+, or run `al` on any supported shell. Stock macOS Bash 3.2 keeps the normal Readline `Ctrl+G` cancellation behavior. Press `/` to search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.
@@ -328,6 +330,7 @@ al untrack ~/.gitconfig
 ```
 
 Environment files, keys, and credential-shaped filenames cannot be tracked. Alias Lens scans the alias file for likely secrets before every push.
+Keep the sync repository private. The alias file is stored as readable text, and the secret scan cannot make a public repository safe for private commands.
 
 If the local and remote copies both changed, Alias Lens keeps the live file untouched and saves private conflict copies. Run `al diff` to compare them.
 
@@ -383,4 +386,4 @@ al help sync
 al repo --help
 ```
 
-If you prefer a browser view, run `al --web` and open `http://127.0.0.1:8787`. The terminal interface remains the default.
+If you prefer a browser view, run `al --web` and open the full URL it prints. The URL includes a session token required to read aliases. The terminal interface remains the default.
