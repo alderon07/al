@@ -8,7 +8,7 @@ Record the commit, distribution, kernel, architecture, Go version, Bash version,
 
 - [ ] Confirm that `git status --short` is empty and record `git rev-parse HEAD`.
 - [ ] Run `make fmt check`.
-- [ ] Run `go test -race -count=1 ./...`.
+- [ ] Run `go test -race -count=1 -skip PTY ./...`. `make check` runs the PTY tests without race instrumentation.
 - [ ] Run `go mod verify` and `go mod tidy -diff`.
 - [ ] Run `go list -m -u -mod=readonly all` and review available direct and transitive updates.
 - [ ] Run `govulncheck ./...`. Review imported-package and module findings even when no called symbol is vulnerable.

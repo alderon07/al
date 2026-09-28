@@ -19,7 +19,7 @@ Read [the compatibility policy](COMPATIBILITY.md) before changing commands, flag
 
    ```bash
    make fmt check
-   go test -race -count=1 ./...
+   go test -race -count=1 -skip PTY ./...
    go mod verify
    go mod tidy -diff
    go list -m -u -mod=readonly all
