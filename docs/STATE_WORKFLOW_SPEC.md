@@ -625,7 +625,7 @@ The first profile version uses these defaults:
 | Open themes | `F4` | `F4` | `Cmd+4` | `F4` |
 | Open health | `F7` | `F7` | `Cmd+7` | `F7` |
 | Open stats | `F2` | `F2` | `Cmd+2` | `F2` |
-| Open settings | `Ctrl+,` | `Ctrl+,` | `Cmd+,` | `F3` |
+| Open Footer | `Ctrl+,` | `Ctrl+,` | `Cmd+,` | `F3` |
 | Open help | `F1` or `?` | `Ctrl+?`, `F1`, or `?` | `Cmd+?`, `F1`, or `?` | `F1` or `?` |
 
 Copy and paste stay owned by the terminal:
@@ -708,7 +708,7 @@ Pack registries, dependency resolution, transitive packs, and automatic updates 
 
 ## Delivery phases
 
-The phase 4 WSL release-candidate evidence in `docs/testing/PHASE4_MANUAL_CHECKLIST.md` remains the next gate. None of this specification bypasses it.
+The WSL shutdown-and-reopen evidence in `docs/testing/RELEASE_WSL.md` remains a release gate. None of this specification bypasses it.
 
 After that gate, deliver this work in these stages:
 
@@ -845,7 +845,7 @@ Tests use isolated temporary homes and repositories. They set every shell, XDG, 
 | Expected state | Static candidates match the command specification. Dynamic candidates stay inert and bounded. Installation is idempotent and shell-specific. Removal preserves unrelated settings and refuses edited blocks. Existing help and command behavior remain unchanged. |
 | Automated evidence | Command-spec parity tests, Bash and Zsh completion golden tests, PTY completion tests, mutation-plan tests, and phase 3 baseline comparisons. |
 | Terminal evidence | Bash 3.2, Bash 5.2, and Zsh 5.9 completion sessions. |
-| Approval | Generated Bash and Zsh completion programs and bounded read-only candidates approved by the user on 2026-09-19. Installation and removal still require the shared operation-plan writer and their automated and terminal evidence. |
+| Approval | Implemented with the shared operation-plan writer and automated coverage. Bash 3.2, Bash 5.2, and Zsh 5.9 terminal evidence remains in the platform release checklists. |
 
 ### SW-013 preserves privacy, repository isolation, and command compatibility
 

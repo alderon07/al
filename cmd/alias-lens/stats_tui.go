@@ -24,7 +24,7 @@ var statsViews = []struct {
 	{"o", "overview"},
 	{"a", "activity"},
 	{"c", "cleanup"},
-	{"g", "groups"},
+	{"g", "categories"},
 }
 
 type statsModel struct {
@@ -81,10 +81,7 @@ func runStatsTUI(data statsData, period string, now time.Time) error {
 func (m statsModel) Init() tea.Cmd { return nil }
 
 func (m statsModel) TerminalBackground() string {
-	if noColorRequested() {
-		return ""
-	}
-	return m.theme.Background
+	return ""
 }
 
 func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -92,6 +89,7 @@ func (m statsModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = message.Width, message.Height
 	case tea.KeyMsg:
+		message = translateShortcut(message, m.shortcutProfile, append([]shortcutAction{shortcutQuit}, statsTranslatedShortcutActions...)...)
 		if matchesShortcut(message, m.shortcutProfile, shortcutStats) {
 			return m, tea.Quit
 		}
@@ -178,8 +176,8 @@ func (m statsModel) View() string {
 	accent := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Accent)).Bold(true)
 	text := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text))
 	muted := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Muted))
-	panel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background)).Padding(1, 2).Width(inner)
-	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Background(lipgloss.Color(m.theme.Background))
+	panel := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text)).Padding(1, 2).Width(inner)
+	page := lipgloss.NewStyle().Foreground(lipgloss.Color(m.theme.Text))
 
 	total := 0
 	for _, row := range rows {
@@ -197,7 +195,11 @@ func (m statsModel) View() string {
 	}
 	var viewTabs []string
 	for index, view := range statsViews {
-		label := view.key + " " + view.label
+		label := view.label
+		if inner < 60 && index < 3 {
+			label = []string{"over", "act", "clean"}[index]
+		}
+		label = view.key + " " + label
 		if index == m.viewIndex {
 			viewTabs = append(viewTabs, accent.Render("["+label+"]"))
 		} else {
@@ -207,7 +209,7 @@ func (m statsModel) View() string {
 
 	closeHint := m.closeHint
 	if closeHint == "" {
-		closeHint = "q close"
+		closeHint = shortcutLabel(m.shortcutProfile, shortcutStatsQuit) + " close"
 	}
 	filterLabel := "period"
 	if m.viewIndex == 1 {
@@ -215,9 +217,19 @@ func (m statsModel) View() string {
 	} else if m.viewIndex == 2 {
 		filterLabel = "age filter"
 	}
-	footerText := "tab view   ←/→ " + filterLabel + "   r refresh   " + closeHint
+	viewKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutStatsNextView))
+	periodKeys := primaryShortcutLabel(m.shortcutProfile, shortcutStatsPreviousPeriod) + "/" + primaryShortcutLabel(m.shortcutProfile, shortcutStatsNextPeriod)
+	rowKeys := primaryShortcutLabel(m.shortcutProfile, shortcutStatsPreviousRow) + "/" + primaryShortcutLabel(m.shortcutProfile, shortcutStatsNextRow)
+	if periodKeys == "Left/Right" {
+		periodKeys = "←/→"
+	}
+	if rowKeys == "Up/Down" {
+		rowKeys = "↑/↓"
+	}
+	reloadKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutStatsReload))
+	footerText := viewKey + " view   " + periodKeys + " " + filterLabel + "   " + reloadKey + " refresh   " + closeHint
 	if m.viewIndex == 0 && width >= 76 {
-		footerText = "tab view   ←/→ period   ↑/↓ inspect   r refresh   " + closeHint
+		footerText = viewKey + " view   " + periodKeys + " period   " + rowKeys + " inspect   " + reloadKey + " refresh   " + closeHint
 	}
 	foot := muted.Render(footerText)
 	note := muted.Render("Counts come only from the active terminal history")
@@ -225,7 +237,7 @@ func (m statsModel) View() string {
 	if m.appHeader != "" && inner >= 79 {
 		bottom = footerWithNavigation(bottom, inner, m.shortcutProfile)
 	}
-	bottom = footerWithMaker(bottom, inner)
+	bottom = footerWithMaker(bottom, frame.footerWidth())
 
 	bodyContent := ""
 	if m.errorText != "" {
@@ -244,7 +256,7 @@ func (m statsModel) View() string {
 		case 3:
 			bodyContent = renderGroupShare(m.data, period, m.now, inner, styles)
 		default:
-			bodyContent = renderStatsOverview(m, rows, inner, styles)
+			bodyContent = renderStatsOverview(m, rows, max(1, inner-4), styles)
 		}
 	}
 
@@ -252,7 +264,7 @@ func (m statsModel) View() string {
 	if m.appHeader != "" {
 		top = m.appHeader + "\n\n" + top
 	}
-	availableTopHeight := max(1, frame.contentHeight()-frame.measureHeight(bottom)-1)
+	availableTopHeight := max(1, frame.contentHeight()-frame.measureFooterHeight(bottom)-1)
 	if overflow := frame.measureHeight(top) - availableTopHeight; overflow > 0 {
 		bodyHeight := max(1, lipgloss.Height(bodyContent)-overflow)
 		bodyContent = lipgloss.NewStyle().MaxHeight(bodyHeight).Render(bodyContent)
@@ -261,7 +273,7 @@ func (m statsModel) View() string {
 			top = m.appHeader + "\n\n" + top
 		}
 	}
-	spacerHeight := max(1, frame.contentHeight()-frame.measureHeight(top)-frame.measureHeight(bottom)+1)
+	spacerHeight := max(1, frame.contentHeight()-frame.measureHeight(top)-frame.measureFooterHeight(bottom)+1)
 	content := top + strings.Repeat("\n", spacerHeight) + bottom
 	return frame.renderStyled(content, page)
 }
@@ -301,6 +313,31 @@ func (m *model) refreshStatsData() {
 		return
 	}
 	m.statsData = data
+	m.refreshBrowserUsage()
+}
+
+func (m *model) refreshBrowserUsage() {
+	m.browserUsage = nil
+	m.browserUsageState = "Shell history unavailable"
+	m.browserUsageReady = true
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	adapter := activeShellAdapter()
+	path := historyPathFor(adapter, home)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		m.browserUsageState = "No shell history file yet"
+		return
+	} else if err != nil {
+		return
+	}
+	events, err := historyUsageEventsFromShell(path, adapter.Name(), m.aliases)
+	if err != nil {
+		return
+	}
+	m.browserUsage = summarizeAliasUses(events, time.Now())
+	m.browserUsageState = ""
 }
 
 func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -325,6 +362,9 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.statsPeriod = (m.statsPeriod + 1) % len(statsPeriods)
 			m.statsSelected = 0
 		}
+	case tea.KeyShiftTab:
+		m.statsViewIndex = (m.statsViewIndex + len(statsViews) - 1) % len(statsViews)
+		m.statsPeriod = defaultPeriodForStatsView(m.statsViewIndex)
 	case tea.KeyUp:
 		m.statsSelected = max(0, m.statsSelected-1)
 	case tea.KeyDown:
@@ -340,6 +380,12 @@ func (m model) updateStatsView(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch message.Runes[0] {
 		case 'q':
 			m.statsOpen = false
+		case 'n':
+			m.statsViewIndex = (m.statsViewIndex + 1) % len(statsViews)
+			m.statsPeriod = defaultPeriodForStatsView(m.statsViewIndex)
+		case 'p':
+			m.statsViewIndex = (m.statsViewIndex + len(statsViews) - 1) % len(statsViews)
+			m.statsPeriod = defaultPeriodForStatsView(m.statsViewIndex)
 		case 'h':
 			m.statsPeriod = (m.statsPeriod + len(statsPeriods) - 1) % len(statsPeriods)
 			m.statsSelected = 0
@@ -384,7 +430,7 @@ func (m model) statsView(frame tuiFrame, header string) string {
 		theme:           m.theme,
 		now:             m.statsNow,
 		appHeader:       header,
-		closeHint:       primaryShortcutLabel(m.shortcutProfile, shortcutStats) + "/esc return",
+		closeHint:       primaryShortcutLabel(m.shortcutProfile, shortcutStats) + "/" + strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit)) + " return",
 		errorText:       m.statsErr,
 		shortcutProfile: m.shortcutProfile,
 		frame:           &frame,

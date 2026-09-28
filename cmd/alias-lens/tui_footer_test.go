@@ -2,12 +2,14 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
@@ -36,11 +38,11 @@ func TestMakerCreditIsPinnedToTheLastPageRow(t *testing.T) {
 	assertMakerCredit(t, lines[len(lines)-1])
 }
 
-func TestFooterControlsAndNavigationHaveOneBlankRowBetweenThem(t *testing.T) {
-	footer := footerWithNavigation("controls", 100, shortcutLinux)
-	lines := strings.Split(footer, "\n")
-	if len(lines) != 3 || lines[0] != "controls" || lines[1] != "" || !strings.Contains(lines[2], " help") {
-		t.Fatalf("footer rows are not separated by one blank row:\n%s", footer)
+func TestFooterMergesControlsAndNavigationWithoutRepeatingHelp(t *testing.T) {
+	footer := footerWithNavigation("enter use  ·  h help  ·  esc quit", 100, shortcutLinux)
+	plain := ansi.Strip(footer)
+	if strings.Contains(plain, "\n") || strings.Count(plain, "h help") != 1 || !strings.Contains(plain, "│") {
+		t.Fatalf("footer did not merge contextual and global hints: %q", plain)
 	}
 }
 
@@ -155,7 +157,7 @@ func TestShortcutsSitImmediatelyAboveDottedRule(t *testing.T) {
 		{"add form", model{adding: true, theme: builtInTheme("phosphor")}},
 		{"confirmation", confirmation},
 	}
-	for _, size := range []struct{ width, height int }{{120, 36}, {48, 18}} {
+	for _, size := range []struct{ width, height int }{{48, 18}, {80, 24}, {120, 36}, {160, 40}, {200, 50}} {
 		for _, page := range pages {
 			t.Run(page.name+"_"+strconv.Itoa(size.width), func(t *testing.T) {
 				page.model.width, page.model.height = size.width, size.height
@@ -164,7 +166,7 @@ func TestShortcutsSitImmediatelyAboveDottedRule(t *testing.T) {
 					t.Fatalf("rendered %dx%d, want %dx%d", gotWidth, gotHeight, size.width, size.height)
 				}
 				lines := strings.Split(view, "\n")
-				rule := strings.Repeat("·", newMainTUIFrame(size.width, size.height).contentWidth)
+				rule := strings.Repeat("·", newMainTUIFrame(size.width, size.height).footerWidth())
 				ruleRow := lineContaining(view, rule)
 				if ruleRow < 1 || ruleRow >= len(lines)-1 {
 					t.Fatalf("dotted footer rule missing or outside viewport: row=%d\n%s", ruleRow, view)
@@ -172,13 +174,19 @@ func TestShortcutsSitImmediatelyAboveDottedRule(t *testing.T) {
 				if strings.TrimSpace(ansi.Strip(lines[ruleRow-1])) == "" {
 					t.Fatalf("blank row between shortcuts and dotted rule:\n%s", view)
 				}
-				if page.name == "aliases" && size.width == 120 {
-					if strings.TrimSpace(ansi.Strip(lines[ruleRow-2])) != "" || !strings.Contains(lines[ruleRow-3], "esc quit") {
-						t.Fatalf("alias controls and navigation lost their blank separator:\n%s", view)
-					}
+				if page.name == "aliases" && size.width == 120 && !strings.Contains(lines[ruleRow-1], "esc quit") {
+					t.Fatalf("alias controls missing above rule:\n%s", view)
 				}
 				if !strings.Contains(lines[ruleRow+1], "Made by Naqi") {
 					t.Fatalf("credit is not directly below dotted rule:\n%s", view)
+				}
+				if size.width == 200 {
+					ruleLine := ansi.Strip(lines[ruleRow])
+					creditLine := ansi.Strip(lines[ruleRow+1])
+					if strings.Index(ruleLine, rule) != mainTUIHorizontalPadding ||
+						strings.LastIndex(creditLine, "Made by Naqi")+len("Made by Naqi") != mainTUIHorizontalPadding+newMainTUIFrame(size.width, size.height).footerWidth() {
+						t.Fatalf("wide footer does not reach the usable right edge:\n%s", view)
+					}
 				}
 				if size.width == 48 {
 					requiredContent := map[string]string{
@@ -203,14 +211,14 @@ func TestRepositoryPickerShortcutsSitAboveDottedRule(t *testing.T) {
 		applyFooterConfig(defaultFooterConfig())
 	})
 
-	for _, size := range []struct{ width, height int }{{120, 36}, {48, 18}} {
+	for _, size := range []struct{ width, height int }{{48, 18}, {80, 24}, {120, 36}, {160, 40}, {200, 50}} {
 		picker := repoPickerModel{width: size.width, height: size.height}
 		view := picker.View()
 		if gotWidth, gotHeight := lipgloss.Width(view), lipgloss.Height(view); gotWidth != size.width || gotHeight != size.height {
 			t.Fatalf("%dx%d picker rendered %dx%d", size.width, size.height, gotWidth, gotHeight)
 		}
 		lines := strings.Split(view, "\n")
-		rule := strings.Repeat("·", newMainTUIFrame(size.width, size.height).contentWidth)
+		rule := strings.Repeat("·", newMainTUIFrame(size.width, size.height).footerWidth())
 		ruleRow := lineContaining(view, rule)
 		if ruleRow < 1 || !strings.Contains(lines[ruleRow-1], "esc cancel") {
 			t.Fatalf("%dx%d picker shortcuts are not beside the dotted rule:\n%s", size.width, size.height, view)
@@ -218,7 +226,27 @@ func TestRepositoryPickerShortcutsSitAboveDottedRule(t *testing.T) {
 	}
 }
 
-func TestMainPagesUseOneWideContentColumn(t *testing.T) {
+func TestMainPagesShareContentColumnAndFullWidthFooter(t *testing.T) {
+	previousRenderer := lipgloss.DefaultRenderer()
+	t.Cleanup(func() { lipgloss.SetDefaultRenderer(previousRenderer) })
+	for _, profile := range []struct {
+		name  string
+		value termenv.Profile
+	}{
+		{name: "truecolor", value: termenv.TrueColor},
+		{name: "ansi256", value: termenv.ANSI256},
+	} {
+		t.Run(profile.name, func(t *testing.T) {
+			t.Setenv("NO_COLOR", "")
+			renderer := lipgloss.NewRenderer(os.Stdout)
+			renderer.SetColorProfile(profile.value)
+			lipgloss.SetDefaultRenderer(renderer)
+			assertMainPagesShareContentColumnAndFullWidthFooter(t)
+		})
+	}
+}
+
+func assertMainPagesShareContentColumnAndFullWidthFooter(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	applyTheme(builtInTheme("phosphor"))
 	applyFooterConfig(FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "center", Tone: "quiet", Rule: "thin"})
@@ -252,7 +280,7 @@ func TestMainPagesUseOneWideContentColumn(t *testing.T) {
 		pageHeaderColumn := -1
 		for _, line := range strings.Split(view, "\n") {
 			if column := strings.Index(line, "ALIAS LENS"); column >= 0 {
-				pageHeaderColumn = column
+				pageHeaderColumn = lipgloss.Width(line[:column])
 				break
 			}
 		}
@@ -269,10 +297,75 @@ func TestMainPagesUseOneWideContentColumn(t *testing.T) {
 		for _, line := range strings.Split(view, "\n") {
 			longestRule = max(longestRule, strings.Count(line, "─"))
 		}
-		if longestRule != mainTUIMaxContentWidth {
-			t.Errorf("%s page divider width = %d, want %d", page.name, longestRule, mainTUIMaxContentWidth)
+		wantRule := newMainTUIFrame(160, 40).footerWidth()
+		if longestRule != wantRule {
+			t.Errorf("%s page divider width = %d, want %d", page.name, longestRule, wantRule)
 		}
 	}
+}
+
+func TestSearchFieldsStayWithinTheirMaximumWidth(t *testing.T) {
+	for _, width := range []int{48, 80, 200} {
+		frame := newMainTUIFrame(width, 50)
+		pages := []struct {
+			name string
+			view string
+		}{
+			{name: "aliases", view: func() string {
+				m := navigationTestModel(pageAliases)
+				m.width, m.height, m.query = width, 50, strings.Repeat("a", 200)+"end"
+				return m.View()
+			}()},
+			{name: "help", view: func() string {
+				m := navigationTestModel(pageHelp)
+				m.width, m.height, m.helpQuery = width, 50, strings.Repeat("a", 200)+"end"
+				return m.View()
+			}()},
+			{name: "repository", view: (repoPickerModel{width: width, height: 50, query: strings.Repeat("a", 200) + "end"}).View()},
+		}
+		for _, page := range pages {
+			found := false
+			for _, line := range strings.Split(page.view, "\n") {
+				plain := ansi.Strip(line)
+				start := strings.Index(plain, "╭")
+				end := strings.Index(plain, "╮")
+				if start < 0 || end < 0 {
+					continue
+				}
+				found = true
+				if got, want := lipgloss.Width(plain[start:end+len("╮")]), searchFieldWidth(frame.contentWidth); got != want {
+					t.Errorf("%s at %d columns: search width = %d, want %d", page.name, width, got, want)
+				}
+				break
+			}
+			if !found {
+				t.Errorf("%s at %d columns: search border missing", page.name, width)
+			}
+		}
+	}
+}
+
+func TestPopulatedWidePageKeepsCreditInsideViewport(t *testing.T) {
+	applyFooterConfig(FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "right", Tone: "quiet", Rule: "dots"})
+	t.Cleanup(func() { applyFooterConfig(defaultFooterConfig()) })
+	m := navigationTestModel(pageAliases)
+	m.width, m.height, m.executeMode = 200, 50, true
+	for index := range 8 {
+		m.aliases = append(m.aliases, Alias{Name: string(rune('a' + index)), Command: "printf example", Description: "example"})
+	}
+	view := m.View()
+	if gotWidth, gotHeight := lipgloss.Width(view), lipgloss.Height(view); gotWidth != 200 || gotHeight != 50 {
+		t.Fatalf("populated page rendered %dx%d, want 200x50", gotWidth, gotHeight)
+	}
+	for index, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "Made by Naqi") {
+			if index >= m.height-2 {
+				t.Fatalf("credit reached the final or an out-of-range row %d", index)
+			}
+			return
+		}
+	}
+	t.Fatal("credit missing from populated wide page")
 }
 
 func TestPlainAliasListOmitsMakerCredit(t *testing.T) {

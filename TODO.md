@@ -67,6 +67,17 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ## Make the terminal interface easier to learn
 
+### Screen review acceptance criteria
+
+- [x] Use a heart for favorites and a location mark for local context in alias rows under `docs/acceptance/ALIAS_STATUS_MARKERS.md`.
+- [x] Restyle the wide alias browser under `docs/acceptance/WIDE_ALIAS_BROWSER.md` so its compact rows and selected detail card use the same theme language as the standard alias cards.
+- [x] At wide terminal widths, browse compact alias rows beside a read-only detail pane for the selected alias. Wrap its command and show its description, tags, context, and health details without executing it.
+- [x] Keep the existing single-column alias cards at narrow widths. Resizing and moving the cursor keep selection, search, visible range, and footer usable without clipping.
+
+- [x] The picker can reach every ranked alias and always shows the visible range and total.
+- [x] Contextual and global footer hints share one line, with each action appearing once.
+- [x] The revision diff footer names horizontal panning, and panning exposes the clipped command tail.
+
 - [x] Add a searchable keyboard guide opened with `?`.
 - [x] Replace unclear bitmap chrome with selectable symbols or ASCII, focused brand art, and an editable appearance screen.
 - [x] Confirm risky aliases before execution and explain why they were flagged.
@@ -78,6 +89,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ## Finish the alias workflow
 
+- [x] Let the TUI mark and unmark the selected alias as a favorite with `f` in command mode. Show the action in the keyboard guide and footer, preserve other metadata, save through the backed-up alias writer, and keep the same alias selected after suggestions reorder. Verify both states and search-mode typing in tests and a PTY.
 - [x] Explain that the category badge is inferred from the command by default.
 - [x] Make the description, category, and tags editable in the add and edit form.
 - [x] Preserve platform and favorite metadata when the TUI edits an alias.
@@ -88,6 +100,8 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Add a themed interactive stats dashboard with plain output for scripts.
 - [x] Make the stats dashboard accessible inside the main alias browser with F2.
 - [x] Use terminal history as the only source for alias usage counts.
+- [x] Show each overview row's latest dated run in the selected period; show unknown when history has no date, and keep the column visible at narrow widths.
+- [x] Label the stats category breakdown as Categories in its tab, heading, and empty state.
 - [x] Export aliases and stats as JSON, YAML, or CSV.
 - [x] Show the expanded command in the terminal after a picker launch.
 - [x] Make `Ctrl+G` launch the picker from an empty Zsh or Bash 4+ prompt; Bash 3.2 uses `al`.
@@ -124,17 +138,18 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [x] Complete the phase 3 Bash and Zsh adapter refactor within the approved acceptance criteria.
   - [x] Route rendering, parsing, history, syntax checks, startup discovery, and integration contracts through `ShellAdapter`.
   - [x] Pin integration output and CI shell environments.
-  - [x] Add PTY execution and key-binding coverage for Bash and Zsh. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
-  - [x] Run the baseline-versus-candidate setup and command-output matrix. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
-  - [x] Record the required WSL 2 terminal evidence. Follow `docs/testing/PHASE3_MANUAL_CHECKLIST.md`.
+  - [x] Add PTY execution and key-binding coverage for Bash and Zsh.
+  - [x] Run the baseline-versus-candidate setup and command-output matrix.
+  - [x] Record the required phase 3 WSL 2 terminal evidence.
 - [ ] Add phase 4 read-only shadow generation after phases 2 and 3 pass.
   - [x] Add the read-only `al catalog shadow` pipeline, bounded native validation, redacted reports, and resource limits.
   - [x] Add Linux and macOS CI matrices, deterministic report hashes, and a disposable WSL verification script.
-  - [ ] Record the WSL 2 release-candidate run from `docs/testing/PHASE4_MANUAL_CHECKLIST.md`.
-    - [x] Record the clean pre-restart WSL 2 run and matching report hashes.
+  - [ ] Record the WSL 2 release-candidate run from `docs/testing/RELEASE_WSL.md`.
+    - [ ] Record the clean pre-restart WSL 2 run and matching report hashes for the release commit.
     - [ ] Shut down WSL, reopen it, and rerun the verifier.
 - [ ] Approve and deliver the state, planning, and portability work in `docs/STATE_WORKFLOW_SPEC.md` after the phase 4 WSL gate.
   - [x] Add the observational status and shared operation-plan foundation.
+  - [ ] Review `docs/acceptance/CATALOG_LIFECYCLE.md`, then implement and verify the complete opt-in Bash and Zsh catalog workflow.
   - [ ] Route catalog enablement and rollback through the approved transaction plan.
   - [ ] Add semantic catalog diff, three-way reconciliation, and native-approval gates.
   - [x] Add versioned machine profiles and catalog conditions.

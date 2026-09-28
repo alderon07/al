@@ -134,10 +134,17 @@ func parseLegacyFunctions(contents string) []Alias {
 }
 
 func currentPlatform() string {
-	if runtime.GOOS == "linux" && (os.Getenv("WSL_DISTRO_NAME") != "" || os.Getenv("WSL_INTEROP") != "") {
+	return platformName(runtime.GOOS, os.Getenv)
+}
+
+func platformName(goos string, getenv func(string) string) string {
+	if goos == "linux" && (getenv("WSL_DISTRO_NAME") != "" || getenv("WSL_INTEROP") != "") {
 		return "wsl"
 	}
-	return runtime.GOOS
+	if goos == "darwin" {
+		return "macos"
+	}
+	return goos
 }
 
 func platformSupported(platforms []string) bool {
@@ -185,10 +192,7 @@ func runMetadataCommand(arguments []string) error {
 	foundEntry := false
 	for _, alias := range aliases {
 		if alias.Name == arguments[0] {
-			metadata = EntryMetadata{Tags: alias.Tags, Platforms: alias.Platforms, Favorite: alias.Favorite}
-			if alias.Category != category(alias.Command) {
-				metadata.Category = alias.Category
-			}
+			metadata = metadataForAlias(alias)
 			foundEntry = true
 			break
 		}
@@ -222,6 +226,14 @@ func runMetadataCommand(arguments []string) error {
 		return err
 	}
 	return setEntryMetadata(path, arguments[0], metadata)
+}
+
+func metadataForAlias(alias Alias) EntryMetadata {
+	metadata := EntryMetadata{Tags: alias.Tags, Platforms: alias.Platforms, Favorite: alias.Favorite}
+	if alias.Category != category(alias.Command) {
+		metadata.Category = alias.Category
+	}
+	return metadata
 }
 
 func setEntryMetadata(path, name string, metadata EntryMetadata) error {

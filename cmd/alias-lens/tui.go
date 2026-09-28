@@ -12,6 +12,7 @@ import (
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 	"github.com/rivo/uniseg"
 )
@@ -63,6 +64,9 @@ type model struct {
 	statsSelected     int
 	statsNow          time.Time
 	statsErr          string
+	browserUsage      map[string]aliasUsageSummary
+	browserUsageState string
+	browserUsageReady bool
 	tourVisible       bool
 	adding            bool
 	field             int
@@ -91,6 +95,14 @@ type model struct {
 	cursorHidden      bool
 	terminalBlurred   bool
 	shortcutProfile   ShortcutProfile
+	shortcutsOpen     bool
+	shortcutCursor    int
+	shortcutCapture   bool
+	shortcutPending   string
+	shortcutFilter    string
+	shortcutFiltering bool
+	shortcutLauncher  string
+	aliasMode         aliasInputMode
 	lastPageShortcut  tuiPage
 	lastShortcutAt    time.Time
 	executableWatch   executableWatch
@@ -98,10 +110,11 @@ type model struct {
 }
 
 func (m model) TerminalBackground() string {
-	if noColorRequested() {
-		return ""
-	}
-	return m.theme.Background
+	return ""
+}
+
+func themeCanvasAvailable() bool {
+	return !noColorRequested() && lipgloss.ColorProfile() <= termenv.ANSI256
 }
 
 type cursorBlinkMsg struct{}
@@ -109,6 +122,14 @@ type cursorBlinkMsg struct{}
 const cursorBlinkInterval = 500 * time.Millisecond
 
 const pageShortcutRepeatWindow = 1200 * time.Millisecond
+
+type aliasInputMode int
+
+const (
+	aliasModeLegacy aliasInputMode = iota
+	aliasModeCommand
+	aliasModeSearch
+)
 
 type tuiPage int
 
@@ -121,6 +142,7 @@ const (
 	pageRevisions
 	pageSync
 	pageHealth
+	pageShortcuts
 )
 
 type trackedFileItem struct {
@@ -186,7 +208,10 @@ func runTUIWithDiff(repositoryDiff bool) error {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	initial := model{aliases: aliases, context: ranking, width: 80, height: 24, theme: theme, status: status, executeMode: !repositoryDiff, tourVisible: !repositoryDiff && tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}
+	initial := model{aliases: aliases, context: ranking, width: 80, height: 24, theme: theme, status: status, executeMode: !repositoryDiff, tourVisible: !repositoryDiff && tourShouldShow(), shortcutProfile: resolvedShortcutProfile(config), shortcutLauncher: launcherLabel(config), aliasMode: aliasModeCommand, executableWatch: watchRunningExecutable()}
+	if !repositoryDiff {
+		initial.refreshBrowserUsage()
+	}
 	if repositoryDiff {
 		if err := initial.openRepositoryDiff(); err != nil {
 			return err
@@ -266,7 +291,8 @@ func runAliasPicker(query string, commandOnly, executeSelection bool) error {
 		options = append(options, tea.WithInput(terminal), tea.WithOutput(terminal))
 	}
 	applyTheme(theme)
-	initial := model{aliases: aliases, context: ranking, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config), executableWatch: watchRunningExecutable()}
+	initial := model{aliases: aliases, context: ranking, query: query, width: 80, height: 24, theme: theme, selectMode: !executeSelection, executeMode: executeSelection, shortcutProfile: resolvedShortcutProfile(config), shortcutLauncher: launcherLabel(config), aliasMode: aliasModeSearch, executableWatch: watchRunningExecutable()}
+	initial.refreshBrowserUsage()
 	if contextErr != nil {
 		initial.status = "Context ranking unavailable: " + contextErr.Error()
 	}
@@ -326,6 +352,76 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		if m.shortcutsOpen {
+			return m.updateShortcutEditor(message)
+		}
+		if m.helpVisible && message.Type == tea.KeyTab {
+			m.lastShortcutAt = time.Time{}
+			return m.updateHelp(message)
+		}
+		if m.helpVisible && plainTextKey(message) {
+			m.lastShortcutAt = time.Time{}
+			return m.updateHelp(message)
+		}
+		if !m.tourVisible && !m.adding && m.deleteName == "" && m.runConfirm == nil && m.diff == nil && !m.helpVisible && !m.statsOpen && !m.settingsOpen && !m.themePicker && !m.revisionOpen && !m.trackedOnly {
+			if m.aliasMode == aliasModeSearch {
+				if message.Type == tea.KeyEsc {
+					m.lastShortcutAt = time.Time{}
+					m.aliasMode = aliasModeCommand
+					return m, nil
+				}
+				if message.Type == tea.KeyBackspace || message.Type == tea.KeyDelete {
+					m.lastShortcutAt = time.Time{}
+					if m.query != "" {
+						_, size := utf8.DecodeLastRuneInString(m.query)
+						m.query = m.query[:len(m.query)-size]
+						m.cursor = 0
+					}
+					return m, nil
+				}
+				if plainTextKey(message) {
+					m.lastShortcutAt = time.Time{}
+					m.healthOnly = false
+					input := string(message.Runes)
+					if message.Type == tea.KeySpace {
+						input = " "
+					}
+					m.query = appendSearchQuery(m.query, input)
+					m.cursor = 0
+					return m, nil
+				}
+			} else if m.aliasMode == aliasModeCommand && message.Type == tea.KeyRunes && acceptsTextInput(message) && string(message.Runes) == "/" {
+				m.lastShortcutAt = time.Time{}
+				m.healthOnly = false
+				m.aliasMode = aliasModeSearch
+				m.cursorHidden = false
+				return m, nil
+			}
+		}
+		if m.diff != nil && !m.diff.confirmRestore {
+			if _, handled := resolveShortcut(message, m.shortcutProfile, diffTranslatedShortcutActions...); handled {
+				m.lastShortcutAt = time.Time{}
+				return m.updateDiff(translateShortcut(message, m.shortcutProfile, diffTranslatedShortcutActions...))
+			}
+		}
+		if m.statsOpen {
+			if _, handled := resolveShortcut(message, m.shortcutProfile, statsTranslatedShortcutActions...); handled {
+				m.lastShortcutAt = time.Time{}
+				return m.updateStatsView(translateShortcut(message, m.shortcutProfile, statsTranslatedShortcutActions...))
+			}
+		}
+		if m.trackedOnly && matchesShortcut(message, m.shortcutProfile, shortcutOpenDiff) {
+			m.lastShortcutAt = time.Time{}
+			if err := m.openRepositoryDiff(); err != nil {
+				m.status = err.Error()
+			}
+			return m, nil
+		}
+		allowed := m.activeTranslatedShortcuts()
+		if (m.adding || m.settingsOpen || m.helpVisible) && plainTextKey(message) {
+			allowed = nil
+		}
+		message = translateShortcut(message, m.shortcutProfile, allowed...)
 		m.cursorHidden = false
 		if _, shortcut := pageForShortcut(message, m.shortcutProfile); !shortcut {
 			m.lastShortcutAt = time.Time{}
@@ -345,7 +441,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		if m.diff != nil {
 			return m.updateDiff(message)
 		}
-		if m.settingsOpen && !matchesShortcut(message, m.shortcutProfile, shortcutSettings) && footerSettingsHandles(message, m.shortcutProfile) {
+		if m.settingsOpen && (plainTextKey(message) || !matchesShortcut(message, m.shortcutProfile, shortcutSettings) && footerSettingsHandles(message, m.shortcutProfile)) {
 			return m.updateFooterSettings(message)
 		}
 		if updated, handled := m.updatePageNavigation(message); handled {
@@ -387,9 +483,22 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.toggleSelectedContext(matches)
 			return m, nil
 		}
-		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type == tea.KeyCtrlD || m.query == "") {
+		if !m.selectMode && matchesShortcut(message, m.shortcutProfile, shortcutFavorite) {
+			m.toggleSelectedFavorite(matches)
+			return m, nil
+		}
+		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type != tea.KeyDelete || m.query == "") {
 			if len(matches) > 0 {
 				m.deleteName = matches[m.cursor].Name
+			}
+			return m, nil
+		}
+		if matchesShortcut(message, m.shortcutProfile, shortcutCommit) {
+			result, err := syncRepository(false)
+			if err != nil {
+				m.status = err.Error()
+			} else {
+				m.status = result
 			}
 			return m, nil
 		}
@@ -442,8 +551,11 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if !acceptsTextInput(message) {
 				return m, nil
 			}
+			if m.aliasMode == aliasModeCommand {
+				return m, nil
+			}
 			m.healthOnly = false
-			m.query += string(message.Runes)
+			m.query = appendSearchQuery(m.query, string(message.Runes))
 			m.cursor = 0
 		}
 	}
@@ -456,6 +568,9 @@ func (m *model) reloadAliasesAndTheme() {
 		m.status = "Could not reload aliases: " + err.Error()
 	} else {
 		m.aliases = aliases
+		if m.browserUsageReady {
+			m.refreshBrowserUsage()
+		}
 		m.cursor = 0
 		m.status = fmt.Sprintf("Reloaded %d aliases", len(aliases))
 	}
@@ -509,6 +624,50 @@ func (m *model) toggleSelectedContext(matches []Alias) {
 		m.status = "Marked " + selected.Name + " for this " + map[string]string{contextRepository: "project", contextDirectory: "folder"}[kind]
 	} else {
 		m.status = "Removed the local context mark from " + selected.Name
+	}
+	for index, alias := range m.currentAliases() {
+		if alias.Name == selected.Name && alias.Command == selected.Command && alias.Type == selected.Type {
+			m.cursor = index
+			break
+		}
+	}
+}
+
+func (m *model) toggleSelectedFavorite(matches []Alias) {
+	if len(matches) == 0 {
+		return
+	}
+	selected := matches[min(m.cursor, len(matches)-1)]
+	count := 0
+	for _, alias := range m.aliases {
+		if alias.Name == selected.Name {
+			count++
+		}
+	}
+	if count > 1 {
+		m.status = "Duplicate alias name; run al check before changing its favorite status"
+		return
+	}
+	metadata := metadataForAlias(selected)
+	metadata.Favorite = !metadata.Favorite
+	path, err := aliasesPath()
+	if err == nil {
+		err = setEntryMetadata(path, selected.Name, metadata)
+	}
+	if err != nil {
+		m.status = "Could not change favorite: " + err.Error()
+		return
+	}
+	for index := range m.aliases {
+		if m.aliases[index].Name == selected.Name && m.aliases[index].Command == selected.Command && m.aliases[index].Type == selected.Type {
+			m.aliases[index].Favorite = metadata.Favorite
+			break
+		}
+	}
+	if metadata.Favorite {
+		m.status = "Marked " + selected.Name + " as a favorite"
+	} else {
+		m.status = "Removed " + selected.Name + " from favorites"
 	}
 	for index, alias := range m.currentAliases() {
 		if alias.Name == selected.Name && alias.Command == selected.Command && alias.Type == selected.Type {
@@ -609,6 +768,8 @@ func (m model) currentPage() tuiPage {
 	switch {
 	case m.helpVisible:
 		return pageHelp
+	case m.shortcutsOpen:
+		return pageShortcuts
 	case m.statsOpen:
 		return pageStats
 	case m.settingsOpen:
@@ -637,6 +798,11 @@ func (m *model) closePages() {
 		applyFooterConfig(m.settingsBefore.Footer)
 	}
 	m.helpVisible = false
+	m.shortcutsOpen = false
+	m.shortcutCapture = false
+	m.shortcutPending = ""
+	m.shortcutFiltering = false
+	m.shortcutFilter = ""
 	m.helpQuery = ""
 	m.statsOpen = false
 	m.settingsOpen = false
@@ -683,11 +849,14 @@ func (m model) View() string {
 		notice := wrapText("Alias Lens was updated. Close this screen, then enter al again.", contentWidth)
 		header += "\n" + lipgloss.NewStyle().Bold(true).Foreground(amberColor).Render(notice)
 	}
-	title := pixelIconLabel(iconSearch, "Find the shortcut before you forget it.", titleStyle) + "\n" + dimStyle.Render("Search, inspect, and rediscover the commands you already own.")
+	title := titleStyle.Render("Aliases")
 	if m.selectMode {
-		title = pixelIconLabel(iconAlias, "Choose an alias to use in your shell.", titleStyle) + "\n" + dimStyle.Render("Enter selects it. Esc returns without changing the prompt.")
+		title = titleStyle.Render("Choose an alias")
 	} else if m.executeMode {
-		title = pixelIconLabel(iconCommand, "Choose an alias to use.", titleStyle) + "\n" + dimStyle.Render("Press Enter to use it. Press Esc to leave without choosing anything.")
+		title = titleStyle.Render("Choose an alias to use.")
+		if contentWidth >= 78 {
+			title += "  " + dimStyle.Render("Press Enter to use it. Esc leaves without choosing.")
+		}
 	}
 	if len(m.aliases) == 0 {
 		title = pixelIconLabel(iconAlias, "Set up your first shortcut.", titleStyle) + "\n" + dimStyle.Render("Create an alias here or add one to the active alias file.")
@@ -713,6 +882,9 @@ func (m model) View() string {
 	if m.helpVisible {
 		return m.helpView(frame, header)
 	}
+	if m.shortcutsOpen {
+		return m.shortcutEditorView(frame, header)
+	}
 	if m.statsOpen {
 		return m.statsView(frame, header)
 	}
@@ -728,36 +900,69 @@ func (m model) View() string {
 	if m.trackedOnly {
 		return m.trackedFilesView(frame, header)
 	}
+	wideAliasBrowser := m.width >= 120 && len(matches) > 0 && !m.healthOnly
+	if wideAliasBrowser {
+		frame = newFullWidthTUIFrame(m.width, m.height, mainTUIHorizontalPadding)
+		contentWidth = frame.contentWidth
+	}
+	searchPlaceholder := "search aliases…"
+	if m.aliasMode == aliasModeCommand {
+		searchPlaceholder = "press / to search aliases…"
+	}
+	searchFocused := m.searchFocused()
+	searchPrefix := markerPrefix(iconSearch)
+	searchBorder := lineColor
+	if searchFocused {
+		searchPrefix += "SEARCH "
+		searchBorder = acidColor
+	}
 	search := lipgloss.NewStyle().
-		Width(contentWidth-3).
+		Width(searchFieldWidth(contentWidth)-2).
 		Padding(0, 1).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(acidColor).
-		Render(acidStyle(markerPrefix(iconSearch)) + searchTextCursor(m.query, m.searchFocused() && !m.cursorHidden))
+		BorderForeground(searchBorder).
+		Render(acidStyle(searchPrefix) + searchTextWithCursorAtWidth(m.query, searchPlaceholder, searchFocused && !m.cursorHidden, searchFieldWidth(contentWidth)-lipgloss.Width(searchPrefix)+lipgloss.Width(markerPrefix(iconSearch))))
 
-	footer := dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("select") + dimStyle.Render("  ·  tab edit at prompt  ·  ? ") + cyanStyle("help") + dimStyle.Render("  ·  esc quit")
+	moveKeys := primaryShortcutLabel(m.shortcutProfile, shortcutMoveUp) + "/" + primaryShortcutLabel(m.shortcutProfile, shortcutMoveDown)
+	if moveKeys == "Up/Down" {
+		moveKeys = "↑↓"
+	}
+	useKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutUse))
+	promptKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutPrompt))
+	helpKey := primaryShortcutLabel(m.shortcutProfile, shortcutHelp)
+	quitKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit))
+	footer := dimStyle.Render(moveKeys+" move  ·  "+useKey+" ") + cyanStyle("select") + dimStyle.Render("  ·  "+promptKey+" edit at prompt  ·  "+helpKey+" ") + cyanStyle("help") + dimStyle.Render("  ·  "+quitKey+" quit")
 	if contentWidth < 96 {
-		footer = dimStyle.Render("enter ") + cyanStyle("select") + dimStyle.Render("  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutHelp)+" help  ·  esc quit")
+		footer = dimStyle.Render(useKey+" ") + cyanStyle("select") + dimStyle.Render("  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 	}
 	if m.selectMode {
-		footer = dimStyle.Render("type · ↑↓ move · enter select · ? help · esc cancel")
+		footer = dimStyle.Render("type · " + moveKeys + " move · " + useKey + " select · " + helpKey + " help · " + quitKey + " cancel")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("type to search  ·  ↑↓ move  ·  enter select  ·  ? help  ·  esc cancel")
+			footer = dimStyle.Render("type to search  ·  " + moveKeys + " move  ·  " + useKey + " select  ·  " + helpKey + " help  ·  " + quitKey + " cancel")
 		}
 	} else if m.executeMode {
-		footer = dimStyle.Render("enter ") + cyanStyle("use") + dimStyle.Render("  ·  tab edit  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutHelp)+" help  ·  esc quit")
+		footer = dimStyle.Render(useKey+" ") + cyanStyle("use") + dimStyle.Render("  ·  "+promptKey+" edit  ·  "+primaryShortcutLabel(m.shortcutProfile, shortcutStats)+" stats  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 		if contentWidth >= 96 {
-			footer = dimStyle.Render("↑↓ move  ·  enter ") + cyanStyle("use") + dimStyle.Render("  ·  tab edit  ·  ? help  ·  esc quit")
+			footer = dimStyle.Render(moveKeys+" move  ·  "+useKey+" ") + cyanStyle("use") + dimStyle.Render("  ·  "+promptKey+" edit  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 		}
+	}
+	if m.aliasMode == aliasModeCommand && !m.selectMode {
+		footer = dimStyle.Render("command mode  ·  / search  ·  " + primaryShortcutLabel(m.shortcutProfile, shortcutFavorite) + " favorite  ·  " + useKey + " use  ·  " + helpKey + " help  ·  " + quitKey + " quit")
+	} else if m.aliasMode == aliasModeSearch && !m.selectMode {
+		footer = dimStyle.Render("search mode  ·  type to filter  ·  esc commands  ·  " + useKey + " use")
 	}
 	if contentWidth < 50 {
 		action := "select"
 		if m.executeMode {
 			action = "use"
 		}
-		footer = dimStyle.Render("enter ") + cyanStyle(action) + dimStyle.Render("  ·  ? help  ·  esc quit")
+		footer = dimStyle.Render(useKey+" ") + cyanStyle(action) + dimStyle.Render("  ·  "+helpKey+" help  ·  "+quitKey+" quit")
 		if m.selectMode {
-			footer = dimStyle.Render("enter select  ·  ? help  ·  esc cancel")
+			footer = dimStyle.Render(useKey + " select  ·  " + helpKey + " help  ·  " + quitKey + " cancel")
+		} else if m.aliasMode == aliasModeCommand {
+			footer = dimStyle.Render("/ search  ·  " + primaryShortcutLabel(m.shortcutProfile, shortcutFavorite) + " favorite  ·  " + helpKey + " help")
+		} else if m.aliasMode == aliasModeSearch {
+			footer = dimStyle.Render("type to search  ·  esc commands")
 		}
 	}
 	if contentWidth >= 79 && !m.selectMode {
@@ -767,14 +972,20 @@ func (m model) View() string {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
 	if m.deleteName != "" {
-		footer = lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("Delete " + m.deleteName + "?  y confirm  ·  n cancel")
+		footer = lipgloss.NewStyle().Bold(true).Foreground(coralColor).Render("Delete " + m.deleteName + "?  " + shortcutLabel(m.shortcutProfile, shortcutConfirm) + " confirm  ·  " + shortcutLabel(m.shortcutProfile, shortcutDecline) + " cancel")
 	}
 
+	overview := ""
+	if len(m.aliases) > 0 && contentWidth >= 68 && height >= 24 {
+		overview = aliasOverview(m.aliases)
+	}
 	contentHeight := frame.contentHeight()
-	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footer)-frame.measureHeight(makerCredit(contentWidth))-4)
+	bodyBudget := max(1, contentHeight-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(overview)-frame.measureHeight(footer)-frame.makerHeight()-4)
 	var body strings.Builder
 	bodyLeadHeight := 0
-	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
+	if wideAliasBrowser {
+		body.WriteString(m.wideAliasBrowser(matches, cursor, contentWidth, bodyBudget))
+	} else if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
 		body.WriteString(m.emptyStateView(contentWidth, height))
 	} else if m.healthOnly {
 		lead := pixelIconLabel(iconHealth, "ALIAS HEALTH", lipgloss.NewStyle().Bold(true).Foreground(coralColor))
@@ -782,7 +993,7 @@ func (m model) View() string {
 		body.WriteByte('\n')
 		bodyLeadHeight = lipgloss.Height(lead)
 	} else if strings.TrimSpace(m.query) == "" {
-		label := "SUGGESTED FOR YOU"
+		label := "ALIASES"
 		if contentWidth >= 68 {
 			if m.context.Working.Repository != "" {
 				label += "  ·  PROJECT " + truncate(terminalSafeText(filepath.Base(m.context.Working.Repository)), max(8, contentWidth-42))
@@ -795,33 +1006,65 @@ func (m model) View() string {
 		body.WriteByte('\n')
 		bodyLeadHeight = lipgloss.Height(lead)
 	}
-	if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
-		// The empty state above replaces the normal search result list.
-	} else if m.healthOnly && len(matches) == 0 {
-		body.WriteString(statusStyle.Render("No health issues found."))
-	} else if len(matches) == 0 {
-		body.WriteString(titleStyle.Render(fmt.Sprintf("No alias matched %q", m.query)))
-		if close := closestAliases(m.aliases, m.query); len(close) > 0 {
-			body.WriteString("\n" + dimStyle.Render("Did you mean ") + aliasStyle.Render(strings.Join(close, "  ")) + dimStyle.Render(" ?"))
-		}
-	} else {
-		aliasBudget := max(3, bodyBudget-bodyLeadHeight)
-		if strings.TrimSpace(m.query) != "" {
-			aliasBudget = max(3, aliasBudget-1)
-		}
-		start, end := aliasWindow(matches, cursor, contentWidth, aliasBudget)
-		for index := start; index < end; index++ {
-			body.WriteString(renderAlias(matches[index], index == cursor, contentWidth, m.context.match(matches[index]) > 0))
-			if index < end-1 {
-				body.WriteString("\n\n")
+	if !wideAliasBrowser {
+		if len(m.aliases) == 0 && strings.TrimSpace(m.query) == "" && !m.healthOnly {
+			// The empty state above replaces the normal search result list.
+		} else if m.healthOnly && len(matches) == 0 {
+			body.WriteString(statusStyle.Render("No health issues found."))
+		} else if len(matches) == 0 {
+			body.WriteString(titleStyle.Render(fmt.Sprintf("No alias matched %q", m.query)))
+			if close := closestAliases(m.aliases, m.query); len(close) > 0 {
+				body.WriteString("\n" + dimStyle.Render("Did you mean ") + aliasStyle.Render(strings.Join(close, "  ")) + dimStyle.Render(" ?"))
 			}
-		}
-		if strings.TrimSpace(m.query) != "" {
-			body.WriteString("\n" + dimStyle.Render(matchSummary(start, end, len(matches))))
+		} else {
+			aliasBudget := max(3, bodyBudget-bodyLeadHeight-1)
+			start, end := aliasWindow(matches, cursor, contentWidth, aliasBudget)
+			for index := start; index < end; index++ {
+				body.WriteString(renderAlias(matches[index], index == cursor, contentWidth, m.context.match(matches[index]) > 0))
+				if index < end-1 {
+					body.WriteByte('\n')
+				}
+			}
+			summary := fmt.Sprintf("Showing %d-%d of %d · ↑↓ browse · / search", start+1, end, len(matches))
+			if strings.TrimSpace(m.query) == "" && len(matches) < len(m.aliases) {
+				summary = fmt.Sprintf("Showing %d-%d of %d suggestions · / search all %d aliases", start+1, end, len(matches), len(m.aliases))
+			}
+			body.WriteString("\n" + dimStyle.Render(summary))
 		}
 	}
-	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", body.String())
+	sections := []string{header, "", title, search}
+	if overview != "" {
+		sections = append(sections, overview)
+	}
+	sections = append(sections, "", body.String())
+	page := lipgloss.JoinVertical(lipgloss.Left, sections...)
 	return frame.renderWithFooter(page, footer)
+}
+
+func aliasOverview(aliases []Alias) string {
+	favorites := 0
+	affected := 0
+	categories := make(map[string]struct{})
+	for _, alias := range aliases {
+		if alias.Favorite {
+			favorites++
+		}
+		if len(alias.Issues) > 0 {
+			affected++
+		}
+		if alias.Category != "" {
+			categories[alias.Category] = struct{}{}
+		}
+	}
+	attention := fmt.Sprintf("%d need attention", affected)
+	if affected == 1 {
+		attention = "1 needs attention"
+	}
+	attentionStyle := dimStyle
+	if affected > 0 {
+		attentionStyle = lipgloss.NewStyle().Foreground(coralColor)
+	}
+	return dimStyle.Render(fmt.Sprintf("%d favorites  │  %d categories  │  ", favorites, len(categories))) + attentionStyle.Render(attention)
 }
 
 func (m *model) startAddForm() {
@@ -860,9 +1103,17 @@ func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if message.Type == tea.KeyCtrlC {
 		return m, tea.Quit
 	}
-	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutHelp) {
+	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutHelp) && (!plainTextKey(message) || message.Type == tea.KeyRunes && string(message.Runes) == "?") {
 		m.helpVisible = false
 		m.helpQuery = ""
+		return m, nil
+	}
+	if message.Type == tea.KeyTab {
+		m.helpVisible = false
+		m.shortcutsOpen = true
+		m.shortcutCursor = 0
+		m.shortcutFilter = ""
+		m.status = ""
 		return m, nil
 	}
 	switch message.Type {
@@ -875,12 +1126,12 @@ func (m model) updateHelp(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if !acceptsTextInput(message) {
 			return m, nil
 		}
-		m.helpQuery += " "
+		m.helpQuery = appendSearchQuery(m.helpQuery, " ")
 	case tea.KeyRunes:
 		if !acceptsTextInput(message) {
 			return m, nil
 		}
-		m.helpQuery += string(message.Runes)
+		m.helpQuery = appendSearchQuery(m.helpQuery, string(message.Runes))
 	}
 	return m, nil
 }
@@ -890,12 +1141,12 @@ func (m model) updateRunConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.runConfirm = nil
 		return m, tea.Quit
 	}
-	if message.Type == tea.KeyEsc || message.String() == "n" {
+	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutDecline) {
 		m.runConfirm = nil
 		m.status = "Canceled"
 		return m, nil
 	}
-	if message.String() != "y" {
+	if !matchesShortcut(message, m.shortcutProfile, shortcutConfirm) {
 		return m, nil
 	}
 	selected := *m.runConfirm
@@ -929,7 +1180,7 @@ func (m model) runConfirmationView(frame tuiFrame, header string) string {
 		"\n" + dimStyle.Render("Alias ") + name + dimStyle.Render(" may make changes that are hard to undo.") +
 		"\n\n" + command +
 		"\n\n" + lipgloss.NewStyle().Foreground(coralColor).Render(wrapText(reason, contentWidth))
-	footer := aliasStyle.Render("y") + dimStyle.Render(" use alias  ·  ") + aliasStyle.Render("n") + dimStyle.Render(" or esc cancel")
+	footer := aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutConfirm)) + dimStyle.Render(" use alias  ·  ") + aliasStyle.Render(shortcutLabel(m.shortcutProfile, shortcutDecline)) + dimStyle.Render(" or "+strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit))+" cancel")
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body)
 	return frame.renderWithFooter(page, footer)
 }
@@ -955,11 +1206,12 @@ func (m model) helpView(frame tuiFrame, header string) string {
 	if contentWidth < 60 {
 		keyWidth = min(keyWidth, max(14, contentWidth/2))
 	}
-	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconHelp)) + searchTextWithPlaceholder(m.helpQuery, "filter shortcuts…"))
+	searchPrefix := markerPrefix(iconHelp) + "FILTER "
+	search := lipgloss.NewStyle().Width(searchFieldWidth(contentWidth)-2).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(searchPrefix) + searchTextWithCursorAtWidth(m.helpQuery, "filter shortcuts…", true, searchFieldWidth(contentWidth)-lipgloss.Width(searchPrefix)+lipgloss.Width(markerPrefix(iconSearch))))
 	title := pixelIconLabel(iconHelp, "Keyboard guide", titleStyle) + "\n" + dimStyle.Render("Type to filter commands and shortcuts.")
-	footerText := strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutHelp)) + " or esc close  ·  ctrl+c quit"
+	footerText := "tab configure shortcuts  ·  esc close"
 	footerView := footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
-	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footerView)-frame.measureHeight(makerCredit(contentWidth))-4)
+	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(search)-frame.measureHeight(footerView)-frame.makerHeight()-4)
 	var rows strings.Builder
 	visible := min(len(shortcuts), rowBudget)
 	for index, shortcut := range shortcuts[:visible] {
@@ -976,7 +1228,7 @@ func (m model) helpView(frame tuiFrame, header string) string {
 	}
 
 	if len(shortcuts) > visible {
-		footerText = fmt.Sprintf("showing %d of %d  ·  type to filter  ·  esc close", visible, len(shortcuts))
+		footerText = fmt.Sprintf("showing %d of %d  ·  tab configure  ·  esc close", visible, len(shortcuts))
 		footerView = footerWithNavigation(dimStyle.Render(wrapText(footerText, contentWidth)), contentWidth, m.shortcutProfile)
 	}
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", title, "", search, "", rows.String())
@@ -1001,7 +1253,7 @@ func pageNavigationHint(width int, profiles ...ShortcutProfile) string {
 		primaryShortcutLabel(profile, shortcutHealth),
 	}
 	formatHint := func() string {
-		return fmt.Sprintf("%s help  ·  %s stats  ·  %s settings  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
+		return fmt.Sprintf("%s help  ·  %s stats  ·  %s footer  ·  %s themes  ·  %s versions  ·  %s sync  ·  %s health",
 			labels[0], labels[1], labels[2], labels[3], labels[4], labels[5], labels[6])
 	}
 	navigation := formatHint()
@@ -1094,7 +1346,7 @@ func (m model) themePickerView(frame tuiFrame, header string) string {
 	if m.status != "" {
 		footer = lipgloss.NewStyle().Foreground(coralColor).Render(truncate(m.status, contentWidth))
 	}
-	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(footer)-frame.measureHeight(makerCredit(contentWidth))-3)
+	rowBudget := max(1, frame.contentHeight()-frame.measureHeight(header)-frame.measureHeight(title)-frame.measureHeight(footer)-frame.makerHeight()-3)
 	cursor := min(max(0, m.themeCursor), max(0, len(themes)-1))
 	visible := min(len(themes), rowBudget)
 	if len(themes) > visible && visible > 1 {
@@ -1184,6 +1436,16 @@ func (m model) updateTrackedFiles(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
 		m = m.refreshTrackedFiles()
 		m.status = "Sync status refreshed"
+		return m, nil
+	}
+	if matchesShortcut(message, m.shortcutProfile, shortcutCommit) {
+		result, err := syncRepository(false)
+		m = m.refreshTrackedFiles()
+		if err != nil {
+			m.status = err.Error()
+		} else {
+			m.status = result
+		}
 		return m, nil
 	}
 	switch message.Type {
@@ -1287,7 +1549,7 @@ func (m model) trackedFilesView(frame tuiFrame, header string) string {
 		}
 	}
 
-	footer := dimStyle.Render("↑↓ move  ·  d compare aliases  ·  ctrl+g save to repo  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSync)) + " or esc aliases  ·  ctrl+c quit")
+	footer := dimStyle.Render("↑↓ move  ·  " + shortcutLabel(m.shortcutProfile, shortcutOpenDiff) + " compare aliases  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutCommit)) + " save to repo  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutRefresh)) + " refresh  ·  " + strings.ToLower(shortcutLabel(m.shortcutProfile, shortcutSync)) + " or " + strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit)) + " aliases")
 	if m.status != "" {
 		footer = statusStyle.Render(truncate(m.status, contentWidth))
 	}
@@ -1434,6 +1696,9 @@ func (m model) saveAliasForm() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.aliases = aliases
+	if m.browserUsageReady {
+		m.refreshBrowserUsage()
+	}
 	m.query = strings.TrimSpace(m.form[0])
 	m.cursor = 0
 	m.adding = false
@@ -1451,12 +1716,12 @@ func (m model) updateDeleteConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd)
 	if message.Type == tea.KeyCtrlC {
 		return m, tea.Quit
 	}
-	if message.Type == tea.KeyEsc || message.String() == "n" {
+	if message.Type == tea.KeyEsc || matchesShortcut(message, m.shortcutProfile, shortcutDecline) {
 		m.status = "Delete canceled"
 		m.deleteName = ""
 		return m, nil
 	}
-	if message.String() != "y" {
+	if !matchesShortcut(message, m.shortcutProfile, shortcutConfirm) {
 		return m, nil
 	}
 	name := m.deleteName
@@ -1470,6 +1735,9 @@ func (m model) updateDeleteConfirmation(message tea.KeyMsg) (tea.Model, tea.Cmd)
 		m.status = "Deleted, but reload failed: " + err.Error()
 	} else {
 		m.aliases = aliases
+		if m.browserUsageReady {
+			m.refreshBrowserUsage()
+		}
 		m.cursor = 0
 		m.status = "Deleted " + name + " · backup saved"
 	}
@@ -1543,7 +1811,7 @@ func (m model) currentAliases() []Alias {
 }
 
 func (m model) searchFocused() bool {
-	return !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.settingsOpen && !m.helpVisible && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
+	return m.aliasMode != aliasModeCommand && !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.settingsOpen && !m.helpVisible && !m.shortcutsOpen && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
 }
 
 func renderAlias(alias Alias, active bool, width int, contextual ...bool) string {
@@ -1566,15 +1834,23 @@ func renderAlias(alias Alias, active bool, width int, contextual ...bool) string
 		}
 	}
 	if len(contextual) > 0 && contextual[0] {
-		lineOne += "  " + lipgloss.NewStyle().Foreground(cyanColor).Render("HERE")
+		lineOne += "  " + lipgloss.NewStyle().Foreground(cyanColor).Render(markerPrefix(iconContext)+"LOCAL")
 	}
 	if len(alias.Tags) > 0 {
 		lineOne += "  " + dimStyle.Render("#"+strings.Join(alias.Tags, " #"))
 	}
-	description := lipgloss.NewStyle().Foreground(inkColor).Render(wrapText(alias.Description, cardWidth-6))
 	lineTwo := lipgloss.NewStyle().Foreground(cyanColor).Render(markerPrefix(iconCommand) + truncate(alias.Command, cardWidth-8))
+	content := lineOne + "\n" + lineTwo
+	if alias.Description != "" {
+		space := cardWidth - lipgloss.Width(lineOne) - 5
+		if space >= 12 {
+			content = lineOne + dimStyle.Render("  "+truncate(alias.Description, space)) + "\n" + lineTwo
+		} else {
+			content += "\n" + lipgloss.NewStyle().Foreground(inkColor).Render(wrapText(alias.Description, cardWidth-6))
+		}
+	}
 	if len(alias.Issues) > 0 {
-		lineTwo += "\n" + lipgloss.NewStyle().Foreground(coralColor).Render(markerPrefix(iconHealth)+strings.Join(alias.Issues, " · "))
+		content += "\n" + lipgloss.NewStyle().Foreground(coralColor).Render(markerPrefix(iconHealth)+strings.Join(alias.Issues, " · "))
 	}
 
 	borderColor := lineColor
@@ -1586,7 +1862,7 @@ func renderAlias(alias Alias, active bool, width int, contextual ...bool) string
 		Padding(0, 1).
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(borderColor).
-		Render(lineOne + "\n" + description + "\n" + lineTwo)
+		Render(content)
 }
 
 func terminalSafeAlias(alias Alias) Alias {
@@ -1618,14 +1894,10 @@ func aliasWindow(aliases []Alias, cursor, width, budget int) (int, int) {
 		end := start
 		for end < len(aliases) {
 			cardHeight := lipgloss.Height(renderAlias(aliases[end], end == cursor, width))
-			separatorHeight := 0
-			if end > start {
-				separatorHeight = 1
-			}
-			if used+separatorHeight+cardHeight > budget && end > start {
+			if used+cardHeight > budget && end > start {
 				break
 			}
-			used += separatorHeight + cardHeight
+			used += cardHeight
 			end++
 		}
 		if cursor < end {
@@ -1683,9 +1955,8 @@ func suggestedAliasesForContext(aliases []Alias, context contextRanking) []Alias
 		}
 		return rankedAliases[i].score > rankedAliases[j].score
 	})
-	limit := min(12, len(rankedAliases))
-	result := make([]Alias, limit)
-	for index := range limit {
+	result := make([]Alias, len(rankedAliases))
+	for index := range rankedAliases {
 		result[index] = rankedAliases[index].alias
 	}
 	return result
@@ -1853,8 +2124,8 @@ func applyTheme(theme Theme) {
 	violetColor = lipgloss.Color(theme.Files)
 	inkColor = lipgloss.Color(theme.Text)
 	mutedColor = lipgloss.Color(theme.Muted)
-	pageColor = lipgloss.Color(theme.Background)
-	panelColor = lipgloss.Color(theme.Panel)
+	pageColor = terminalBackgroundColor(theme.Background)
+	panelColor = terminalBackgroundColor(theme.Panel)
 	activeColor = lipgloss.Color(theme.Selected)
 	lineColor = lipgloss.Color(theme.Border)
 
@@ -1900,19 +2171,50 @@ func searchTextCursor(query string, visible bool) string {
 	return searchTextWithCursor(query, "search aliases…", visible)
 }
 
+func searchTextCursorAtWidth(query string, visible bool, fieldWidth int) string {
+	return searchTextWithCursorAtWidth(query, "search aliases…", visible, fieldWidth)
+}
+
 func searchTextWithPlaceholder(query, placeholder string) string {
 	return searchTextWithCursor(query, placeholder, true)
 }
 
 func searchTextWithCursor(query, placeholder string, visible bool) string {
+	return searchTextWithCursorAtWidth(query, placeholder, visible, mainTUISearchMaxWidth)
+}
+
+func searchTextWithCursorAtWidth(query, placeholder string, visible bool, fieldWidth int) string {
 	cursor := " "
 	if visible {
 		cursor = acidStyle("█")
 	}
+	available := max(1, fieldWidth-5-lipgloss.Width(markerPrefix(iconSearch)))
 	if query == "" {
-		return dimStyle.Render(placeholder) + cursor
+		return dimStyle.Render(ansi.Truncate(placeholder, available, "…")) + cursor
 	}
-	return lipgloss.NewStyle().Foreground(inkColor).Render(query) + cursor
+	visibleQuery := terminalSafeText(query)
+	if overflow := lipgloss.Width(visibleQuery) - available; overflow > 0 {
+		visibleQuery = ansi.TruncateLeft(visibleQuery, overflow+1, "…")
+	}
+	return lipgloss.NewStyle().Foreground(inkColor).Render(visibleQuery) + cursor
+}
+
+const maxSearchQueryRunes = 256
+
+func appendSearchQuery(current, input string) string {
+	remaining := maxSearchQueryRunes - utf8.RuneCountInString(current)
+	if remaining <= 0 {
+		return current
+	}
+	var addition strings.Builder
+	for _, character := range input {
+		if remaining == 0 {
+			break
+		}
+		addition.WriteRune(character)
+		remaining--
+	}
+	return current + addition.String()
 }
 
 func truncate(value string, width int) string {
@@ -1980,8 +2282,8 @@ func wrapText(value string, width int) string {
 
 func padRight(value string, width int) string {
 	cellWidth := lipgloss.Width(value)
-	if cellWidth >= width {
-		return truncate(value, width)
+	if cellWidth > width {
+		return ansi.Truncate(value, width, "…")
 	}
 	return value + strings.Repeat(" ", width-cellWidth)
 }

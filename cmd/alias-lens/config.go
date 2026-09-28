@@ -26,6 +26,7 @@ type AppConfig struct {
 	Shell           string                    `json:"shell"`
 	Profiles        []string                  `json:"profiles,omitempty"`
 	ShortcutProfile string                    `json:"shortcut_profile,omitempty"`
+	Shortcuts       map[string]string         `json:"shortcuts,omitempty"`
 	Providers       map[string]ProviderConfig `json:"providers"`
 	AutoSync        AutoSyncConfig            `json:"auto_sync"`
 	TrackedFiles    []TrackedFileConfig       `json:"tracked_files,omitempty"`
@@ -177,6 +178,9 @@ func validateAppConfig(config AppConfig) error {
 			return fmt.Errorf("invalid shortcut_profile in configuration: %w", err)
 		}
 	}
+	if err := validateShortcutOverrides(config); err != nil {
+		return fmt.Errorf("invalid shortcuts in configuration: %w", err)
+	}
 	if len(config.Profiles) > 32 {
 		return fmt.Errorf("invalid profiles in configuration: keep 32 or fewer profile names")
 	}
@@ -322,7 +326,7 @@ func runConfigCommand(arguments []string) error {
 	if err := saveConfig(config); err != nil {
 		return err
 	}
-	fmt.Println("Alias Lens configuration updated")
+	cliResult("Alias Lens configuration updated")
 	return nil
 }
 
@@ -350,7 +354,7 @@ func runConfigProfileCommand(arguments []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Print(workflowplan.RenderPlain(preview))
+	fmt.Print(cliPlanText(workflowplan.RenderPlain(preview)))
 	if len(preview.Actions) == 0 {
 		fmt.Println("Nothing needed to change.")
 		return nil

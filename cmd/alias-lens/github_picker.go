@@ -119,7 +119,7 @@ func (m repoPickerModel) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			if !acceptsTextInput(message) {
 				return m, nil
 			}
-			m.query += string(message.Runes)
+			m.query = appendSearchQuery(m.query, string(message.Runes))
 			m.cursor = 0
 		}
 	}
@@ -150,7 +150,7 @@ func (m repoPickerModel) View() string {
 		header = brand + "  " + pickerTitle
 	}
 	subtitle := dimStyle.Render(fmt.Sprintf("%d writable repositories across configured providers", len(m.repos)))
-	search := lipgloss.NewStyle().Width(contentWidth-3).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconSearch)) + searchText(m.query))
+	search := lipgloss.NewStyle().Width(searchFieldWidth(contentWidth)-2).Padding(0, 1).Border(lipgloss.RoundedBorder()).BorderForeground(acidColor).Render(acidStyle(markerPrefix(iconSearch)) + searchTextCursorAtWidth(m.query, true, searchFieldWidth(contentWidth)))
 
 	var list strings.Builder
 	visible := max(1, m.height-12)

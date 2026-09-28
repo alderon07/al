@@ -6,7 +6,26 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
+
+func TestPadRightPreservesStyledRows(t *testing.T) {
+	styled := "\x1b[41;97mrow\x1b[0m"
+	if got := padRight(styled, 3); got != styled {
+		t.Fatalf("exact-width styled row changed: %q", got)
+	}
+	if got := padRight(styled, 5); got != styled+"  " {
+		t.Fatalf("padded styled row changed: %q", got)
+	}
+	tooWide := "\x1b[41;97mabcdef\x1b[0m"
+	got := padRight(tooWide, 4)
+	if plain := ansi.Strip(got); plain != "abc…" {
+		t.Fatalf("styled overflow rendered as %q, want %q", plain, "abc…")
+	}
+	if !strings.HasSuffix(got, "\x1b[0m") {
+		t.Fatalf("styled overflow lost its color reset: %q", got)
+	}
+}
 
 func TestUnicodeLayoutUsesTerminalCellWidth(t *testing.T) {
 	for _, test := range []struct {

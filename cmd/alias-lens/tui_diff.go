@@ -203,10 +203,10 @@ func (m model) updateDiff(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	view := m.diff
 	if view.confirmRestore {
-		switch message.String() {
-		case "y":
+		if matchesShortcut(message, m.shortcutProfile, shortcutConfirm) {
 			return m.restoreSelectedRevision()
-		case "n":
+		}
+		if matchesShortcut(message, m.shortcutProfile, shortcutDecline) {
 			view.confirmRestore = false
 			return m, nil
 		}
@@ -250,6 +250,10 @@ func (m model) updateDiff(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			view.scroll++
 		case "k":
 			view.scroll--
+		case "h":
+			view.horizontal = max(0, view.horizontal-8)
+		case "l":
+			view.horizontal += 8
 		case "n":
 			view.scroll = nextDiffHunk(rows, view.scroll, 1)
 		case "p":
@@ -339,12 +343,22 @@ func (m model) diffView(frame tuiFrame, header string) string {
 			}
 		}
 	}
-	footerText := "↑↓/jk scroll · n/p change · ←→ pan · s layout · a commands · esc back"
+	scrollKeys := shortcutLabel(m.shortcutProfile, shortcutDiffScrollDown) + "/" + shortcutLabel(m.shortcutProfile, shortcutDiffScrollUp)
+	if scrollKeys == "Down / j/Up / k" {
+		scrollKeys = "↑↓/jk"
+	}
+	changeKeys := shortcutLabel(m.shortcutProfile, shortcutDiffNext) + "/" + shortcutLabel(m.shortcutProfile, shortcutDiffPrevious)
+	panKeys := shortcutLabel(m.shortcutProfile, shortcutDiffPanLeft) + "/" + shortcutLabel(m.shortcutProfile, shortcutDiffPanRight)
+	if panKeys == "Left/Right" {
+		panKeys = "←→"
+	}
+	backKey := strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit))
+	footerText := scrollKeys + " scroll · " + changeKeys + " change · " + panKeys + " pan · " + shortcutLabel(m.shortcutProfile, shortcutDiffLayout) + " layout · " + shortcutLabel(m.shortcutProfile, shortcutDiffAliases) + " commands · " + backKey + " back"
 	if view.revisionID != "" {
-		footerText = "↑↓/jk scroll · n/p change · s layout · a commands · r restore · esc back"
+		footerText = scrollKeys + " scroll · " + changeKeys + " change · " + panKeys + " pan · " + shortcutLabel(m.shortcutProfile, shortcutDiffLayout) + " layout · " + shortcutLabel(m.shortcutProfile, shortcutDiffAliases) + " commands · " + shortcutLabel(m.shortcutProfile, shortcutDiffRestore) + " restore · " + backKey + " back"
 	}
 	if view.confirmRestore {
-		footerText = "Restore this revision? y confirm · n or esc cancel"
+		footerText = "Restore this revision? " + shortcutLabel(m.shortcutProfile, shortcutConfirm) + " confirm · " + shortcutLabel(m.shortcutProfile, shortcutDecline) + " or " + strings.ToLower(primaryShortcutLabel(m.shortcutProfile, shortcutQuit)) + " cancel"
 	}
 	footer := dimStyle.Render(footerText)
 	page := lipgloss.JoinVertical(lipgloss.Left, header, "", body.String())

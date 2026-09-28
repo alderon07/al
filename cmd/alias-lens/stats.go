@@ -16,13 +16,44 @@ type usageEvent struct {
 }
 
 type statsRow struct {
-	Alias Alias
-	Count int
+	Alias   Alias
+	Count   int
+	LastRun time.Time
 }
 
 type statsData struct {
 	Aliases []Alias
 	Events  []usageEvent
+}
+
+type aliasUsageSummary struct {
+	All     int
+	Today   int
+	Week    int
+	LastRun time.Time
+}
+
+func summarizeAliasUses(events []usageEvent, now time.Time) map[string]aliasUsageSummary {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	week := now.AddDate(0, 0, -7)
+	summaries := make(map[string]aliasUsageSummary)
+	for _, event := range events {
+		summary := summaries[event.Name]
+		summary.All++
+		if !event.Time.IsZero() {
+			if !event.Time.Before(today) {
+				summary.Today++
+			}
+			if !event.Time.Before(week) {
+				summary.Week++
+			}
+			if event.Time.After(summary.LastRun) {
+				summary.LastRun = event.Time
+			}
+		}
+		summaries[event.Name] = summary
+	}
+	return summaries
 }
 
 func hasUntimestampedUsage(events []usageEvent) bool {
@@ -113,10 +144,19 @@ func rankedStatsRows(data statsData, period string, now time.Time) ([]statsRow, 
 		return nil, err
 	}
 	counts := usageCountsSince(data.Events, since)
+	lastRuns := make(map[string]time.Time, len(counts))
+	for _, event := range data.Events {
+		if event.Time.IsZero() || (!since.IsZero() && event.Time.Before(since)) {
+			continue
+		}
+		if event.Time.After(lastRuns[event.Name]) {
+			lastRuns[event.Name] = event.Time
+		}
+	}
 	rows := make([]statsRow, 0, len(data.Aliases))
 	for _, alias := range data.Aliases {
 		if count := counts[alias.Name]; count > 0 {
-			rows = append(rows, statsRow{Alias: alias, Count: count})
+			rows = append(rows, statsRow{Alias: alias, Count: count, LastRun: lastRuns[alias.Name]})
 		}
 	}
 	sort.Slice(rows, func(i, j int) bool {

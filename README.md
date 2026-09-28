@@ -86,11 +86,15 @@ See [Local data and privacy](docs/PRIVACY.md) for every file Alias Lens creates 
 
 Alias Lens is available under the [Apache License 2.0](LICENSE).
 
+Read the [1.x compatibility policy](docs/COMPATIBILITY.md) before relying on command output or configuration fields in scripts.
+
 ## Find the shortcut before you forget it
 
-Open Alias Lens with `Ctrl+G` on Zsh or Bash 4+, or run `al` on any supported shell. Stock macOS Bash 3.2 keeps the normal Readline `Ctrl+G` cancellation behavior. Search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.
+Open Alias Lens with `Ctrl+G` on Zsh or Bash 4+, or run `al` on any supported shell. Stock macOS Bash 3.2 keeps the normal Readline `Ctrl+G` cancellation behavior. Press `/` to search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.
 
 The idle screen brings useful aliases back into view. Select one and press `Enter` to run it in the current shell. Press `Tab` to return the alias to the prompt without running it, then edit it or add arguments. New and edited aliases work without restarting the shell.
+
+On terminals at least 120 columns wide, the browser shows compact alias rows beside details for the selected alias. The detail pane wraps its command and shows its description, tags, platform, local context mark, and any health warnings. Narrow terminals keep the single-column cards. Moving through the list only previews text; `Enter` is still required to use an alias.
 
 Use the CLI when you already know what you want:
 
@@ -109,34 +113,38 @@ Running `al search` without a query keeps the alphabetical list.
 
 ## Use the keys that matter
 
-Press `?` inside the TUI for the full searchable keyboard guide.
+Press `h` in command mode for the searchable keyboard guide. Press `/` to type an alias search.
 
 | Key | Action |
 | --- | --- |
 | `↑` and `↓` | Select an alias |
 | `Enter` | Use the selected alias |
 | `Tab` | Return the selected alias to the prompt without running it |
-| `Ctrl+N` | Add an alias |
-| `Ctrl+E` | Edit the selected alias |
-| `Ctrl+B` | Mark or unmark the selected alias for this project or folder |
-| `Delete` or `Ctrl+D` | Delete the selected alias after confirmation |
-| `F2` | Open usage stats |
-| `Ctrl+,` or `F3` | Customize the TUI footer |
-| `F7` | Show alias health warnings |
-| `F6` | Show tracked files and sync status; press `d` to compare aliases |
-| `Ctrl+G` | Sync while the TUI is open |
-| `F4` | Preview and select a theme |
-| `Ctrl+Z` or `F8` | Browse revisions; press `Enter` to preview before restoring |
-| `Ctrl+R` or `F5` | Reload aliases and settings |
+| `a` | Add an alias |
+| `e` | Edit the selected alias |
+| `c` | Mark or unmark the selected alias for this project or folder |
+| `d` | Delete the selected alias after confirmation |
+| `s` | Open usage stats |
+| `o` | Customize the TUI footer |
+| `i` | Show alias health warnings |
+| `y` | Show tracked files and sync status; press `d` there to compare aliases |
+| `p` | Sync while the TUI is open |
+| `t` | Preview and select a theme |
+| `v` | Browse revisions; press `Enter` to preview before restoring |
+| `r` | Reload aliases and settings |
 | `Esc` | Exit |
 
-The page shortcuts work from the alias list, help, stats, footer settings, themes, revisions, sync status, and alias health. Press the current page's shortcut again to return to the alias list.
+The page shortcuts work from the alias list, help, stats, the Footer page, themes, revisions, sync status, and alias health. Press the current page's shortcut again to return to the alias list.
 
-The table shows the Linux defaults. Windows uses `F5` as the primary refresh key. macOS uses Command shortcuts with the listed function keys and Control keys as terminal-safe fallbacks.
+The table shows the single-letter defaults in command mode. Existing function keys and platform-specific modifier keys remain available as fallbacks. Entering search with `/` lets you type these letters into the query.
 
-`F1` through `F8` open Help, Stats, Settings, Themes, Refresh, Sync, Health, and Revisions in every profile. These keys keep a chosen profile usable when the terminal does not send its preferred modifier.
+`F1` through `F8` open Help, Stats, Footer, Themes, Refresh, Sync, Health, and Revisions in every profile. These keys keep a chosen profile usable when the terminal does not send its preferred modifier.
 
-Alias Lens chooses a familiar keyboard style for your computer: Windows on Windows and WSL, macOS on macOS, and Linux on Linux. See the active style or choose the one you already know:
+Alias Lens chooses a keyboard style for your computer: Windows on Windows and WSL, macOS on macOS, and Linux on Linux.
+
+The alias screen starts in command mode. Press a single letter such as `h` for help, `s` for stats, `a` to add, `e` to edit, or `r` to refresh. Press `/` to search aliases; `Esc` returns to command mode and keeps the current results. Function keys and the platform's modifier shortcuts remain available. The shell launcher stays `Ctrl+G` so ordinary shell typing works.
+
+See the active style or choose one:
 
 ```bash
 al shortcuts
@@ -144,15 +152,23 @@ al shortcuts auto
 al shortcuts macos
 al shortcuts windows
 al shortcuts linux
+al shortcuts set add Alt+N
+al shortcuts set stats.next-view Alt+V
+al shortcuts set launcher Ctrl+K
+al shortcuts reset add
+al shortcuts reset-all
 ```
 
-You can use any style on any computer. Run `al shortcuts auto` to remove a saved choice and return to the style for the current computer. The macOS style shows Command shortcuts with terminal-safe fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
+Open the keyboard guide in the TUI and press `Tab` to configure shortcuts on screen. Select an action with the arrow keys, press `Enter`, press the new key, then press `Enter` to save. Use `/` to filter the list and `Delete` to restore a selected default. Changes to TUI keys work immediately. Reload your shell integration after changing the launcher.
+
+Run `al shortcuts` to see the action names and current keys. A saved key replaces that action's profile defaults. You can use any style on any computer. Run `al shortcuts auto` to remove a saved style choice and return to the style for the current computer. The macOS style shows Command shortcuts with terminal-safe fallbacks because many terminals keep Command keys for themselves. Copy and paste remain terminal features. They are commonly `Cmd+C` and `Cmd+V` on macOS or `Ctrl+Shift+C` and `Ctrl+Shift+V` in Windows and Linux terminals. `Ctrl+C` still cancels or closes Alias Lens when the terminal sends it to the app.
 
 On Zsh and Bash 4+, `Ctrl+G` keeps its normal cancel behavior when the prompt contains text. Bash 3.2 does not install the picker binding; run `al` instead. Set `ALIAS_LENS_NOBIND=1` before the shell integration loads if you do not want the key binding.
 
 ## Add context to cryptic names
 
 Alias Lens edits the command, name, description, category, and tags from one form. Tags become search terms, and favorites appear first in suggestions.
+In the TUI, move to an alias and press `f` in command mode to mark or unmark it as a favorite. Press `Esc` to leave search mode before using `f`.
 
 ```bash
 al meta gs tags=git,daily favorite=true
@@ -177,8 +193,8 @@ al context remove deploy --all
 ```
 
 The marks stay in a private local file. They do not change your alias definitions
-or sync to your dotfiles repository. `Ctrl+B` in the alias browser toggles the
-current project or folder mark. On macOS, `Cmd+B` is also available.
+or sync to your dotfiles repository. Press `c` in command mode to toggle the
+current project or folder mark. `Ctrl+B` and macOS `Cmd+B` remain available.
 
 It also finds common Bash and Zsh functions. Add metadata above an alias or function when you prefer to edit the file:
 
@@ -202,7 +218,7 @@ al suggest add 1 myname
 
 Suggestions come only from the active shell's local history. Commands that commonly contain credentials, including `ssh`, `curl`, and `export`, are excluded.
 
-Press `F2` in the TUI or run `al stats` to see alias usage:
+Press `s` in TUI command mode or run `al stats` to see alias usage:
 
 ```bash
 al stats
@@ -210,7 +226,8 @@ al stats today
 al stats --plain week
 ```
 
-Counts come from your active terminal history. Time periods need shell-history timestamps.
+Counts come from your active terminal history. The overview's Last run column shows the latest dated use in the selected period, or `unknown` when that history has no date. Time periods need shell-history timestamps.
+Press `g` in stats for the Categories view. It uses each alias's category, then its first tag, then `untagged`.
 
 Export aliases or stats as JSON, YAML, or CSV:
 
@@ -243,7 +260,7 @@ Aliases that contain risky commands open a review screen before execution. The s
 
 ## Make it look like your terminal
 
-Open the theme picker with `F4`, or choose a theme by name:
+Open the theme picker with `t`, or choose a theme by name:
 
 ```bash
 al theme
@@ -253,7 +270,9 @@ al theme --check
 
 Moving through the picker previews each theme. Press `Enter` to save it or `Esc` to keep the previous theme.
 
-Press `F3` in the TUI to compose the footer. You can edit its message, choose a named icon, set its alignment and tone, and add a thin or dotted rule. The `ALIAS LENS` product name and interface stay fixed. The editor shows every choice for the active row. Use Left, Right, or Space to pick one, then select `Save changes` and press Enter. This path works in terminals that reserve `Ctrl+S` for flow control. Named footer icons use ordinary Unicode characters and do not require a Nerd Font.
+Human-facing commands use PTerm for colored headings, check results, and manual sync progress when run in a terminal. Redirected output, `NO_COLOR`, JSON, completion scripts, and shell integration stay plain.
+
+Press `o` in TUI command mode to compose the footer. You can edit its message, choose a named icon, set its alignment and tone, and add a thin or dotted rule. The `ALIAS LENS` product name and interface stay fixed. The editor shows every choice for the active row. Use Left, Right, or Space to pick one, then select `Save changes` and press Enter. This path works in terminals that reserve `Ctrl+S` for flow control. Named footer icons use ordinary Unicode characters and do not require a Nerd Font.
 
 You can also change the footer message and icon from the command line:
 
@@ -311,16 +330,17 @@ al untrack ~/.gitconfig
 ```
 
 Environment files, keys, and credential-shaped filenames cannot be tracked. Alias Lens scans the alias file for likely secrets before every push.
+Keep the sync repository private. The alias file is stored as readable text, and the secret scan cannot make a public repository safe for private commands.
 
 If the local and remote copies both changed, Alias Lens keeps the live file untouched and saves private conflict copies. Run `al diff` to compare them.
 
-Run `al diff --tui` for a native terminal diff of the tracked and current alias files. In the TUI, press `F6`, then `d` to open the same comparison. The viewer shows full file changes, including comments and metadata. Use `n` and `p` to jump between changes, arrow keys to scroll, and `s` to switch between unified and split layouts when the terminal is wide enough.
+Run `al diff --tui` for a native terminal diff of the tracked and current alias files. In TUI command mode, press `y`, then `d` to open the same comparison. The viewer shows full file changes, including comments and metadata. Use `n` and `p` to jump between changes, arrow keys to scroll, and `s` to switch between unified and split layouts when the terminal is wide enough.
 
 ## Undo the oops
 
 Alias Lens saves a private revision before each edit and before it restores another version.
 
-In the TUI, press `Ctrl+Z` or `F8`, choose a revision, and press `Enter` to preview what restoring it would change. Press `r`, then `y` to restore it.
+In TUI command mode, press `v`, choose a revision, and press `Enter` to preview what restoring it would change. Press `r`, then `y` to restore it.
 
 ```bash
 al history
@@ -366,4 +386,4 @@ al help sync
 al repo --help
 ```
 
-If you prefer a browser view, run `al --web` and open `http://127.0.0.1:8787`. The terminal interface remains the default.
+If you prefer a browser view, run `al --web` and open the full URL it prints. The URL includes a session token required to read aliases. The terminal interface remains the default.

@@ -49,7 +49,7 @@ Configure Git sync:
 
 Other commands:
   theme      List dark themes or select one by preset name
-  shortcuts  Show or choose Windows, Linux, or macOS keyboard shortcuts
+  shortcuts  Show profiles and configure TUI and shell shortcuts
   completion Print Bash or Zsh completion code
   shell-init Print Bash or Zsh integration; normally called by al setup
   --web      Start the optional local web interface on 127.0.0.1:8787
@@ -369,18 +369,28 @@ Examples:
   al theme tokyo-night
 `,
 	"shortcuts": `Usage: al shortcuts [auto|windows|linux|macos|test]
+       al shortcuts set ACTION KEY
+       al shortcuts reset ACTION
+       al shortcuts reset-all
 
 Show the keyboard style Alias Lens uses. Without a saved choice, Alias Lens
 chooses Windows on Windows and WSL, macOS on macOS, and Linux on Linux. You can
 choose any style on any computer. Use auto to remove a saved choice and return
 to the style for the current computer. The test option shows the active
-shortcuts without changing your shortcut choice.
+shortcuts without changing your shortcut choice. Set a listed action to a key
+such as Alt+N, Ctrl+Y, Cmd+R, or F5. A custom binding replaces that action's
+profile defaults. The launcher action changes the Bash and Zsh prompt binding;
+reload the shell integration after changing it.
 
 Examples:
   al shortcuts
   al shortcuts macos
   al shortcuts auto
   al shortcuts test
+  al shortcuts set add Alt+N
+  al shortcuts set launcher Ctrl+K
+  al shortcuts reset add
+  al shortcuts reset-all
 `,
 	"completion": `Usage:
   al completion bash|zsh
@@ -419,7 +429,7 @@ func isHelpFlag(argument string) bool {
 }
 
 func printUsage() {
-	fmt.Print(usageText)
+	fmt.Print(cliUsageText(usageText))
 }
 
 func printCommandUsage(command string) {
@@ -430,5 +440,5 @@ func printCommandUsage(command string) {
 		printUsage()
 		return
 	}
-	fmt.Print(spec.Usage)
+	fmt.Print(cliUsageText(spec.Usage))
 }

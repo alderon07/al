@@ -37,6 +37,38 @@ func TestInterruptedAliasWriteKeepsOriginalAndBackup(t *testing.T) {
 	}
 }
 
+func TestEditingEmptyAliasFileSavesBackupAndRevision(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAliasFile(path, nil, []byte("alias gs='git status'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backup := path + ".alias-lens.bak"
+	if info, err := os.Stat(backup); err != nil || info.Size() != 0 || info.Mode().Perm() != 0o600 {
+		t.Fatalf("empty backup = %v, %v", info, err)
+	}
+	revisions, err := listRevisions(path)
+	if err != nil || len(revisions) != 1 || revisions[0].Size != 0 {
+		t.Fatalf("empty revision = %v, %v", revisions, err)
+	}
+}
+
+func TestCreatingAliasFileDoesNotSavePriorRevision(t *testing.T) {
+	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	if err := writeAliasFile(path, nil, []byte("alias gs='git status'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path + ".alias-lens.bak"); !os.IsNotExist(err) {
+		t.Fatalf("missing file gained a backup: %v", err)
+	}
+	revisions, err := listRevisions(path)
+	if err != nil || len(revisions) != 0 {
+		t.Fatalf("missing file gained a prior revision: %v, %v", revisions, err)
+	}
+}
+
 func TestAliasWriteRejectsEditBeforeFinalRename(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".bash_aliases")
 	original := []byte("alias old='true'\n")

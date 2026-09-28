@@ -60,14 +60,14 @@ func TestShortcutProfilesUsePlatformConventions(t *testing.T) {
 		action  shortcutAction
 		want    string
 	}{
-		{profile: shortcutWindows, action: shortcutAdd, want: "Ctrl+N"},
-		{profile: shortcutWindows, action: shortcutRefresh, want: "F5 / Ctrl+R"},
-		{profile: shortcutLinux, action: shortcutHelp, want: "F1 / Ctrl+? / ?"},
-		{profile: shortcutLinux, action: shortcutSettings, want: "F3 / Ctrl+,"},
-		{profile: shortcutLinux, action: shortcutRefresh, want: "Ctrl+R / F5"},
-		{profile: shortcutMacOS, action: shortcutAdd, want: "Cmd+N / Ctrl+N"},
-		{profile: shortcutMacOS, action: shortcutEdit, want: "Cmd+Shift+E / Ctrl+E"},
-		{profile: shortcutMacOS, action: shortcutThemes, want: "Cmd+4 / F4"},
+		{profile: shortcutWindows, action: shortcutAdd, want: "a / Ctrl+N"},
+		{profile: shortcutWindows, action: shortcutRefresh, want: "r / F5 / Ctrl+R"},
+		{profile: shortcutLinux, action: shortcutHelp, want: "h / F1 / Ctrl+? / ?"},
+		{profile: shortcutLinux, action: shortcutSettings, want: "o / F3 / Ctrl+,"},
+		{profile: shortcutLinux, action: shortcutRefresh, want: "r / Ctrl+R / F5"},
+		{profile: shortcutMacOS, action: shortcutAdd, want: "a / Cmd+N / Ctrl+N"},
+		{profile: shortcutMacOS, action: shortcutEdit, want: "e / Cmd+Shift+E / Ctrl+E"},
+		{profile: shortcutMacOS, action: shortcutThemes, want: "t / Cmd+4 / F4"},
 	}
 	for _, test := range tests {
 		if got := shortcutLabel(test.profile, test.action); got != test.want {
@@ -247,13 +247,16 @@ func TestEveryShortcutActionHasTerminalSafeBinding(t *testing.T) {
 
 func TestShortcutProfilesDoNotAssignOneKeyToMultipleActions(t *testing.T) {
 	for _, profile := range []ShortcutProfile{shortcutWindows, shortcutLinux, shortcutMacOS} {
-		seen := make(map[shortcutKey]shortcutAction)
+		seen := make(map[string]map[shortcutKey]shortcutAction)
 		for _, definition := range shortcutDefinitions {
+			if seen[definition.scope] == nil {
+				seen[definition.scope] = make(map[shortcutKey]shortcutAction)
+			}
 			for _, binding := range shortcutChoiceForProfile(definition, profile).bindings {
-				if action, exists := seen[binding.key]; exists {
+				if action, exists := seen[definition.scope][binding.key]; exists {
 					t.Errorf("%s binding %s is assigned to actions %d and %d", profile, binding.label, action, definition.action)
 				}
-				seen[binding.key] = definition.action
+				seen[definition.scope][binding.key] = definition.action
 			}
 		}
 	}
@@ -289,13 +292,13 @@ func TestShortcutGuideUsesFriendlyMacLabels(t *testing.T) {
 		text.WriteString("\n")
 	}
 	guide := text.String()
-	for _, want := range []string{"Cmd+N / Ctrl+N", "Add an alias", "Cmd+6 / F6", "saved versions"} {
+	for _, want := range []string{"a / Cmd+N / Ctrl+N", "Add an alias", "y / Cmd+6 / F6", "saved versions"} {
 		if !strings.Contains(guide, want) {
 			t.Fatalf("macOS shortcut guide is missing %q:\n%s", want, guide)
 		}
 	}
 	view := (model{width: 120, height: 36, helpVisible: true, shortcutProfile: shortcutMacOS}).View()
-	for _, want := range []string{"Cmd+N / Ctrl+N", "Cmd+Backspace / Delete", "Cmd+6 / F6", "Cmd+, / F3", "Cmd+? / F1 / ? / Esc"} {
+	for _, want := range []string{"a / Cmd+N / Ctrl+N", "d / Cmd+Backspace / Delete", "y / Cmd+6 / F6", "o / Cmd+, / F3", "h / Cmd+? / F1 / ? / Esc"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("rendered macOS keyboard guide is missing %q:\n%s", want, view)
 		}
@@ -304,7 +307,7 @@ func TestShortcutGuideUsesFriendlyMacLabels(t *testing.T) {
 
 func TestWideNavigationUsesReadableModifierNames(t *testing.T) {
 	hint := pageNavigationHint(120, shortcutLinux)
-	for _, want := range []string{"F1 help", "F3 settings", "Ctrl+Z versions"} {
+	for _, want := range []string{"h help", "o footer", "v versions"} {
 		if !strings.Contains(hint, want) {
 			t.Fatalf("wide navigation hint is missing %q: %s", want, hint)
 		}

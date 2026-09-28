@@ -46,6 +46,11 @@ These criteria cover the validated findings from Codex Security scan
   and explicitly enrolled tracked-file allowlist.
 - Secret scanning covers every allowed outgoing blob, while ordinary allowed-only
   histories continue to push.
+- A push publishes only the reviewed branch ref, even when Git is configured to
+  follow tags automatically; unreviewed annotated tag content stays local.
+- A push rejects a remote branch that diverged from the reviewed local branch,
+  while a fast-forward branch update still works.
+- Outgoing allowed paths are regular Git files; symlink entries are rejected.
 
 ## Release integrity
 

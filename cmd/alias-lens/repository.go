@@ -44,6 +44,15 @@ func syncRepository(push bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if !push {
+		state, stateErr := loadSyncState()
+		if stateErr != nil {
+			return "", fmt.Errorf("read sync status: %w", stateErr)
+		}
+		if state.Status == "conflict" {
+			return "", fmt.Errorf("sync conflict is unresolved; repository was not changed; run al diff, then use al sync --pull to import remote-only aliases or al sync --push to keep the local alias file")
+		}
+	}
 	return syncRepositoryFiles(config, sourcePath, push)
 }
 
@@ -197,9 +206,14 @@ func showRepositoryDiffTo(output io.Writer) error {
 		fmt.Fprintln(output, "The commands and functions match, but comments, metadata, ordering, whitespace, or unparsed syntax differ.")
 		fmt.Fprintf(output, "  local:   %s\n", source)
 		fmt.Fprintf(output, "  tracked: %s\n", target)
-		fmt.Fprintln(output, "Run al sync to keep the local file. To combine both files, compare them and choose which lines to keep.")
+		fmt.Fprintln(output, "Neither file was changed. Run al diff --tui to review every changed line before choosing what to keep.")
+		fmt.Fprintln(output, "Run al sync --push only when the active file contains everything you want to publish.")
 		return nil
 	}
+	fmt.Fprintln(output, "Alias files differ. Neither file was changed.")
+	fmt.Fprintf(output, "  active:     %s\n", source)
+	fmt.Fprintf(output, "  repository: %s\n", target)
+	fmt.Fprintf(output, "Summary: %d local-only, %d repository-only, %d changed.\n\n", len(localOnly), len(remoteOnly), len(conflicts))
 	for _, name := range localOnly {
 		fmt.Fprintln(output, "LOCAL ONLY ", name)
 	}
@@ -209,7 +223,42 @@ func showRepositoryDiffTo(output io.Writer) error {
 	for _, conflict := range conflicts {
 		fmt.Fprintf(output, "CHANGED    %s\n  local:  %s\n  remote: %s\n", conflict.Name, terminalSafeText(conflict.Local), terminalSafeText(conflict.Remote))
 	}
+	fmt.Fprintln(output, "\nThis summary covers parsed alias and function names and commands only. Comments, metadata, ordering, whitespace, or other shell lines may also differ.")
+	fmt.Fprintln(output, "Run al diff --tui to review every changed line before replacing the repository copy.")
+	writeRepositoryDiffGuidance(output, len(localOnly), len(remoteOnly), len(conflicts))
 	return nil
+}
+
+func writeRepositoryDiffGuidance(output io.Writer, localOnly, remoteOnly, changed int) {
+	fmt.Fprintln(output)
+	if changed > 0 {
+		fmt.Fprintf(output, "Alias Lens cannot choose between commands for %d changed alias", changed)
+		if changed != 1 {
+			fmt.Fprint(output, "es")
+		}
+		fmt.Fprintln(output, ".")
+		fmt.Fprintln(output, "Edit the active alias file to keep the command you want for each CHANGED alias.")
+		if remoteOnly > 0 {
+			fmt.Fprintln(output, "Copy any REMOTE ONLY aliases you want to keep into the active file.")
+		}
+		fmt.Fprintln(output, "Run al diff again to review the result, then run al sync --push to publish the resolved active file.")
+		return
+	}
+	if localOnly > 0 && remoteOnly > 0 {
+		fmt.Fprintln(output, "To keep aliases from both files:")
+		fmt.Fprintln(output, "  1. Run al sync --pull to import repository-only aliases into the active file.")
+		fmt.Fprintln(output, "  2. Run al diff again. Copy any remaining REMOTE ONLY functions or entries you want into the active file.")
+		fmt.Fprintln(output, "  3. Run al sync --push to publish the resolved active file.")
+		return
+	}
+	if remoteOnly > 0 {
+		fmt.Fprintln(output, "To bring repository entries into the active file:")
+		fmt.Fprintln(output, "  1. Run al sync --pull to import repository-only aliases.")
+		fmt.Fprintln(output, "  2. Run al diff again. Copy any remaining REMOTE ONLY functions or entries you want into the active file.")
+		fmt.Fprintln(output, "  3. Run al sync --push to publish the resolved active file.")
+		return
+	}
+	fmt.Fprintln(output, "Run al sync --push to publish the local-only aliases from the active file.")
 }
 
 func pullRepository() (string, error) {
@@ -237,6 +286,9 @@ func pullRepository() (string, error) {
 		return "Repository updated; it does not contain an alias file yet", nil
 	}
 	if err != nil {
+		return "", err
+	}
+	if err := protectRepositoryAliasCopy(config.Repository, config.AliasFile, target, remote); err != nil {
 		return "", err
 	}
 	_, remoteOnly, conflicts := compareAliasFiles(local, remote)
@@ -268,13 +320,21 @@ func pullRepository() (string, error) {
 			return "", err
 		}
 	}
-	imported := len(additions)
-	if imported == 0 && skippedFunctions == 0 {
-		return "Repository pulled; no new aliases were found", nil
+	updated := local
+	if len(additions) > 0 {
+		updated, err = readFileLimited(source, aliasFileLimit)
+		if err != nil {
+			return "", fmt.Errorf("read imported aliases: %w", err)
+		}
 	}
-	message := fmt.Sprintf("Repository pulled; imported %d aliases", imported)
+	message := fmt.Sprintf("Repository pulled; imported %d aliases", len(additions))
 	if skippedFunctions > 0 {
 		message += fmt.Sprintf("; left %d remote functions unchanged for manual review", skippedFunctions)
+	}
+	if bytes.Equal(updated, remote) {
+		message += "; active and repository alias files match"
+	} else {
+		message += "; active and repository alias files still differ. Run al diff to review what remains before pushing"
 	}
 	return message, nil
 }
@@ -305,9 +365,13 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 	}
 	changed := !bytes.Equal(contents, existing)
 	if changed {
-		if err := writeRepositoryFile(config.Repository, relative, contents, 0o644); err != nil {
+		if err := writeRepositoryFile(config.Repository, relative, contents, 0o600); err != nil {
 			return "", err
 		}
+	} else if err := protectRepositoryAliasCopy(config.Repository, relative, target, existing); err != nil {
+		return "", err
+	}
+	if changed {
 		if output, err := gitOutput("-C", config.Repository, "add", "--", relative); err != nil {
 			return "", fmt.Errorf("git add failed: %s", strings.TrimSpace(string(output)))
 		}
@@ -325,6 +389,20 @@ func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string
 		return "Aliases committed locally", nil
 	}
 	return "Repository already matches " + aliasDisplayPath(), nil
+}
+
+func protectRepositoryAliasCopy(repository, relative, target string, contents []byte) error {
+	info, err := os.Stat(target)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm() == 0o600 {
+		return nil
+	}
+	return writeRepositoryFile(repository, relative, contents, 0o600)
 }
 
 func scanOutgoingAliasHistory(repository, relative string) error {
@@ -363,7 +441,7 @@ func pushRepository(config AppConfig) error {
 	}
 	refspec := plan.Snapshot + ":" + plan.Destination
 	lease := "--force-with-lease=" + plan.Destination + ":" + plan.RemoteBase
-	if output, err := gitOutput("-C", config.Repository, "push", "--porcelain", lease, "--", plan.Remote, refspec); err != nil {
+	if output, err := gitOutput("-C", config.Repository, "push", "--porcelain", "--no-follow-tags", lease, "--", plan.Remote, refspec); err != nil {
 		return fmt.Errorf("git push failed: %s", cleanCommandOutput(output))
 	}
 	return nil
@@ -401,6 +479,9 @@ func prepareRepositoryPush(config AppConfig) (repositoryPushPlan, error) {
 		return repositoryPushPlan{}, fmt.Errorf("resolve refreshed upstream for branch %s: %w", branch, err)
 	}
 	upstream := strings.TrimSpace(string(upstreamOutput))
+	if _, err := gitReviewOutputBounded(1024, config.Repository, "merge-base", "--is-ancestor", upstream, snapshot); err != nil {
+		return repositoryPushPlan{}, fmt.Errorf("push blocked because the remote branch diverged from the local branch; reconcile the branch, then retry")
+	}
 	if err := validateOutgoingRepositoryHistory(config, upstream, snapshot); err != nil {
 		return repositoryPushPlan{}, err
 	}
@@ -430,14 +511,20 @@ func validateOutgoingRepositoryHistory(config AppConfig, upstream, snapshot stri
 			if !ok {
 				return fmt.Errorf("push blocked because outgoing commit %s changes untracked path %s; publish that commit separately, then retry", revision, terminalSafeText(path))
 			}
-			object := revision + ":" + path
-			typeOutput, typeErr := gitReviewOutputBounded(1024, config.Repository, "cat-file", "-t", object)
-			if typeErr != nil {
+			treeOutput, treeErr := gitReviewOutputBounded(8<<20, config.Repository, "ls-tree", "-z", revision, "--", ":(literal)"+path)
+			if treeErr != nil {
+				return fmt.Errorf("inspect outgoing file %s: %w", terminalSafeText(path), treeErr)
+			}
+			if len(treeOutput) == 0 {
 				continue
 			}
-			if strings.TrimSpace(string(typeOutput)) != "blob" {
+			entry := bytes.TrimSuffix(treeOutput, []byte{0})
+			metadata, entryPath, found := bytes.Cut(entry, []byte{'\t'})
+			fields := strings.Fields(string(metadata))
+			if !found || string(entryPath) != path || len(fields) != 3 || fields[1] != "blob" || (fields[0] != "100644" && fields[0] != "100755") {
 				return fmt.Errorf("push blocked because %s is not a regular file in outgoing commit %s", terminalSafeText(path), revision)
 			}
+			object := revision + ":" + path
 			contents, showErr := gitReviewOutputBounded(limit, config.Repository, "show", object)
 			if showErr != nil {
 				return fmt.Errorf("inspect outgoing file %s: %w", terminalSafeText(path), showErr)

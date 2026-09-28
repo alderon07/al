@@ -99,6 +99,9 @@ func (m model) restoreSelectedRevision() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.aliases = aliases
+	if m.browserUsageReady {
+		m.refreshBrowserUsage()
+	}
 	m.query = ""
 	m.cursor = 0
 	m.revisionOpen = false

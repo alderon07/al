@@ -1,6 +1,6 @@
 # Phase 3 shell adapter acceptance criteria
 
-Status: approved on 2026-09-16. Phase 3 implementation may proceed under these criteria.
+Status: implemented and covered by automated Bash and Zsh adapter and PTY tests. Current release checks live under `docs/testing/`.
 
 ## Scope and baseline
 

@@ -1,6 +1,6 @@
 # Shell-neutral alias architecture proposal
 
-Status: architecture approved on 2026-09-16. This document does not authorize implementation, an automatic migration, or a support claim for another shell. Each implementation phase remains blocked by the acceptance criteria gate below.
+Status: approved architecture record. The catalog model, Bash and Zsh adapters, and read-only shadow inspection are implemented. Catalog activation, automatic migration, and support for another shell still require separate acceptance criteria.
 
 Review record: independently reviewed by `gpt-5.6-sol` at high reasoning effort. The final review found no unresolved P0 or P1 architecture blockers and approved the document only after the safety corrections were incorporated.
 
@@ -85,7 +85,7 @@ Every entry has a stable ID. A rename changes the name but keeps usage data and 
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "entries": [
     {
       "id": "87f4d803c44a4d8792c4824f8e0bc3f1",

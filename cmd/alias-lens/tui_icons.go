@@ -19,6 +19,7 @@ var (
 	iconAlias      = pixelIcon{"#..#", ".##.", "›", ">"}
 	iconBrand      = pixelIcon{".##.", "####", "◉", "*"}
 	iconCommand    = pixelIcon{"#...", ".###", "$", "$"}
+	iconContext    = pixelIcon{".##.", "#..#", "⌖", "@"}
 	iconEdit       = pixelIcon{"...#", ".##.", "✎", "~"}
 	iconFavorite   = pixelIcon{".#.#", "###.", "♥︎", "*"}
 	iconFunction   = pixelIcon{"#..#", ".##.", "ƒ", "f"}
@@ -57,6 +58,7 @@ func namedPixelIcon(value string) (pixelIcon, bool) {
 		"alias":      iconAlias,
 		"brand":      iconBrand,
 		"command":    iconCommand,
+		"context":    iconContext,
 		"edit":       iconEdit,
 		"favorite":   iconFavorite,
 		"function":   iconFunction,

@@ -57,21 +57,43 @@ func runAutoSyncCommand(arguments []string) error {
 		return fmt.Errorf("usage: al autosync enable|disable|status")
 	}
 	if arguments[0] == "status" {
-		state, _ := loadSyncState()
-		fmt.Printf("enabled: %t\nstatus: %s\n", config.AutoSync.Enabled, defaultString(state.Status, "not started"))
+		statePath, err := syncDataPath("sync-state.json")
+		if err != nil {
+			return fmt.Errorf("locate automatic sync status: %w", err)
+		}
+		state, err := loadSyncStateAt(statePath)
+		if err != nil {
+			return fmt.Errorf("read automatic sync status %s: %w; run al data paths to locate it", statePath, err)
+		}
+		type trackedStatus struct {
+			file  TrackedFileConfig
+			state SyncState
+		}
+		trackedStatuses := make([]trackedStatus, 0, len(config.TrackedFiles))
+		for _, tracked := range config.TrackedFiles {
+			trackedPath, pathErr := trackedStatePath(tracked)
+			if pathErr != nil {
+				return fmt.Errorf("locate tracked sync status for %s: %w", tracked.Source, pathErr)
+			}
+			trackedState, readErr := loadSyncStateAt(trackedPath)
+			if readErr != nil {
+				return fmt.Errorf("read tracked sync status for %s at %s: %w", tracked.Source, trackedPath, readErr)
+			}
+			trackedStatuses = append(trackedStatuses, trackedStatus{file: tracked, state: trackedState})
+		}
+		if cliStyled() {
+			cliHeading("Automatic sync")
+		}
+		cliKeyValue("enabled", fmt.Sprint(config.AutoSync.Enabled))
+		cliKeyValue("status", defaultString(state.Status, "not started"))
 		if state.Message != "" {
-			fmt.Println("message:", state.Message)
+			cliKeyValue("message", state.Message)
 		}
 		if !state.UpdatedAt.IsZero() {
-			fmt.Println("updated:", state.UpdatedAt.Local().Format(time.RFC3339))
+			cliKeyValue("updated", state.UpdatedAt.Local().Format(time.RFC3339))
 		}
-		for _, tracked := range config.TrackedFiles {
-			statePath, pathErr := trackedStatePath(tracked)
-			if pathErr != nil {
-				continue
-			}
-			trackedState, _ := loadSyncStateAt(statePath)
-			fmt.Printf("tracked: %s -> %s [%s]\n", tracked.Source, tracked.RepositoryPath, defaultString(trackedState.Status, "waiting"))
+		for _, tracked := range trackedStatuses {
+			fmt.Printf("%s: %s -> %s [%s]\n", cliAccent("tracked"), tracked.file.Source, tracked.file.RepositoryPath, defaultString(tracked.state.Status, "waiting"))
 		}
 		return nil
 	}
@@ -86,9 +108,9 @@ func runAutoSyncCommand(arguments []string) error {
 		if err := ensureWatchProcess(); err != nil {
 			return err
 		}
-		fmt.Println("Automatic sync enabled.")
+		cliResult("Automatic sync enabled.")
 	} else {
-		fmt.Println("Automatic sync disabled. The current worker will stop on its next check.")
+		cliResult("Automatic sync disabled. The current worker will stop on its next check.")
 	}
 	return nil
 }
@@ -106,11 +128,25 @@ func runWatch(daemon bool) error {
 	if err != nil {
 		return err
 	}
+	stopHeartbeat := make(chan struct{})
+	heartbeatDone := make(chan struct{})
+	heartbeatErrors := make(chan error, 1)
+	go func() {
+		defer close(heartbeatDone)
+		maintainSyncLock(lock, stopHeartbeat, heartbeatErrors, 30*time.Second)
+	}()
 	defer func() {
+		close(stopHeartbeat)
+		<-heartbeatDone
+		releaseSyncLock(lock)
 		lock.Close()
-		os.Remove(lock.Name())
 	}()
 	for {
+		select {
+		case err := <-heartbeatErrors:
+			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
+		default:
+		}
 		if ctx.Err() != nil {
 			_ = writeSyncStatus("stopped", "automatic sync stopped cleanly", "", "")
 			return nil
@@ -139,14 +175,19 @@ func runWatch(daemon bool) error {
 				writeSyncStatus("offline", cycleErr.Error(), state.LocalHash, state.RemoteHash)
 			}
 		}
+		select {
+		case err := <-heartbeatErrors:
+			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
+		default:
+		}
 		if !daemon {
 			return cycleErr
 		}
-		if err := os.Chtimes(lock.Name(), time.Now(), time.Now()); err != nil {
-			return fmt.Errorf("refresh sync lock: %w", err)
-		}
 		timer := time.NewTimer(time.Duration(config.AutoSync.IntervalSeconds) * time.Second)
 		select {
+		case err := <-heartbeatErrors:
+			timer.Stop()
+			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
 		case <-ctx.Done():
 			if !timer.Stop() {
 				<-timer.C
@@ -262,17 +303,20 @@ func saveTrackedConflict(tracked TrackedFileConfig, local, remote []byte, stateP
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
-	if err := writeFileAtomically(filepath.Join(directory, "local"), local, 0o600); err != nil {
+	localCopy := filepath.Join(directory, "local")
+	remoteCopy := filepath.Join(directory, "remote")
+	if err := writeFileAtomically(localCopy, local, 0o600); err != nil {
 		return err
 	}
-	if err := writeFileAtomically(filepath.Join(directory, "remote"), remote, 0o600); err != nil {
+	if err := writeFileAtomically(remoteCopy, remote, 0o600); err != nil {
 		return err
 	}
-	state := SyncState{LocalHash: contentHash(local), RemoteHash: contentHash(remote), Status: "conflict", Message: "both copies changed; files were not overwritten", UpdatedAt: time.Now()}
+	message := fmt.Sprintf("files were not overwritten; compare private copies at %s and %s", localCopy, remoteCopy)
+	state := SyncState{LocalHash: contentHash(local), RemoteHash: contentHash(remote), Status: "conflict", Message: message, UpdatedAt: time.Now()}
 	if err := writeSyncStateAt(statePath, state); err != nil {
 		return err
 	}
-	return fmt.Errorf("tracked file conflict: %s", tracked.Source)
+	return fmt.Errorf("tracked file conflict: %s; %s", tracked.Source, message)
 }
 
 func ensureWatchProcess() error {
@@ -328,6 +372,11 @@ func reconcileAliases(config AppConfig) error {
 	if remoteErr != nil && !remoteMissing {
 		return remoteErr
 	}
+	if !remoteMissing {
+		if err := protectRepositoryAliasCopy(config.Repository, config.AliasFile, target, remote); err != nil {
+			return err
+		}
+	}
 	if localMissing {
 		if remoteMissing {
 			if err := writeNewAliasFile(aliasPath, nil); err != nil {
@@ -376,14 +425,19 @@ func saveSyncConflict(local, remote []byte, message string) error {
 		return err
 	}
 	suffix := strings.TrimPrefix(activeShellAdapter().AliasFilename(), ".")
-	if err := writeFileAtomically(filepath.Join(directory, "local."+suffix), local, 0o600); err != nil {
+	localCopy := filepath.Join(directory, "local."+suffix)
+	remoteCopy := filepath.Join(directory, "remote."+suffix)
+	if err := writeFileAtomically(localCopy, local, 0o600); err != nil {
 		return err
 	}
-	if err := writeFileAtomically(filepath.Join(directory, "remote."+suffix), remote, 0o600); err != nil {
+	if err := writeFileAtomically(remoteCopy, remote, 0o600); err != nil {
 		return err
 	}
-	writeSyncStatus("conflict", message+"; run al diff", contentHash(local), contentHash(remote))
-	return fmt.Errorf("%s; live aliases were not overwritten", message)
+	message += fmt.Sprintf("; live aliases were not overwritten; private copies: %s and %s; run al diff", localCopy, remoteCopy)
+	if err := writeSyncStatus("conflict", message, contentHash(local), contentHash(remote)); err != nil {
+		return fmt.Errorf("save conflict copies, but record sync status: %w", err)
+	}
+	return errors.New(message)
 }
 
 func replaceAliasFile(path string, contents []byte) error {
@@ -421,6 +475,59 @@ func acquireSyncLock() (*os.File, error) {
 		}
 	}
 	return nil, openErr
+}
+
+func maintainSyncLock(lock *os.File, stop <-chan struct{}, errs chan<- error, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-ticker.C:
+			if err := refreshSyncLock(lock); err != nil {
+				errs <- err
+				return
+			}
+		}
+	}
+}
+
+func refreshSyncLock(lock *os.File) error {
+	owned, err := lock.Stat()
+	if err != nil {
+		return err
+	}
+	current, err := os.Stat(lock.Name())
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(owned, current) {
+		return fmt.Errorf("lock was replaced")
+	}
+	now := time.Now()
+	if err := os.Chtimes(lock.Name(), now, now); err != nil {
+		return err
+	}
+	current, err = os.Stat(lock.Name())
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(owned, current) {
+		return fmt.Errorf("lock was replaced")
+	}
+	return nil
+}
+
+func releaseSyncLock(lock *os.File) {
+	owned, err := lock.Stat()
+	if err != nil {
+		return
+	}
+	current, err := os.Stat(lock.Name())
+	if err == nil && os.SameFile(owned, current) {
+		_ = os.Remove(lock.Name())
+	}
 }
 
 func syncDataPath(name string) (string, error) {

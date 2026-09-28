@@ -65,10 +65,16 @@ func runAliasCheck(arguments []string) (int, error) {
 		if finding.Line > 0 {
 			location = fmt.Sprintf(" line %d", finding.Line)
 		}
-		fmt.Printf("%-5s%s  %s\n", finding.Severity, location, finding.Message)
+		severity := fmt.Sprintf("%-5s", finding.Severity)
+		if finding.Severity == checkError {
+			severity = cliAttention(severity)
+		} else {
+			severity = cliAccent(severity)
+		}
+		fmt.Printf("%s%s  %s\n", severity, location, finding.Message)
 	}
 	if len(findings) == 0 {
-		fmt.Printf("OK  %s is valid for %s.\n", aliasDisplayPath(), adapter.DisplayName())
+		fmt.Printf("%s  %s is valid for %s.\n", cliPositive("OK"), aliasDisplayPath(), adapter.DisplayName())
 		return 0, nil
 	}
 	fmt.Printf("Found %s and %s in %s.\n", findingCount(errors, "error"), findingCount(warnings, "warning"), aliasDisplayPath())

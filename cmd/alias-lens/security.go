@@ -64,10 +64,10 @@ func runSecretScan() error {
 	}
 	findings := findSecretFindings(contents)
 	if len(findings) == 0 {
-		fmt.Printf("No likely secrets found in %s.\n", aliasDisplayPath())
+		cliResult(fmt.Sprintf("No likely secrets found in %s.", aliasDisplayPath()))
 		return nil
 	}
-	fmt.Println("Review these lines before syncing. Secret values are hidden:")
+	cliHeading("Review these lines before syncing. Secret values are hidden:")
 	for _, finding := range findings {
 		fmt.Printf("  line %d  %s\n", finding.Line, finding.Kind)
 	}

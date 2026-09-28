@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/rivo/uniseg"
 	"strings"
 	"unicode"
@@ -427,7 +428,13 @@ func makerCredit(width int) string {
 	}
 	credit = footerToneStyle(activeFooter.Tone).Width(max(1, width)).Align(alignment).Render(credit)
 	if rule := footerRule(activeFooter.Rule, width); rule != "" {
-		return rule + "\n" + credit
+		credit = rule + "\n" + credit
+	}
+	if width >= 150 {
+		// Bubble Tea's full-screen renderer can skip the final nonblank row
+		// after a wide resize. A nonbreaking space keeps the credit painted
+		// without adding a visible mark below it.
+		credit += "\n\u00a0"
 	}
 	return credit
 }
@@ -461,15 +468,32 @@ func footerWithNavigation(footer string, width int, profiles ...ShortcutProfile)
 	if navigation == "" {
 		return footer
 	}
-	return footer + "\n\n" + dimStyle.Render(navigation)
+	plain := ansi.Strip(footer)
+	separator := "  │  "
+	for _, hint := range strings.Split(navigation, "  ·  ") {
+		if strings.Contains(plain, hint) {
+			continue
+		}
+		candidate := footer + dimStyle.Render(separator+hint)
+		if lipgloss.Width(candidate) > width {
+			break
+		}
+		footer = candidate
+		separator = "  ·  "
+	}
+	return footer
 }
 
 func pageWithMaker(page string, width, height int) string {
-	credit := makerCredit(width)
+	return pageWithMakerWidths(page, width, width, height)
+}
+
+func pageWithMakerWidths(page string, contentWidth, footerWidth, height int) string {
+	credit := makerCredit(footerWidth)
 	if credit == "" {
 		return page
 	}
-	wrappedPage := lipgloss.NewStyle().Width(max(1, width)).Render(page)
+	wrappedPage := lipgloss.NewStyle().Width(max(1, contentWidth)).Render(page)
 	gap := max(0, height-lipgloss.Height(wrappedPage)-lipgloss.Height(credit))
 	return page + strings.Repeat("\n", gap) + "\n" + credit
 }

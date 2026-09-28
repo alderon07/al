@@ -65,12 +65,13 @@ A reviewed change can alter one major identity trait when the change solves a me
 | `FRAME-01` | Minimum viewport | The interactive TUI must require at least 48 columns and 18 rows. | Render at 47 by 18, 48 by 17, and 48 by 18. Only the last case opens the page. |
 | `FRAME-02` | Size error | The fallback must state both the 48 by 18 requirement and the detected size. | Assert both values in the plain rendered string. |
 | `FRAME-03` | Outer inset | Standard pages must use one row above and below, plus three cells at the left and right. Stats may use two horizontal cells to protect chart width. | Measure the first visible content cell at 80 by 24. |
-| `FRAME-04` | Content bounds | Standard-page content must be at least 40 and at most 108 cells wide. | Render at 48, 80, 116, and 160 columns. Content stops growing after 108 cells. |
+| `FRAME-04` | Content bounds | Standard-page headings and body content must be at least 40 and at most 108 cells wide. Search fields stop at 72 cells. | Render at 48, 80, 116, 160, and 200 columns. Body content stops growing after 108 cells; search stops after 72. |
 | `FRAME-05` | Region order | Header, title, primary control, content, local controls, global controls, and maker credit must appear in that order when present. | Golden-test one primary and one secondary page. |
 | `FRAME-06` | Vertical gaps | Major regions should have one empty row between them. Components must not add multiple decorative empty rows. | Inspect at 80 by 24 and 48 by 18. |
 | `FRAME-07` | Height pressure | The page must reduce the visible list window before removing the focused item or local controls. | Shrink a populated page and assert that selection and controls remain visible. |
 | `FRAME-08` | Resize stability | A resize must preserve the current object, query, entered form text, and modal state. | Update the model with smaller and larger window messages. |
 | `FRAME-09` | Complete canvas | Every interactive page must paint its theme background through the last viewport row. Embedded and standalone stats must not expose a strip of the terminal's default background below the page. | Render stats at 48 by 18, 80 by 24, and 120 by 30. Assert the final row spans the viewport with the page background, then inspect both entry paths in a real terminal. |
+| `FRAME-10` | Footer reach | A configured footer rule and aligned maker credit use the full available width inside the frame padding, with one rightmost cell reserved to prevent terminal wrapping. | Check the rule and credit at 48, 120, 160, and 200 columns, including live PTY resizes. |
 
 ### Work in terminal cells
 
@@ -83,6 +84,8 @@ The standard page has these bounds:
 - One row and three columns of outer padding in the alias browser and its secondary pages.
 - A content width no smaller than 40 cells.
 - A content width capped at 108 cells on wide terminals.
+- Search fields capped at 72 cells, with long queries showing their trailing text and cursor.
+- A footer rule and maker credit aligned across the available viewport width rather than the body content column.
 - One blank row between major regions when height permits.
 - One blank row between alias cards.
 
@@ -215,7 +218,7 @@ Markers aid scanning. They never replace words, arrows, or keyboard labels. The 
 | --- | --- | --- |
 | `ICON-01` | Marker choices | Every semantic marker provides a symbol and ASCII form and can be hidden. |
 | `ICON-02` | Label spacing | Put exactly one plain space between a heading marker and its text label. |
-| `ICON-03` | Text alternative | A semantic marker must share its line with a label, except a favorite mark whose alias metadata exposes the same state. |
+| `ICON-03` | Text alternative | A semantic marker must share its line with a label, except a favorite mark whose alias metadata exposes the same state and a wide-list context mark whose selected detail names the project or folder. |
 | `ICON-04` | Compatibility | Built-in symbols use ordinary Unicode. Nerd Font and private-use glyphs are forbidden. |
 | `ICON-05` | Density | A normal heading may contain one marker. A card may contain command, function, favorite, and health markers only when those states exist. |
 | `ICON-06` | Full art | Use the multirow brand mark only in a spacious welcome or empty state. |

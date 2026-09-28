@@ -27,7 +27,7 @@
 | --- | --- | --- | --- | --- |
 | Help | `F1` or `?` | `Ctrl+?`, `F1`, or `?` | `Cmd+?`, `F1`, or `?` | `F1` or `?` |
 | Stats | `F2` | `F2` | `Cmd+2` or `F2` | `F2` |
-| Settings | `Ctrl+,` or `F3` | `Ctrl+,` or `F3` | `Cmd+,` or `F3` | `F3` |
+| Footer | `Ctrl+,` or `F3` | `Ctrl+,` or `F3` | `Cmd+,` or `F3` | `F3` |
 | Themes | `F4` | `F4` | `Cmd+4` or `F4` | `F4` |
 | Refresh | `F5` or `Ctrl+R` | `Ctrl+R` or `F5` | `Cmd+R`, `F5`, or `Ctrl+R` | `F5` or `Ctrl+R` |
 | Sync status | `F6` | `F6` | `Cmd+6` or `F6` | `F6` |

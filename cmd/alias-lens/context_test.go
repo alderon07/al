@@ -5,11 +5,28 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	tea "alias-lens/cmd/alias-lens/internal/tea"
 )
+
+func TestDefaultPickerCanReachPastFirstTwelveAliases(t *testing.T) {
+	aliases := make([]Alias, 20)
+	for index := range aliases {
+		name := "a" + strconv.Itoa(index)
+		aliases[index] = Alias{Name: name, Command: "echo " + name, Description: name}
+	}
+	ranked := suggestedAliases(aliases)
+	if len(ranked) != len(aliases) {
+		t.Fatalf("default picker has %d of %d aliases", len(ranked), len(aliases))
+	}
+	view := (model{aliases: aliases, cursor: 19, width: 100, height: 30}).View()
+	if !strings.Contains(view, "of 20") || !strings.Contains(view, ranked[19].Name) {
+		t.Fatalf("picker did not expose the last alias and range:\n%s", view)
+	}
+}
 
 func TestContextRankingKeepsTextRelevanceAndBoostsSuggestions(t *testing.T) {
 	project := filepath.Join(t.TempDir(), "project")
@@ -140,16 +157,24 @@ func TestContextUsesNearestGitRootAndExactFolder(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(inner, ".git"), []byte("gitdir: elsewhere\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	canonicalInner, err := filepath.EvalSymlinks(inner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalFolder, err := filepath.EvalSymlinks(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
 	working, err := contextForDirectory(folder)
-	if err != nil || working.Repository != inner {
+	if err != nil || working.Repository != canonicalInner {
 		t.Fatalf("nearest Git root = %q, %v", working.Repository, err)
 	}
 	kind, path, err := contextTarget(working, "auto")
-	if err != nil || kind != contextRepository || path != inner {
+	if err != nil || kind != contextRepository || path != canonicalInner {
 		t.Fatalf("default context = %s %s, %v", kind, path, err)
 	}
 	kind, path, err = contextTarget(working, contextDirectory)
-	if err != nil || kind != contextDirectory || path != folder {
+	if err != nil || kind != contextDirectory || path != canonicalFolder {
 		t.Fatalf("exact folder context = %s %s, %v", kind, path, err)
 	}
 	if _, _, err := contextTarget(workingContext{Directory: parent}, contextRepository); err == nil {
@@ -199,7 +224,7 @@ func TestTUIContextShortcutTogglesSelectedAlias(t *testing.T) {
 	m := model{aliases: []Alias{alias}, context: ranking, width: 90, height: 24, shortcutProfile: shortcutLinux}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlB})
 	marked := updated.(model)
-	if marked.context.match(alias) != 1 || !strings.Contains(marked.View(), "HERE") {
+	if marked.context.match(alias) != 1 || !strings.Contains(marked.View(), "LOCAL") || strings.Contains(marked.View(), "HERE") {
 		t.Fatalf("TUI did not show context mark: %s", marked.View())
 	}
 	updated, _ = marked.Update(tea.KeyMsg{Type: tea.KeyCtrlB})

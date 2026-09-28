@@ -157,7 +157,7 @@ func runHistorySuggestions(arguments []string) error {
 		fmt.Println("No repeated long commands need aliases yet.")
 		return nil
 	}
-	fmt.Println("Repeated commands that do not have aliases:")
+	cliHeading("Repeated commands that do not have aliases:")
 	for index, suggestion := range suggestions {
 		fmt.Printf("%2d  %-6s  %3d uses  %s\n", index+1, suggestion.Name, suggestion.Count, suggestion.Command)
 	}

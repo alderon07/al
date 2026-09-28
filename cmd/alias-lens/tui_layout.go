@@ -10,6 +10,7 @@ const (
 	mainTUIHorizontalPadding = 3
 	mainTUIContentInset      = 8
 	mainTUIMaxContentWidth   = 108
+	mainTUISearchMaxWidth    = 72
 )
 
 type tuiFrame struct {
@@ -45,8 +46,22 @@ func (frame tuiFrame) contentHeight() int {
 	return max(1, frame.height-2)
 }
 
+func (frame tuiFrame) footerWidth() int {
+	// Keep the last column free so terminals that wrap at the right edge do not
+	// push the maker line below the viewport.
+	return max(1, frame.width-frame.horizontalPadding*2-1)
+}
+
+func (frame tuiFrame) makerHeight() int {
+	return lipgloss.Height(lipgloss.NewStyle().Width(frame.footerWidth()).Render(makerCredit(frame.footerWidth())))
+}
+
 func (frame tuiFrame) measureHeight(content string) int {
 	return lipgloss.Height(lipgloss.NewStyle().Width(frame.contentWidth).Render(content))
+}
+
+func (frame tuiFrame) measureFooterHeight(content string) int {
+	return lipgloss.Height(lipgloss.NewStyle().Width(frame.footerWidth()).Render(content))
 }
 
 func (frame tuiFrame) render(page string) string {
@@ -62,15 +77,15 @@ func (frame tuiFrame) renderStyled(page string, style lipgloss.Style) string {
 }
 
 func (frame tuiFrame) renderWithMaker(page string) string {
-	return frame.render(pageWithMaker(page, frame.contentWidth, frame.contentHeight()))
+	return frame.render(pageWithMakerWidths(page, frame.contentWidth, frame.footerWidth(), frame.contentHeight()))
 }
 
 func (frame tuiFrame) renderWithFooter(body, footer string) string {
-	credit := makerCredit(frame.contentWidth)
-	footerHeight := frame.measureHeight(footer)
+	credit := makerCredit(frame.footerWidth())
+	footerHeight := frame.measureFooterHeight(footer)
 	creditHeight := 0
 	if credit != "" {
-		creditHeight = frame.measureHeight(credit)
+		creditHeight = frame.makerHeight()
 	}
 	availableBodyHeight := max(1, frame.contentHeight()-footerHeight-creditHeight)
 	if frame.measureHeight(body) > availableBodyHeight {
@@ -82,4 +97,8 @@ func (frame tuiFrame) renderWithFooter(body, footer string) string {
 		page += "\n" + credit
 	}
 	return frame.render(page)
+}
+
+func searchFieldWidth(contentWidth int) int {
+	return min(contentWidth, mainTUISearchMaxWidth)
 }

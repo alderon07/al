@@ -32,6 +32,51 @@ func TestStatsDashboardFitsTerminalWidth(t *testing.T) {
 	}
 }
 
+func TestStatsOverviewShowsLastRunAtNarrowAndWideWidths(t *testing.T) {
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.Local)
+	data := statsData{
+		Aliases: []Alias{{Name: "dated", Command: "echo dated"}, {Name: "undated", Command: "echo undated"}},
+		Events: []usageEvent{
+			{Name: "dated", Time: now.Add(-3 * time.Hour)},
+			{Name: "dated", Time: now.Add(-2 * time.Hour)},
+			{Name: "undated"},
+		},
+	}
+	for _, width := range []int{48, 80, 120} {
+		view := (statsModel{data: data, width: width, height: 24, theme: defaultTheme(), now: now}).View()
+		for _, label := range []string{"LAST RUN", "2h ago", "unknown"} {
+			if !strings.Contains(view, label) {
+				t.Fatalf("%d-column overview missing %q:\n%s", width, label, view)
+			}
+		}
+		for _, line := range strings.Split(view, "\n") {
+			if lipgloss.Width(line) > width {
+				t.Fatalf("%d-column overview rendered a %d-cell line:\n%s", width, lipgloss.Width(line), view)
+			}
+		}
+	}
+}
+
+func TestStatsLastRunRespectsSelectedPeriod(t *testing.T) {
+	now := time.Date(2026, 9, 27, 12, 0, 0, 0, time.Local)
+	data := statsData{
+		Aliases: []Alias{{Name: "ll"}},
+		Events: []usageEvent{
+			{Name: "ll"},
+			{Name: "ll", Time: now.AddDate(0, 0, -2)},
+			{Name: "ll", Time: now.Add(-time.Hour)},
+		},
+	}
+	all, err := rankedStatsRows(data, "all", now)
+	if err != nil || len(all) != 1 || all[0].Count != 3 || !all[0].LastRun.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("all-time row = %#v, %v", all, err)
+	}
+	today, err := rankedStatsRows(data, "today", now)
+	if err != nil || len(today) != 1 || today[0].Count != 1 || !today[0].LastRun.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("today row = %#v, %v", today, err)
+	}
+}
+
 func TestStatsDashboardFillsWideTerminal(t *testing.T) {
 	view := (statsModel{
 		data:   statsData{Aliases: []Alias{{Name: "ll", Command: "ls -al"}}, Events: []usageEvent{{Name: "ll", Time: time.Now()}}},
@@ -49,7 +94,7 @@ func TestStatsDashboardFillsWideTerminal(t *testing.T) {
 	}
 }
 
-func TestStatsDashboardPaintsLastViewportRow(t *testing.T) {
+func TestStatsDashboardLeavesLastViewportRowAtTerminalBackground(t *testing.T) {
 	t.Setenv("NO_COLOR", "")
 	previousRenderer := lipgloss.DefaultRenderer()
 	renderer := lipgloss.NewRenderer(os.Stdout)
@@ -75,21 +120,21 @@ func TestStatsDashboardPaintsLastViewportRow(t *testing.T) {
 			if embedded {
 				model.appHeader = "ALIAS LENS"
 			}
-			if got := model.TerminalBackground(); got != background.Background {
-				t.Fatalf("embedded=%t: terminal background = %q, want %q", embedded, got, background.Background)
+			if got := model.TerminalBackground(); got != "" {
+				t.Fatalf("embedded=%t: terminal background = %q, want no terminal mutation", embedded, got)
 			}
 			lines := strings.Split(model.View(), "\n")
 			last := lines[len(lines)-1]
 			if got := lipgloss.Width(last); got != size.width {
 				t.Fatalf("embedded=%t size=%dx%d: last row width = %d", embedded, size.width, size.height, got)
 			}
-			if !strings.Contains(last, backgroundPrefix) {
-				t.Fatalf("embedded=%t size=%dx%d: last row does not paint the page background: %q", embedded, size.width, size.height, last)
+			if strings.Contains(last, backgroundPrefix) {
+				t.Fatalf("embedded=%t size=%dx%d: last row paints a separate page background: %q", embedded, size.width, size.height, last)
 			}
 		}
 	}
-	if got := (model{theme: background, statsOpen: true}).TerminalBackground(); got != background.Background {
-		t.Fatalf("main TUI terminal background = %q, want %q", got, background.Background)
+	if got := (model{theme: background, statsOpen: true}).TerminalBackground(); got != "" {
+		t.Fatalf("main TUI terminal background = %q, want no terminal mutation", got)
 	}
 }
 
@@ -111,6 +156,16 @@ func TestStatsDashboardShowsExactAliasCoverageMap(t *testing.T) {
 	}
 	if strings.Contains(view, "██") {
 		t.Fatalf("coverage map fell back to the old block style:\n%s", view)
+	}
+}
+
+func TestAliasCoverageMapHasOneDotPerAliasAtSeventy(t *testing.T) {
+	view := renderCoverageMap(15, 70, builtInTheme("phosphor"))
+	if got := strings.Count(view, "●"); got != 16 {
+		t.Fatalf("filled dot count = %d, want 15 chart dots and one legend dot", got)
+	}
+	if got := strings.Count(view, "○"); got != 56 {
+		t.Fatalf("empty dot count = %d, want 55 chart dots and one legend dot", got)
 	}
 }
 
@@ -203,7 +258,10 @@ func TestStatsViewKeysOpenEachChart(t *testing.T) {
 		theme:  builtInTheme("phosphor"),
 		now:    time.Now(),
 	}
-	for key, expected := range map[string]string{"a": "Seven-day activity", "c": "Unused for a month", "g": "Usage by group", "o": "Alias coverage"} {
+	if view := m.View(); !strings.Contains(view, "g categories") || strings.Contains(view, "g groups") {
+		t.Fatalf("stats tab did not use the categories label:\n%s", view)
+	}
+	for key, expected := range map[string]string{"a": "Seven-day activity", "c": "Unused for a month", "g": "Usage by category", "o": "Alias coverage"} {
 		updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
 		m = updated.(statsModel)
 		if view := m.View(); !strings.Contains(view, expected) {
@@ -288,7 +346,8 @@ func TestEmbeddedStatsRefreshPreservesViewAndPeriod(t *testing.T) {
 	}
 }
 
-func TestStatsDashboardUsesEachThemeCanvasInsteadOfPanel(t *testing.T) {
+func TestStatsDashboardUsesTerminalCanvasForEveryTheme(t *testing.T) {
+	t.Setenv("NO_COLOR", "")
 	previousRenderer := lipgloss.DefaultRenderer()
 	renderer := lipgloss.NewRenderer(os.Stdout)
 	renderer.SetColorProfile(termenv.TrueColor)
@@ -314,8 +373,8 @@ func TestStatsDashboardUsesEachThemeCanvasInsteadOfPanel(t *testing.T) {
 		if strings.Contains(view, backgroundPrefix(theme.Panel)) {
 			t.Fatalf("%s stats still paint the panel background", theme.Name)
 		}
-		if count := strings.Count(view, backgroundPrefix(theme.Background)); count == 0 {
-			t.Fatalf("%s stats omitted the canvas background", theme.Name)
+		if strings.Contains(view, backgroundPrefix(theme.Background)) {
+			t.Fatalf("%s stats paint a separate canvas background", theme.Name)
 		}
 		if lipgloss.Width(strings.Split(view, "\n")[0]) != 100 {
 			t.Fatalf("%s canvas background fix changed the dashboard width", theme.Name)
@@ -370,7 +429,7 @@ func TestMainTUIOpensStatsAndReturnsToAliases(t *testing.T) {
 		t.Fatal("F2 did not open stats inside the main TUI")
 	}
 	view := stats.View()
-	for _, expected := range []string{"ALIAS LENS", "Alias rhythm", "ll", "F2/esc return"} {
+	for _, expected := range []string{"ALIAS LENS", "Alias rhythm", "ll", "s/esc return"} {
 		if !strings.Contains(view, expected) {
 			t.Fatalf("embedded stats view is missing %q:\n%s", expected, view)
 		}
@@ -391,6 +450,24 @@ func TestUsageCountsRespectPeriodBoundary(t *testing.T) {
 	counts := usageCountsSince(events, now.Add(-7*24*time.Hour))
 	if counts["gs"] != 1 || counts["gp"] != 1 {
 		t.Fatalf("unexpected weekly counts: %#v", counts)
+	}
+}
+
+func TestSelectedAliasUsageUsesDatedHistoryWindows(t *testing.T) {
+	now := time.Date(2026, time.September, 27, 15, 0, 0, 0, time.UTC)
+	events := []usageEvent{
+		{Name: "gs", Time: now.Add(-time.Hour)},
+		{Name: "gs", Time: now.Add(-6 * 24 * time.Hour)},
+		{Name: "gs", Time: now.Add(-8 * 24 * time.Hour)},
+		{Name: "gs"},
+		{Name: "gl", Time: now.Add(-time.Hour)},
+	}
+	summaries := summarizeAliasUses(events, now)
+	if got := summaries["gs"]; got.All != 4 || got.Today != 1 || got.Week != 2 || !got.LastRun.Equal(now.Add(-time.Hour)) {
+		t.Fatalf("selected alias usage = %#v", got)
+	}
+	if got := summaries["gl"]; got.All != 1 || got.Today != 1 || got.Week != 1 {
+		t.Fatalf("other alias usage = %#v", got)
 	}
 }
 

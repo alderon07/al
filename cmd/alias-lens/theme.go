@@ -384,7 +384,7 @@ func runThemeCommand(arguments []string) error {
 		if err := saveTheme(theme); err != nil {
 			return err
 		}
-		fmt.Printf("Theme set to %s.\n", theme.Name)
+		cliResult(fmt.Sprintf("Theme set to %s.", theme.Name))
 		return nil
 	}
 	current, err := loadTheme()
@@ -396,7 +396,7 @@ func runThemeCommand(arguments []string) error {
 		if theme.Preset == current.Preset {
 			marker = "*"
 		}
-		fmt.Printf("%s %-14s %s\n", marker, theme.Preset, theme.Name)
+		fmt.Printf("%s %s %s\n", cliPositive(marker), cliAccent(fmt.Sprintf("%-14s", theme.Preset)), theme.Name)
 	}
 	return nil
 }

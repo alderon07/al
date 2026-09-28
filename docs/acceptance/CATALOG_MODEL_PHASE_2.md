@@ -1,6 +1,6 @@
 # Phase 2 catalog-model acceptance criteria
 
-Status: approved on 2026-09-17. Phase 2 implementation may proceed within this scope.
+Status: implemented. These criteria record the original phase 2 boundary. The catalog later advanced to schema 2 under `docs/STATE_WORKFLOW_SPEC.md`, which is the current reference for conditions and profiles.
 
 ## Scope
 
@@ -12,7 +12,7 @@ The implementation belongs in `internal/catalog`. Its public operations accept b
 
 Implementation cannot start until an independent reviewer approves every criterion in this document. The approval commit is the comparison base for the phase 2 diff.
 
-## Version 2 schema
+## Original phase 2 schema
 
 The root object contains exactly these fields:
 

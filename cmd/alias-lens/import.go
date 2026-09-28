@@ -90,7 +90,7 @@ func runImportCommand(arguments []string) error {
 	if err := writeAliasFile(aliasPath, current, updated, info.Mode().Perm()); err != nil {
 		return err
 	}
-	fmt.Printf("Imported %d aliases. Backup and private revision saved.\n", len(plan.Add))
+	cliResult(fmt.Sprintf("Imported %d aliases. Backup and private revision saved.", len(plan.Add)))
 	return nil
 }
 
@@ -200,19 +200,19 @@ func parseImportAliases(contents []byte, adapter ShellAdapter) []Alias {
 }
 
 func printImportPlan(path string, plan importPlan) {
-	fmt.Println("Import preview:", terminalSafeText(path))
+	fmt.Println(cliAccent("Import preview:"), terminalSafeText(path))
 	for _, issue := range plan.Issues {
 		location := ""
 		if issue.Line > 0 {
 			location = fmt.Sprintf(" line %d", issue.Line)
 		}
-		fmt.Printf("ISSUE %-17s%s  %s\n", issue.Kind, location, issue.Message)
+		fmt.Printf("%s %-17s%s  %s\n", cliAttention("ISSUE"), issue.Kind, location, issue.Message)
 	}
 	for _, skipped := range plan.Skip {
-		fmt.Println("SKIP ", skipped)
+		fmt.Println(cliAccent("SKIP "), skipped)
 	}
 	for _, alias := range plan.Add {
-		fmt.Printf("ADD    %-20s %s\n", alias.Name, terminalSafeText(alias.Command))
+		fmt.Printf("%s    %-20s %s\n", cliPositive("ADD"), alias.Name, terminalSafeText(alias.Command))
 	}
 	fmt.Printf("Planned: %d add, %d skip, %d issues.\n", len(plan.Add), len(plan.Skip), len(plan.Issues))
 }

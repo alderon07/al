@@ -37,7 +37,7 @@ func runPlanCommand(arguments []string) (int, error) {
 			return 1, err
 		}
 	} else {
-		fmt.Print(workflowplan.RenderPlain(value))
+		fmt.Print(cliPlanText(workflowplan.RenderPlain(value)))
 	}
 	if value.Summary.Blocked {
 		return 1, nil

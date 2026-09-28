@@ -64,6 +64,9 @@ func TestAutomaticSyncDoesNotActivateRemoteAliasBytes(t *testing.T) {
 	if readErr != nil || string(contents) != string(baseline) {
 		t.Fatalf("live aliases changed to %q, %v", contents, readErr)
 	}
+	if info, statErr := os.Stat(filepath.Join(repository, ".bash_aliases")); statErr != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("repository alias copy mode = %v, %v; want 0600", info, statErr)
+	}
 	if _, statErr := os.Stat(filepath.Join(home, "remote-code-ran")); !os.IsNotExist(statErr) {
 		t.Fatalf("remote top-level command ran: %v", statErr)
 	}
@@ -129,12 +132,15 @@ func TestManualPullStillImportsRemoteAliasesWithoutTopLevelCode(t *testing.T) {
 	}
 
 	message, err := pullRepository()
-	if err != nil || !strings.Contains(message, "imported 1 aliases") {
+	if err != nil || !strings.Contains(message, "imported 1 aliases") || !strings.Contains(message, "still differ") || !strings.Contains(message, "al diff") {
 		t.Fatalf("manual pull = %q, %v", message, err)
 	}
 	contents, err := os.ReadFile(aliasPath)
 	if err != nil || !strings.Contains(string(contents), "alias remote='git push'") || strings.Contains(string(contents), "touch ") {
 		t.Fatalf("manual pull wrote unsafe or incomplete content: %q, %v", contents, err)
+	}
+	if info, statErr := os.Stat(filepath.Join(repository, ".bash_aliases")); statErr != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("repository alias copy mode = %v, %v; want 0600", info, statErr)
 	}
 	if _, statErr := os.Stat(filepath.Join(home, "remote-code-ran")); !os.IsNotExist(statErr) {
 		t.Fatalf("manual pull executed remote top-level code: %v", statErr)

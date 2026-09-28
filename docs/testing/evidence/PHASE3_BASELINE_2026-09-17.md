@@ -1,5 +1,7 @@
 # Phase 3 baseline comparison
 
+Historical evidence for the implementation commit. Run the current platform checklist before a release.
+
 Date: 2026-09-17
 
 Environment: WSL 2, Ubuntu 24.04.5 LTS

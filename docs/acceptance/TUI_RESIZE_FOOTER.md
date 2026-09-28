@@ -32,10 +32,10 @@ and wide supported sizes.
 ### RF-004 keeps one content column across pages
 
 The main alias browser and every page opened inside it use the same horizontal
-padding and maximum content width. Switching to stats, keyboard help, footer
-settings, themes, revisions, sync status, health, or a confirmation must not
-make the header, controls, global navigation, divider, or maker line grow or
-shrink on the same terminal.
+padding and maximum content width for headings, controls, and global navigation.
+The divider and maker line use the full width inside that padding. Switching to
+stats, keyboard help, footer settings, themes, revisions, sync status, health,
+or a confirmation must keep those widths consistent on the same terminal.
 
 The standalone stats dashboard may use the full terminal width because it has
 no parent browser column to match.

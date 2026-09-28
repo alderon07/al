@@ -728,7 +728,11 @@ func TestTallTerminalShowsMoreSuggestedAliases(t *testing.T) {
 		t.Fatalf("suggestion cap returned %d aliases, want 10", len(suggestions))
 	}
 	start, end := aliasWindow(aliases, 0, 82, 26)
-	if start != 0 || end < 6 {
-		t.Fatalf("tall terminal rendered aliases %d through %d, want at least 6", start, end)
+	if start != 0 || end != 10 {
+		t.Fatalf("tall terminal rendered aliases %d through %d, want all 10", start, end)
+	}
+	_, shortEnd := aliasWindow(aliases, 0, 82, 12)
+	if shortEnd >= end {
+		t.Fatalf("short terminal rendered %d aliases, want fewer than %d", shortEnd, end)
 	}
 }
