@@ -134,10 +134,17 @@ func parseLegacyFunctions(contents string) []Alias {
 }
 
 func currentPlatform() string {
-	if runtime.GOOS == "linux" && (os.Getenv("WSL_DISTRO_NAME") != "" || os.Getenv("WSL_INTEROP") != "") {
+	return platformName(runtime.GOOS, os.Getenv)
+}
+
+func platformName(goos string, getenv func(string) string) string {
+	if goos == "linux" && (getenv("WSL_DISTRO_NAME") != "" || getenv("WSL_INTEROP") != "") {
 		return "wsl"
 	}
-	return runtime.GOOS
+	if goos == "darwin" {
+		return "macos"
+	}
+	return goos
 }
 
 func platformSupported(platforms []string) bool {

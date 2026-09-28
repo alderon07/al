@@ -424,7 +424,7 @@ func bashLoginPath(home string) (string, error) {
 }
 
 func bashLoginStartupSupported(platform string) bool {
-	return platform == "darwin" || platform == "linux"
+	return platform == "darwin" || platform == "macos" || platform == "linux"
 }
 
 func ensureStartupFileLoads(path, aliasFilename, block string) error {

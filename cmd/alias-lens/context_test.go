@@ -157,16 +157,24 @@ func TestContextUsesNearestGitRootAndExactFolder(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(inner, ".git"), []byte("gitdir: elsewhere\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	canonicalInner, err := filepath.EvalSymlinks(inner)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalFolder, err := filepath.EvalSymlinks(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
 	working, err := contextForDirectory(folder)
-	if err != nil || working.Repository != inner {
+	if err != nil || working.Repository != canonicalInner {
 		t.Fatalf("nearest Git root = %q, %v", working.Repository, err)
 	}
 	kind, path, err := contextTarget(working, "auto")
-	if err != nil || kind != contextRepository || path != inner {
+	if err != nil || kind != contextRepository || path != canonicalInner {
 		t.Fatalf("default context = %s %s, %v", kind, path, err)
 	}
 	kind, path, err = contextTarget(working, contextDirectory)
-	if err != nil || kind != contextDirectory || path != folder {
+	if err != nil || kind != contextDirectory || path != canonicalFolder {
 		t.Fatalf("exact folder context = %s %s, %v", kind, path, err)
 	}
 	if _, _, err := contextTarget(workingContext{Directory: parent}, contextRepository); err == nil {
