@@ -19,7 +19,7 @@ import (
 
 func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestTUIResizeHelper$")
-	command.Env = append(os.Environ(), "ALIAS_LENS_TUI_RESIZE_HELPER=1", "NO_COLOR=1", "TERM=xterm-256color")
+	command.Env = append(os.Environ(), "ALIAS_LENS_TUI_RESIZE_HELPER=1", "HOME="+t.TempDir(), "NO_COLOR=1", "TERM=xterm-256color")
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 36, Cols: 120})
 	if err != nil {
 		t.Fatal(err)
@@ -93,7 +93,7 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 
 func TestHeldPageShortcutDoesNotFlickerInPTY(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestTUIResizeHelper$")
-	command.Env = append(os.Environ(), "ALIAS_LENS_TUI_RESIZE_HELPER=1", "NO_COLOR=1", "TERM=xterm-256color")
+	command.Env = append(os.Environ(), "ALIAS_LENS_TUI_RESIZE_HELPER=1", "HOME="+t.TempDir(), "NO_COLOR=1", "TERM=xterm-256color")
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 36, Cols: 120})
 	if err != nil {
 		t.Fatal(err)
@@ -131,6 +131,16 @@ func TestHeldPageShortcutDoesNotFlickerInPTY(t *testing.T) {
 }
 
 func TestControlPunctuationPTY(t *testing.T) {
+	parentHome := t.TempDir()
+	configDirectory := filepath.Join(parentHome, ".config", "alias-lens")
+	if err := os.MkdirAll(configDirectory, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDirectory, "config.json"), []byte("{"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", parentHome)
+
 	tests := []struct {
 		name     string
 		sequence string
@@ -146,7 +156,7 @@ func TestControlPunctuationPTY(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			command := exec.Command(os.Args[0], "-test.run=^TestTUIResizeHelper$")
-			command.Env = append(os.Environ(), "ALIAS_LENS_TUI_RESIZE_HELPER=1", "NO_COLOR=1", "TERM=xterm-256color")
+			command.Env = append(os.Environ(), "ALIAS_LENS_TUI_RESIZE_HELPER=1", "HOME="+t.TempDir(), "NO_COLOR=1", "TERM=xterm-256color")
 			terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 30, Cols: 100})
 			if err != nil {
 				t.Fatal(err)
