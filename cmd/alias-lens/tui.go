@@ -368,7 +368,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 				if message.Type == tea.KeyEsc {
 					m.lastShortcutAt = time.Time{}
 					m.aliasMode = aliasModeCommand
-					return m, nil
+					return m, m.wideAliasRedraw()
 				}
 				if message.Type == tea.KeyBackspace || message.Type == tea.KeyDelete {
 					m.lastShortcutAt = time.Time{}
@@ -377,7 +377,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 						m.query = m.query[:len(m.query)-size]
 						m.cursor = 0
 					}
-					return m, nil
+					return m, m.wideAliasRedraw()
 				}
 				if plainTextKey(message) {
 					m.lastShortcutAt = time.Time{}
@@ -388,14 +388,14 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					m.query = appendSearchQuery(m.query, input)
 					m.cursor = 0
-					return m, nil
+					return m, m.wideAliasRedraw()
 				}
 			} else if m.aliasMode == aliasModeCommand && message.Type == tea.KeyRunes && acceptsTextInput(message) && string(message.Runes) == "/" {
 				m.lastShortcutAt = time.Time{}
 				m.healthOnly = false
 				m.aliasMode = aliasModeSearch
 				m.cursorHidden = false
-				return m, nil
+				return m, m.wideAliasRedraw()
 			}
 		}
 		if m.diff != nil && !m.diff.confirmRestore {
@@ -469,7 +469,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		matches := m.currentAliases()
 		if matchesShortcut(message, m.shortcutProfile, shortcutRefresh) {
 			m.reloadAliasesAndTheme()
-			return m, nil
+			return m, m.wideAliasRedraw()
 		}
 		if matchesShortcut(message, m.shortcutProfile, shortcutAdd) {
 			m.startAddForm()
@@ -481,11 +481,11 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if !m.selectMode && matchesShortcut(message, m.shortcutProfile, shortcutContext) {
 			m.toggleSelectedContext(matches)
-			return m, nil
+			return m, m.wideAliasRedraw()
 		}
 		if !m.selectMode && matchesShortcut(message, m.shortcutProfile, shortcutFavorite) {
 			m.toggleSelectedFavorite(matches)
-			return m, nil
+			return m, m.wideAliasRedraw()
 		}
 		if matchesShortcut(message, m.shortcutProfile, shortcutDelete) && (message.Type != tea.KeyDelete || m.query == "") {
 			if len(matches) > 0 {
@@ -502,6 +502,7 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		previousCursor := m.cursor
 		switch message.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
 			return m, tea.Quit
@@ -557,6 +558,9 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 			m.healthOnly = false
 			m.query = appendSearchQuery(m.query, string(message.Runes))
 			m.cursor = 0
+		}
+		if m.cursor != previousCursor {
+			return m, m.wideAliasRedraw()
 		}
 	}
 	return m, nil
@@ -1812,6 +1816,13 @@ func (m model) currentAliases() []Alias {
 
 func (m model) searchFocused() bool {
 	return m.aliasMode != aliasModeCommand && !m.terminalBlurred && !m.tourVisible && !m.adding && !m.themePicker && !m.settingsOpen && !m.helpVisible && !m.shortcutsOpen && !m.statsOpen && m.deleteName == "" && m.runConfirm == nil && !m.revisionOpen && !m.trackedOnly
+}
+
+func (m model) wideAliasRedraw() tea.Cmd {
+	if m.width >= 120 && !m.healthOnly {
+		return tea.ClearScreen
+	}
+	return nil
 }
 
 func renderAlias(alias Alias, active bool, width int, contextual ...bool) string {

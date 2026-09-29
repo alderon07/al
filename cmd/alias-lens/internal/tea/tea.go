@@ -318,6 +318,10 @@ func Quit() Msg {
 	return tea2.Quit()
 }
 
+func ClearScreen() Msg {
+	return tea2.ClearScreen()
+}
+
 func Tick(duration time.Duration, callback func(time.Time) Msg) Cmd {
 	command := tea2.Tick(duration, func(now time.Time) tea2.Msg { return callback(now) })
 	return func() Msg { return command() }
