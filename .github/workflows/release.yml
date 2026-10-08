@@ -67,7 +67,17 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Check
+      - name: Install Zsh on Ubuntu
+        run: sudo apt-get update && sudo apt-get install --yes zsh
+      - name: Prepare private test temporary directory
+        run: |
+          test_tmp=$(mktemp -d /tmp/al-release.XXXXXX)
+          chmod 700 "$test_tmp"
+          test_tmp=$(cd "$test_tmp" && pwd -P)
+          printf 'TMPDIR=%s\n' "$test_tmp" >> "$GITHUB_ENV"
+      - name: Check with required shells
+        env:
+          AL_REQUIRE_PTY_SHELLS: "1"
         run: make check
       - name: Run govulncheck
         uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
@@ -117,6 +127,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           release_flags=(--verify-tag --generate-notes)
           if [[ "$GITHUB_REF_NAME" == *-* ]]; then
