@@ -222,8 +222,15 @@ func findShadowHeredocOperator(line []byte) int {
 			index += 2
 			continue
 		}
-		if character == '<' && index+1 < len(line) && line[index+1] == '<' && (index+2 >= len(line) || line[index+2] != '<') {
-			return index
+		if character == '<' && index+1 < len(line) && line[index+1] == '<' {
+			end := index + 2
+			for end < len(line) && line[end] == '<' {
+				end++
+			}
+			if end == index+2 {
+				return index
+			}
+			index = end - 1
 		}
 	}
 	return -1
@@ -510,98 +517,177 @@ func matchingOuterBrace(contents []byte, open int) (int, bool) {
 	type heredocSpec struct {
 		delimiter []byte
 		stripTabs bool
+		quoted    bool
 	}
 	heredocs := []heredocSpec{}
-	depth := 0
-	arithmeticDepth := 0
+	heredocActive := false
 	quote := byte(0)
-	escaped := false
-	for index := open; index < len(contents); index++ {
-		if len(heredocs) > 0 && (index == 0 || contents[index-1] == '\n') {
+	wordStart := true
+	commandStart := true
+	for index := open + 1; index < len(contents); index++ {
+		if heredocActive {
 			lineEnd := bytes.IndexByte(contents[index:], '\n')
 			if lineEnd < 0 {
-				lineEnd = len(contents)
-			} else {
-				lineEnd += index
+				return 0, false
 			}
-			line := bytes.TrimSuffix(contents[index:lineEnd], []byte{'\r'})
+			lineEnd += index
+			line := contents[index:lineEnd]
+			if !heredocs[0].quoted && bytes.HasSuffix(line, []byte{'\\'}) {
+				return 0, false
+			}
 			if heredocs[0].stripTabs {
 				line = bytes.TrimLeft(line, "\t")
 			}
 			if bytes.Equal(line, heredocs[0].delimiter) {
 				heredocs = heredocs[1:]
+				heredocActive = len(heredocs) > 0
 			}
 			index = lineEnd
+			wordStart, commandStart = true, true
 			continue
 		}
 		character := contents[index]
-		if escaped {
-			escaped = false
-			continue
+		if character == '\n' && quote != 0 && len(heredocs) > 0 {
+			return 0, false
 		}
-		if quote != 0 {
-			if character == '\\' && quote != '\'' {
-				escaped = true
-				continue
-			}
+		if quote == '\'' {
 			if character == quote {
 				quote = 0
 			}
 			continue
 		}
-		if arithmeticDepth > 0 {
-			if character == '(' {
-				arithmeticDepth++
-			} else if character == ')' {
-				arithmeticDepth--
+		if character == '\\' {
+			if index+1 >= len(contents) {
+				return 0, false
 			}
+			next := contents[index+1]
+			if next == '\n' {
+				return 0, false
+			}
+			if quote == '"' && !bytes.ContainsRune([]byte("$`\"\\\n"), rune(next)) {
+				continue
+			}
+			index++
+			wordStart, commandStart = false, false
 			continue
 		}
-		if character == '\'' || character == '"' || character == '`' {
-			quote = character
-			continue
+		if character == '`' {
+			return 0, false
 		}
-		if character == '$' && index+2 < len(contents) && contents[index+1] == '(' && contents[index+2] == '(' {
-			arithmeticDepth = 2
-			index += 2
-			continue
-		}
-		if character == '#' {
-			if index == 0 || contents[index-1] == '\n' || contents[index-1] == ' ' || contents[index-1] == '\t' {
-				for index < len(contents) && contents[index] != '\n' {
-					index++
+		if character == '$' && index+1 < len(contents) {
+			next := contents[index+1]
+			if next == '{' || next == '[' || next == '\'' || next == '"' {
+				return 0, false
+			}
+			if next == '(' {
+				end, ok := shadowNumericArithmetic(contents, index)
+				if !ok {
+					return 0, false
 				}
+				index = end
+				wordStart, commandStart = false, false
 				continue
 			}
 		}
-		if character == '<' && index+1 < len(contents) && contents[index+1] == '<' && (index+2 >= len(contents) || contents[index+2] != '<') {
+		if quote == '"' {
+			if character == quote {
+				quote = 0
+			}
+			continue
+		}
+		if character == '\'' || character == '"' {
+			quote = character
+			wordStart, commandStart = false, false
+			continue
+		}
+		if character == '#' && wordStart {
+			for index < len(contents) && contents[index] != '\n' {
+				index++
+			}
+			if len(heredocs) > 0 {
+				index--
+			} else {
+				wordStart, commandStart = true, true
+			}
+			continue
+		}
+		if character == '<' && index+1 < len(contents) && contents[index+1] == '<' {
+			if index+2 < len(contents) && contents[index+2] == '<' {
+				return 0, false
+			}
 			spec, next, ok := parseShadowHeredoc(contents, index+2)
 			if !ok {
 				return 0, false
 			}
 			heredocs = append(heredocs, spec)
 			index = next - 1
+			wordStart = true
 			continue
 		}
-		if character == '{' {
-			depth++
+		if character == '{' || character == '(' || character == ')' {
+			return 0, false
 		}
 		if character == '}' {
-			depth--
-			if depth == 0 {
-				return index, true
+			if !commandStart || !wordStart || len(heredocs) > 0 || (index+1 < len(contents) && !bytes.ContainsRune([]byte(" \t\n;"), rune(contents[index+1]))) {
+				return 0, false
+			}
+			return index, true
+		}
+		switch character {
+		case ' ', '\t':
+			wordStart = true
+		case '\n':
+			heredocActive = len(heredocs) > 0
+			wordStart, commandStart = true, true
+		case ';', '|', '&':
+			wordStart, commandStart = true, true
+		case '<', '>':
+			wordStart = true
+		case '\r':
+			return 0, false
+		default:
+			wordStart, commandStart = false, false
+		}
+	}
+	return 0, false
+}
+
+func shadowNumericArithmetic(contents []byte, start int) (int, bool) {
+	if start+2 >= len(contents) || contents[start+2] != '(' {
+		return 0, false
+	}
+	depth := 0
+	for index := start + 3; index < len(contents); index++ {
+		character := contents[index]
+		if character == '(' {
+			depth++
+			continue
+		}
+		if character == ')' {
+			if depth > 0 {
+				depth--
+				continue
+			}
+			return index + 1, index+1 < len(contents) && contents[index+1] == ')'
+		}
+		if character < '0' || character > '9' {
+			if !bytes.ContainsRune([]byte(" \t\n+-*/%<>&|^~!?:="), rune(character)) {
+				return 0, false
 			}
 		}
 	}
 	return 0, false
 }
+
 func parseShadowHeredoc(contents []byte, position int) (struct {
 	delimiter []byte
 	stripTabs bool
+	quoted    bool
 }, int, bool) {
 	result := struct {
 		delimiter []byte
 		stripTabs bool
+		quoted    bool
 	}{}
 	if position < len(contents) && contents[position] == '-' {
 		result.stripTabs = true
@@ -610,39 +696,61 @@ func parseShadowHeredoc(contents []byte, position int) (struct {
 	for position < len(contents) && (contents[position] == ' ' || contents[position] == '\t') {
 		position++
 	}
-	if position >= len(contents) {
-		return result, position, false
-	}
 	quote := byte(0)
-	if contents[position] == '\'' || contents[position] == '"' {
-		quote = contents[position]
-		position++
-	}
-	start := position
 	for position < len(contents) {
 		character := contents[position]
-		if quote != 0 {
+		if character == '\n' && quote != 0 {
+			return result, position, false
+		}
+		if quote == '\'' {
 			if character == quote {
-				result.delimiter = append([]byte(nil), contents[start:position]...)
-				position++
-				break
+				quote = 0
+			} else {
+				result.delimiter = append(result.delimiter, character)
 			}
 			position++
 			continue
 		}
-		if bytes.ContainsRune([]byte(" \t\r\n;|&()<>"), rune(character)) {
-			result.delimiter = append([]byte(nil), contents[start:position]...)
+		if character == '\\' {
+			result.quoted = true
+			if position+1 >= len(contents) || contents[position+1] == '\n' {
+				return result, position, false
+			}
+			next := contents[position+1]
+			if quote == '"' && !bytes.ContainsRune([]byte("$`\"\\"), rune(next)) {
+				result.delimiter = append(result.delimiter, character)
+				position++
+			} else {
+				result.delimiter = append(result.delimiter, next)
+				position += 2
+			}
+			continue
+		}
+		if character == '$' || character == '`' || character == '\r' {
+			return result, position, false
+		}
+		if quote == '"' {
+			if character == quote {
+				quote = 0
+			} else {
+				result.delimiter = append(result.delimiter, character)
+			}
+			position++
+			continue
+		}
+		if character == '\'' || character == '"' {
+			result.quoted = true
+			quote = character
+			position++
+			continue
+		}
+		if bytes.ContainsRune([]byte(" \t\n;|&()<>"), rune(character)) {
 			break
 		}
+		result.delimiter = append(result.delimiter, character)
 		position++
 	}
-	if quote != 0 && (position == 0 || contents[position-1] != quote) {
-		return result, position, false
-	}
-	if quote == 0 && result.delimiter == nil {
-		result.delimiter = append([]byte(nil), contents[start:position]...)
-	}
-	return result, position, len(result.delimiter) > 0
+	return result, position, quote == 0 && len(result.delimiter) > 0
 }
 
 func newShadowEntry(shell, name, kind, value, description string, metadata EntryMetadata) neutralcatalog.Entry {

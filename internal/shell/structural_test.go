@@ -100,3 +100,92 @@ func TestInvalidNativeSourceCannotHideControlMasks(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeStructuralGrammarRefusesEscapesAndUnsupportedContexts(t *testing.T) {
+	bodies := map[string]string{
+		"escaped quote":                "\n: \\'\n}\nprintf harmless_sentinel\n{\n: \\'\n",
+		"literal braces":               "\nprintf {\n}\nprintf harmless_sentinel\nfunction other {\nprintf }\n",
+		"ANSI C quote":                 "\n" + `printf $'escaped\' brace }'` + "\n",
+		"nested double substitution":   "\nprintf \"$(printf '%s' \"}\")\"\n",
+		"command substitution":         "\nprintf $(printf '}')\n",
+		"process substitution":         "\ncat <(printf '}')\n",
+		"parameter expansion":          "\nprintf ${HOME:-'}'}\n",
+		"brace expansion":              "\nprintf {one,two}\n",
+		"backtick":                     "\nprintf `printf '}'`\n",
+		"arithmetic substitution":      "\nprintf $(( $(printf 8) << 2 ))\n",
+		"arithmetic variable":          "\nprintf $((value << 2))\n",
+		"legacy arithmetic":            "\nprintf $[8 + 2]\n",
+		"nested group":                 "\n{ printf safe; }\n",
+		"escaped newline before close": "\nprintf \\\n}\nprintf harmless_sentinel\n{\n",
+		"dynamic delimiter":            "\ncat <<$'EOF'\n}\nEOF\n",
+		"reviewed heredoc joining":     "\ncat <<EOF\nEO\\\nF\n}\nprintf 'harmless_sentinel\\n'\nfunction other {\nEOF\n",
+		"reviewed heredoc quote":       "\ncat <<EOF \"\n\"\nEOF\n}\nprintf 'harmless_sentinel\\n'\nfunction other {\n# \"\nEOF\n",
+		"unsupported here string":      "\ncat <<< 'literal input'\n",
+		"unsupported input overlap":    "\ncat <<<< 'literal input'\n",
+		"repeated here strings":        "\ncat <<< 'first' <<< 'second'\n",
+	}
+	for _, name := range []string{"bash", "zsh"} {
+		for label, body := range bodies {
+			t.Run(name+"/"+label, func(t *testing.T) {
+				source := []byte("synthetic() {" + body + "}\n")
+				if err := shell.ValidateCatalogNativeDeclaration(name, source); err == nil {
+					t.Fatal("unsafe or unsupported declaration accepted")
+				}
+			})
+		}
+	}
+}
+
+func TestNativeHereStringOperatorBoundary(t *testing.T) {
+	declaration := []byte("function synthetic {\ncat <<<EOF\n}\nbuiltin printf 'harmless_sentinel\\n'\nfunction other {\nEOF\n}\n")
+	for _, name := range []string{"bash", "zsh"} {
+		t.Run(name, func(t *testing.T) {
+			if err := shell.ValidateCatalogNativeDeclaration(name, declaration); err == nil {
+				t.Fatal("reviewed here-string declaration accepted")
+			}
+			results := shell.ImportShadowSource(name, declaration)
+			if len(results) != 1 || results[0].Entry != nil || results[0].EndByte != len(declaration) {
+				t.Fatalf("unsupported declaration range changed: %#v", results)
+			}
+			results = shell.ImportShadowSource(name, []byte("cat <<< 'EOF'\nalias next='true'\n"))
+			if len(results) != 2 || results[0].Entry != nil || results[1].Name != "next" {
+				t.Fatalf("here-string suffix was treated as heredoc: %#v", results)
+			}
+		})
+	}
+}
+
+func TestNativeStructuralGrammarPreservesBodyAndFollowingAlias(t *testing.T) {
+	bodies := map[string]string{
+		"quoted variable":                  "\n printf '%s' \"$HOME\"\n",
+		"escaped quote":                    "\n printf '%s' \\'\n",
+		"escaped braces":                   "\n printf '%s' \\{ \\}\n",
+		"quoted braces":                    "\n printf '%s' '{' \"}\"\n",
+		"numeric arithmetic":               "\n printf '%s' $((8 << 2))\n",
+		"single line":                      " printf '%s' body; ",
+		"quoted heredoc backslash":         "\ncat <<'EOF'\nEO\\\nF\n} literal data {\nEOF\n",
+		"heredoc trailing quoted argument": "\ncat <<EOF \"argument\"\n} literal data {\nEOF\n",
+		"quoted input operator":            "\nprintf '%s' '<<< literal'\n",
+		"tab stripping heredoc":            "\ncat <<-EOF\n\t} literal data {\n\tEOF\n",
+	}
+	for _, delimiter := range []string{"EOF", "'EOF'", `\EOF`, "'EO'F", `"EO"F`} {
+		bodies["heredoc "+delimiter] = "\n cat <<" + delimiter + "\n} braced data {\nEOF\n"
+	}
+	for _, name := range []string{"bash", "zsh"} {
+		for label, body := range bodies {
+			t.Run(name+"/"+label, func(t *testing.T) {
+				declaration := "synthetic() {" + body + "} # trailing\n"
+				if err := shell.ValidateCatalogNativeDeclaration(name, []byte(declaration)); err != nil {
+					t.Fatal(err)
+				}
+				results := shell.ImportShadowSource(name, []byte(declaration+"alias next='true'\n"))
+				if len(results) != 2 || results[0].Entry == nil || results[1].Name != "next" || results[0].EndByte != len(declaration) {
+					t.Fatalf("source range changed: %#v", results)
+				}
+				if actual := *results[0].Entry.Native[name].FunctionBody; actual != body {
+					t.Fatalf("body changed: %q", actual)
+				}
+			})
+		}
+	}
+}

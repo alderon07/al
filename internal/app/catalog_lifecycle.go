@@ -17,6 +17,7 @@ import (
 	"alias-lens/internal/catalogrender"
 	"alias-lens/internal/catalogstore"
 	workflowplan "alias-lens/internal/plan"
+	shellapi "alias-lens/internal/shell"
 )
 
 type CatalogLifecycleDecisions struct {
@@ -242,7 +243,11 @@ func (svc *Services) buildCatalogEnablePlanForCatalog(shell string, decisions Ca
 			owners[record.Name] = record
 		}
 	}
-	nativeEntries := importShadowSource(shell, native)
+	reviewSource, err := shellapi.CatalogNativeReviewSource(adapter, native)
+	if err != nil {
+		return workflowplan.OperationPlan{}, err
+	}
+	nativeEntries := importShadowSource(shell, reviewSource)
 	collisions := map[string]int{}
 	for _, record := range nativeEntries {
 		if record.Entry != nil {
@@ -478,7 +483,15 @@ func refreshCatalogFallbacks(shell, path string, native []byte, adoptions catalo
 		}
 	}
 	result := catalogstore.AdoptionsFile{Version: 1, Records: []catalogstore.Adoption{}}
-	parsed := importShadowSource(shell, updated)
+	adapter, err := shellapi.New(shell)
+	if err != nil {
+		return nil, adoptions, err
+	}
+	reviewSource, err := shellapi.CatalogNativeReviewSource(adapter, updated)
+	if err != nil {
+		return nil, adoptions, err
+	}
+	parsed := importShadowSource(shell, reviewSource)
 	for _, record := range adoptions.Records {
 		if record.Shell != shell {
 			result.Records = append(result.Records, record)

@@ -71,7 +71,7 @@ func (r Runner) Run(ctx context.Context, repository string, input []byte, args .
 	return r.run(ctx, repository, input, args...)
 }
 func (r Runner) run(ctx context.Context, repository string, input []byte, args ...string) ([]byte, error) {
-	options := []string{"-c", "core.hooksPath=" + r.Hooks, "-c", "core.fsmonitor=false", "-c", "core.attributesFile=/dev/null", "-c", "credential.helper=", "-c", "submodule.recurse=false", "-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never", "-c", "protocol.version=2", "-c", "http.followRedirects=false", "-c", "filter.lfs.required=false", "-c", "filter.lfs.smudge=", "-c", "filter.lfs.clean=", "-c", "filter.lfs.process=", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "commit.gpgsign=false", "-c", "user.name=Alias Lens", "-c", "user.email=alias-lens@localhost"}
+	options := []string{"--no-replace-objects", "-c", "core.hooksPath=" + r.Hooks, "-c", "core.fsmonitor=false", "-c", "core.attributesFile=/dev/null", "-c", "credential.helper=", "-c", "submodule.recurse=false", "-c", "protocol.ext.allow=never", "-c", "protocol.file.allow=never", "-c", "protocol.version=2", "-c", "http.followRedirects=false", "-c", "filter.lfs.required=false", "-c", "filter.lfs.smudge=", "-c", "filter.lfs.clean=", "-c", "filter.lfs.process=", "-c", "maintenance.auto=false", "-c", "gc.auto=0", "-c", "commit.gpgsign=false", "-c", "push.followTags=false", "-c", "push.gpgSign=false", "-c", "user.name=Alias Lens", "-c", "user.email=alias-lens@localhost"}
 	if repository != "" {
 		options = append(options, "-C", repository)
 	}

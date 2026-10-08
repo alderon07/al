@@ -233,14 +233,6 @@ func CatalogPinnedIntegration(adapter Adapter, executable string) (string, error
 	declarations := regexp.MustCompile(`(?m)^([A-Za-z_][A-Za-z0-9_]*)\(\) \{$`)
 	text = declarations.ReplaceAllString(text, "function $1 {")
 	text = strings.Replace(text, "unalias al 2>/dev/null || true\n", "", 1)
-	for _, result := range ImportShadowSource(adapter.Name(), []byte(text)) {
-		if result.Name == "al" && result.Entry != nil {
-			declaration := text[result.StartByte:result.EndByte]
-			guarded := "if " + declaration + "then builtin unalias al 2>/dev/null || :; fi\n"
-			text = text[:result.StartByte] + guarded + text[result.EndByte:]
-			break
-		}
-	}
 	text = strings.ReplaceAll(text, " alias-lens", " "+QuoteShadow(executable))
 	lines := strings.Split(text, "\n")
 	kept := []string{}
@@ -265,6 +257,22 @@ func (bashShellAdapter) CatalogStartupRoute(path string, contents []byte, home s
 }
 func (zshShellAdapter) CatalogStartupRoute(string, []byte, string) (string, bool) {
 	return "zsh-interactive", false
+}
+
+func CatalogNativeReviewSource(adapter Adapter, native []byte) ([]byte, error) {
+	stripped, start, err := CatalogRemoveOwnedIntegration(adapter, native)
+	if err != nil {
+		return nil, err
+	}
+	masked := append([]byte{}, native...)
+	if start >= 0 {
+		for index := start; index < start+len(native)-len(stripped); index++ {
+			if masked[index] != '\n' {
+				masked[index] = ' '
+			}
+		}
+	}
+	return masked, nil
 }
 
 func CatalogRemoveOwnedIntegration(adapter Adapter, native []byte) ([]byte, int, error) {

@@ -273,3 +273,76 @@ func TestManagedSSHRelativeHomeRefusedWithoutLoop(t *testing.T) {
 		t.Fatal("relative-home policy looped")
 	}
 }
+
+func TestManagedPushDoesNotFollowTags(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
+	repository := setupRunnerRepository(t)
+	remote := filepath.Join(t.TempDir(), "remote.git")
+	runGit(t, repository, "init", "--bare", remote)
+	runGit(t, repository, "-c", "user.name=Synthetic", "-c", "user.email=synthetic@localhost", "tag", "-am", "synthetic private message", "synthetic-private")
+	runGit(t, repository, "config", "push.followTags", "true")
+	runner, cleanup, err := New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if _, err := runner.run(context.Background(), repository, nil, "-c", "protocol.file.allow=always", "push", "--", "file://"+remote, "HEAD:refs/heads/catalog"); err != nil {
+		t.Fatal(err)
+	}
+	refs := strings.Fields(runGit(t, remote, "for-each-ref", "--format=%(refname)"))
+	if len(refs) != 1 || refs[0] != "refs/heads/catalog" {
+		t.Fatalf("managed push expanded explicit refspec: %v", refs)
+	}
+	if strings.TrimSpace(runGit(t, repository, "config", "push.followTags")) != "true" {
+		t.Fatal("local followTags setting changed")
+	}
+}
+
+func TestManagedPushDoesNotExecuteSigners(t *testing.T) {
+	for _, signing := range []struct{ name, mode, format, program string }{
+		{"true", "true", "openpgp", "gpg.program"},
+		{"if-asked", "if-asked", "openpgp", "gpg.program"},
+		{"format-program", "true", "x509", "gpg.x509.program"},
+		{"ssh-key-command", "if-asked", "ssh", "gpg.ssh.defaultKeyCommand"},
+	} {
+		t.Run(signing.name, func(t *testing.T) {
+			t.Setenv("HOME", privateTestHome(t))
+			repository := setupRunnerRepository(t)
+			remote := filepath.Join(t.TempDir(), "remote.git")
+			runGit(t, repository, "init", "--bare", remote)
+			runGit(t, remote, "config", "receive.certNonceSeed", "synthetic-seed")
+			marker := filepath.Join(t.TempDir(), "signer-called")
+			signer := filepath.Join(t.TempDir(), "signer")
+			if err := os.WriteFile(signer, []byte("#!/bin/sh\nprintf called > '"+marker+"'\nexit 1\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			runGit(t, repository, "config", "push.gpgSign", signing.mode)
+			runGit(t, repository, "config", "gpg.format", signing.format)
+			runGit(t, repository, "config", signing.program, signer)
+			if signing.format != "ssh" {
+				runGit(t, repository, "config", "user.signingKey", "synthetic-key")
+			}
+			runner, cleanup, err := New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			runner.Password = "synthetic-password"
+			if err := runner.AuditNetworkConfig(context.Background(), repository, "https://example.invalid/synthetic/repo.git"); err != nil {
+				t.Fatal("repository with signing settings refused", err)
+			}
+			if _, err := runner.run(context.Background(), repository, nil, "-c", "protocol.file.allow=always", "push", "--", "file://"+remote, "HEAD:refs/heads/catalog"); err != nil {
+				t.Fatal("managed unsigned push failed", err)
+			}
+			if _, err := os.Stat(marker); !os.IsNotExist(err) {
+				t.Fatal("managed push executed configured signer")
+			}
+			if strings.TrimSpace(runGit(t, remote, "rev-parse", "refs/heads/catalog")) != strings.TrimSpace(runGit(t, repository, "rev-parse", "HEAD")) {
+				t.Fatal("unsigned push did not publish intended branch")
+			}
+			if strings.TrimSpace(runGit(t, repository, "config", "push.gpgSign")) != signing.mode || strings.TrimSpace(runGit(t, repository, "config", signing.program)) != signer {
+				t.Fatal("local signing settings changed")
+			}
+		})
+	}
+}

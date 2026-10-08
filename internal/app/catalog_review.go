@@ -10,6 +10,7 @@ import (
 	neutralcatalog "alias-lens/internal/catalog"
 	"alias-lens/internal/catalogstore"
 	workflowplan "alias-lens/internal/plan"
+	shellapi "alias-lens/internal/shell"
 )
 
 func (svc *Services) catalogAdoptionForEntry(entry neutralcatalog.Entry, shell, path string, native []byte) (catalogstore.Adoption, error) {
@@ -24,7 +25,15 @@ func (svc *Services) catalogAdoptionForEntry(entry neutralcatalog.Entry, shell, 
 		}
 	}
 	var match *shadowResult
-	for _, result := range importShadowSource(shell, native) {
+	adapter, err := svc.shellAdapter(shell)
+	if err != nil {
+		return catalogstore.Adoption{}, err
+	}
+	reviewSource, err := shellapi.CatalogNativeReviewSource(adapter, native)
+	if err != nil {
+		return catalogstore.Adoption{}, err
+	}
+	for _, result := range importShadowSource(shell, reviewSource) {
 		if result.Name == sourceName {
 			if match != nil || result.Entry == nil {
 				return catalogstore.Adoption{}, fmt.Errorf("native name is ambiguous")

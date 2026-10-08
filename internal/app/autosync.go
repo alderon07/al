@@ -196,7 +196,8 @@ func (svc *Services) reconcileTrackedFileInSession(session *mutationSession, con
 	if err != nil {
 		return err
 	}
-	local, localErr := readFileLimited(tracked.Source, trackedFileLimit)
+	observed, localErr := svc.internalSettings().observeTrackedSource(tracked.Source)
+	local := observed.contents
 	remote, remoteErr := readFileLimited(target, trackedFileLimit)
 	localMissing, remoteMissing := os.IsNotExist(localErr), os.IsNotExist(remoteErr)
 	if localErr != nil && !localMissing {
@@ -217,14 +218,14 @@ func (svc *Services) reconcileTrackedFileInSession(session *mutationSession, con
 		return svc.saveTrackedConflictInSession(session, tracked, nil, remote, statePath)
 	}
 	if remoteMissing {
-		return svc.pushTrackedFileInSession(session, config, tracked, local, statePath)
+		return svc.pushObservedTrackedFileInSession(session, config, tracked, observed, statePath)
 	}
 	localHash, remoteHash := contentHash(local), contentHash(remote)
 	switch decideSyncAction(state, localHash, remoteHash) {
 	case actionNoop:
 		return writeSyncStateAtInSession(session, statePath, SyncState{LocalHash: localHash, RemoteHash: remoteHash, Status: "synced", Message: "files match", UpdatedAt: svc.dependencies.Now()})
 	case actionPush:
-		return svc.pushTrackedFileInSession(session, config, tracked, local, statePath)
+		return svc.pushObservedTrackedFileInSession(session, config, tracked, observed, statePath)
 	case actionPull:
 		return svc.saveTrackedConflictInSession(session, tracked, local, remote, statePath)
 	case actionConflict:
@@ -239,9 +240,24 @@ func (svc *Services) pushTrackedFile(config AppConfig, tracked TrackedFileConfig
 	})
 }
 func (svc *Services) pushTrackedFileInSession(session *mutationSession, config AppConfig, tracked TrackedFileConfig, contents []byte, statePath string) error {
+	observed, err := svc.internalSettings().observeTrackedSource(tracked.Source)
+	if err != nil {
+		return err
+	}
+	if contentHash(contents) != contentHash(observed.contents) {
+		return fmt.Errorf("tracked source changed before publication; run al watch to retry")
+	}
+	return svc.pushObservedTrackedFileInSession(session, config, tracked, observed, statePath)
+}
+
+func (svc *Services) pushObservedTrackedFileInSession(session *mutationSession, config AppConfig, tracked TrackedFileConfig, observed trackedSourceObservation, statePath string) error {
 	if err := svc.validateTrackedFileConfig(tracked); err != nil {
 		return err
 	}
+	if err := svc.internalSettings().verifyTrackedSource(tracked.Source, observed); err != nil {
+		return err
+	}
+	contents := observed.contents
 	if err := secretFindingsErrorFor(tracked.Source, findSecretFindings(contents)); err != nil {
 		return fmt.Errorf("%s: %w", tracked.Source, err)
 	}
@@ -266,14 +282,18 @@ func (svc *Services) replaceTrackedFile(path string, contents []byte) error {
 	return svc.withMutation(func(session *mutationSession) error { return replaceTrackedFileInSession(session, path, contents) })
 }
 func replaceTrackedFileInSession(session *mutationSession, path string, contents []byte) error {
-	current, err := readFileLimited(path, trackedFileLimit)
+	svc := session.services
+	if svc == nil {
+		svc = DefaultServices()
+	}
+	observed, err := svc.internalSettings().observeTrackedSource(path)
 	if err != nil {
 		return err
 	}
-	info, err := os.Stat(path)
-	if err != nil {
+	if err := svc.internalSettings().verifyTrackedSource(path, observed); err != nil {
 		return err
 	}
+	current, info := observed.contents, observed.info
 	if err := writePrivateBackupInSession(session, path+".alias-lens.bak", current); err != nil {
 		return err
 	}

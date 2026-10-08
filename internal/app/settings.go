@@ -86,30 +86,38 @@ func (s *SettingsService) sensitiveConfigPath(path string) bool {
 }
 
 func (s *SettingsService) validateTrackedFileConfig(tracked TrackedFileConfig) error {
-	if err := s.dependencies.GuardTrackedSource(tracked.Source); err != nil {
+	if err := s.validateTrackedRegistryEntry(tracked); err != nil {
 		return err
 	}
+	file, _, err := openTrustedTrackedSource(tracked.Source, s.validateTrackedSourcePath)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if file != nil {
+		file.Close()
+	}
+	return nil
+}
+
+func (s *SettingsService) validateTrackedRegistryEntry(tracked TrackedFileConfig) error {
 	if !filepath.IsAbs(tracked.Source) {
 		return fmt.Errorf("tracked file source must be an absolute path: %s", tracked.Source)
 	}
 	if s.sensitiveConfigPath(tracked.Source) {
 		return fmt.Errorf("refusing to track a credential-shaped file: %s", tracked.Source)
 	}
-	if resolved, err := filepath.EvalSymlinks(tracked.Source); err == nil && s.sensitiveConfigPath(resolved) {
-		return fmt.Errorf("refusing to track a link to a credential-shaped file: %s", tracked.Source)
-	}
 	configFile, err := s.configPath()
 	if err != nil {
 		return err
 	}
-	if s.sameFilePath(tracked.Source, configFile) {
+	if filepath.Clean(tracked.Source) == filepath.Clean(configFile) {
 		return fmt.Errorf("refusing to track Alias Lens configuration: %s", tracked.Source)
 	}
 	contextsFile, err := s.dependencies.ContextPath()
 	if err != nil {
 		return err
 	}
-	if s.sameFilePath(tracked.Source, contextsFile) {
+	if filepath.Clean(tracked.Source) == filepath.Clean(contextsFile) {
 		return fmt.Errorf("refusing to track private context marks: %s", tracked.Source)
 	}
 	if _, err := s.dependencies.ValidateRepositoryPath(tracked.RepositoryPath, "tracked repository path"); err != nil {
@@ -162,7 +170,7 @@ func (s *SettingsService) validateAppConfig(config AppConfig) error {
 	seenSources := make(map[string]bool)
 	seenRepositoryPaths := make(map[string]bool)
 	for _, tracked := range config.TrackedFiles {
-		if err := s.validateTrackedFileConfig(tracked); err != nil {
+		if err := s.validateTrackedRegistryEntry(tracked); err != nil {
 			return fmt.Errorf("invalid tracked_files entry: %w; remove it from config.json", err)
 		}
 		source := filepath.Clean(tracked.Source)

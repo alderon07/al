@@ -216,7 +216,7 @@ func ValidateCatalogNativeDeclaration(shell string, declaration []byte) error {
 
 	results := ImportShadowSource(shell, declaration)
 	if len(results) != 1 || results[0].Entry == nil {
-		return fmt.Errorf("native implementation must be one complete declaration")
+		return fmt.Errorf("native implementation must be one complete declaration in the supported shell grammar; simplify quoting and continuations before al catalog approve")
 	}
 	if CatalogProtectedName(results[0].Name) || results[0].StartByte != 0 || results[0].EndByte != len(declaration) {
 		return fmt.Errorf("native implementation escapes its declaration or uses a protected name")

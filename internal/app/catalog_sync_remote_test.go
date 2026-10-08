@@ -123,14 +123,29 @@ func TestRemotePullEditPushUncertainReconciliation(t *testing.T) {
 			runGit(t, repository, "add", "unrelated")
 			os.WriteFile(filepath.Join(repository, "unrelated"), []byte("dirty"), 0600)
 			beforeIndex := runGit(t, repository, "ls-files", "--stage")
+			runGit(t, repository, "tag", "-am", "synthetic private tag message", "synthetic-private")
+			runGit(t, repository, "config", "push.followTags", "true")
+			signing := "true"
+			if outcome == "unchanged" {
+				signing = "if-asked"
+			}
+			runGit(t, repository, "config", "push.gpgSign", signing)
+			runGit(t, repository, "config", "user.signingKey", "synthetic-key")
+			runGit(t, bare, "config", "receive.certNonceSeed", "synthetic-seed")
+			signerMarker := filepath.Join(service.homeDirectory(), "signer-called")
+			signer := filepath.Join(service.homeDirectory(), "synthetic-signer")
+			if err := os.WriteFile(signer, []byte("#!/bin/sh\nprintf called > "+shellapi.Quote(signerMarker)+"\nexit 1\n"), 0700); err != nil {
+				t.Fatal(err)
+			}
+			runGit(t, repository, "config", "gpg.program", signer)
 			bin := filepath.Join(service.homeDirectory(), "bin")
 			os.Mkdir(bin, 0700)
 			attempted := filepath.Join(service.homeDirectory(), "attempted")
 			failure := "exit 1"
 			if outcome == "advanced" {
-				failure = shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " -c protocol.file.allow=always push -- " + shellapi.Quote("file://"+bare) + " \"$last\"; exit 1"
+				failure = shellapi.Quote(actualGit) + " \"$@\"; exit 1"
 			}
-			script := "#!/bin/sh\noperation=\nfor arg do case \"$arg\" in fetch|push) operation=$arg ;; esac;last=$arg;done\ncase \"$operation\" in\nfetch) " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " -c protocol.file.allow=always fetch --no-write-fetch-head --no-tags --no-recurse-submodules --depth=1 --filter=blob:none -- " + shellapi.Quote("file://"+bare) + " \"$last\" || exit $?\n " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " config --unset-all " + shellapi.Quote("remote.file://"+bare+".promisor") + "\n " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " config --unset-all " + shellapi.Quote("remote.file://"+bare+".partialclonefilter") + "\n " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " config " + shellapi.Quote("remote."+remoteURL+".promisor") + " true\n " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " config " + shellapi.Quote("remote."+remoteURL+".partialclonefilter") + " blob:none\n exit 0 ;;\npush) if [ ! -f " + shellapi.Quote(attempted) + " ]; then printf attempted > " + shellapi.Quote(attempted) + "; " + failure + "; fi\n exec " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " -c protocol.file.allow=always push -- " + shellapi.Quote("file://"+bare) + " \"$last\" ;;\n*) exec " + shellapi.Quote(actualGit) + " \"$@\" ;;\nesac\n"
+			script := "#!/bin/sh\noperation=\nfor arg do case \"$arg\" in fetch|push) operation=$arg ;; esac; done\nfor arg do shift; case \"$arg\" in " + shellapi.Quote(remoteURL) + ") set -- \"$@\" " + shellapi.Quote("file://"+bare) + " ;; fetch|push) set -- \"$@\" -c protocol.file.allow=always \"$arg\" ;; *) set -- \"$@\" \"$arg\" ;; esac; done\ncase \"$operation\" in\nfetch) " + shellapi.Quote(actualGit) + " \"$@\" || exit $?\n " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " config --unset-all " + shellapi.Quote("remote.file://"+bare+".promisor") + "\n " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " config --unset-all " + shellapi.Quote("remote.file://"+bare+".partialclonefilter") + "\n " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " config " + shellapi.Quote("remote."+remoteURL+".promisor") + " true\n " + shellapi.Quote(actualGit) + " -C " + shellapi.Quote(repository) + " config " + shellapi.Quote("remote."+remoteURL+".partialclonefilter") + " blob:none\n exit 0 ;;\npush) printf '%s\\n' \"$@\" > " + shellapi.Quote(filepath.Join(service.homeDirectory(), "push-args")) + "; if [ ! -f " + shellapi.Quote(attempted) + " ]; then printf attempted > " + shellapi.Quote(attempted) + "; " + failure + "; fi\n exec " + shellapi.Quote(actualGit) + " \"$@\" ;;\n*) exec " + shellapi.Quote(actualGit) + " \"$@\" ;;\nesac\n"
 			script = strings.Replace(script, "#!/bin/sh\n", "#!/bin/sh\nexec 2>"+shellapi.Quote(filepath.Join(service.homeDirectory(), "git-debug-stderr"))+"\n", 1)
 			os.WriteFile(filepath.Join(bin, "git"), []byte(script), 0700)
 			t.Setenv("PATH", bin+string(os.PathListSeparator)+capturedPATH)
@@ -145,6 +160,16 @@ func TestRemotePullEditPushUncertainReconciliation(t *testing.T) {
 			source := pending.PushIntent.SourceCommit
 			if err := push(); err != nil {
 				t.Fatal("uncertain intent reconciliation", err)
+			}
+			if strings.TrimSpace(runGit(t, bare, "for-each-ref", "refs/tags")) != "" {
+				t.Fatal("catalog push published an unrelated tag")
+			}
+			if _, err := os.Stat(signerMarker); !os.IsNotExist(err) {
+				t.Fatal("catalog push executed a configured signer")
+			}
+			pushArgs, err := os.ReadFile(filepath.Join(service.homeDirectory(), "push-args"))
+			if err != nil || !strings.Contains(string(pushArgs), "--no-follow-tags\n") || !strings.Contains(string(pushArgs), "--signed=false\n") || !strings.Contains(string(pushArgs), "--no-replace-objects\n") {
+				t.Fatal("catalog transport lost explicit push controls", err)
 			}
 			complete, _, err := service.readCatalogSyncRecord()
 			if err != nil || complete.PushIntent != nil || complete.HEAD != source {

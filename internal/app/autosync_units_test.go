@@ -121,7 +121,7 @@ func TestAutosyncRefusesTrackedCatalogFallbackBeforeAnyUnitWrites(t *testing.T) 
 	}
 	writeAutosyncInstalledFixture(t, "bash")
 	before := mutationInventory(t, home)
-	if e := DefaultServices().runWatch(false); e == nil || !strings.Contains(e.Error(), "remove it from config.json") {
+	if e := DefaultServices().runWatch(false); e == nil || !strings.Contains(e.Error(), "al untrack") {
 		t.Fatal("stale fallback registry accepted", e)
 	}
 	if after := mutationInventory(t, home); after != before {

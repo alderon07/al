@@ -471,7 +471,7 @@ func (svc *Services) reconcileCatalogPush(session *mutationSession, record catal
 		runner.Username = map[string]string{"github": "x-access-token", "gitlab": "oauth2", "bitbucket": "x-token-auth"}[record.Provider]
 		runner.Password = token
 		runner.Authority = remote.Host
-		if _, err := runner.RunTransport(ctx, record.Repository, remote.managedTransport(), nil, "push", "--", record.RemoteURL, intent.SourceCommit+":"+intent.DestinationRef); err != nil {
+		if _, err := runner.RunTransport(ctx, record.Repository, remote.managedTransport(), nil, "push", "--no-follow-tags", "--signed=false", "--", record.RemoteURL, intent.SourceCommit+":"+intent.DestinationRef); err != nil {
 			return fmt.Errorf("catalog push outcome is uncertain; run al sync --push to reconcile the pinned intent")
 		}
 		remote, err = svc.discoverRemoteCatalogAtRef(ctx, config, record.RemoteURL, record.CatalogPath, record.RemoteRef)
