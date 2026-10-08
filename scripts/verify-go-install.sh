@@ -12,7 +12,8 @@ candidate_root=$(mktemp -d "${TMPDIR:-/tmp}/al-go-install.XXXXXX")
 trap 'rm -rf "$candidate_root"' EXIT
 mkdir -m 700 "$candidate_root/home" "$candidate_root/bin" "$candidate_root/work"
 cd "$candidate_root/work"
-env HOME="$candidate_root/home" GOBIN="$candidate_root/bin" GOWORK=off GOENV=off GOFLAGS= \
+env HOME="$candidate_root/home" GOBIN="$candidate_root/bin" GOWORK=off GOENV=off GOFLAGS=-modcacherw \
+    GOMODCACHE="$candidate_root/mod-cache" GOCACHE="$candidate_root/build-cache" \
     GOPROXY=https://proxy.golang.org,direct GOSUMDB=sum.golang.org GOPRIVATE= GONOPROXY= GONOSUMDB= \
     "$candidate_go" install "github.com/alderon07/al/cmd/alias-lens@$candidate_version"
 installed_binary="$candidate_root/bin/alias-lens"
