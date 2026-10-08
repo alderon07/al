@@ -82,7 +82,7 @@ jobs:
           zsh --version
           uname -a
       - name: Run Linux shadow matrix
-        run: go test ./cmd/alias-lens -run '^TestShadow(LinuxMatrix|NeverExecutes|Validator|ReadOnly|ShellSelection|Nonblocking|RawSecret|Ambiguous|Generation)' -count=1
+        run: go test ./cmd/alias-lens ./internal/app ./internal/shell -run '^TestShadow(LinuxMatrix|NeverExecutes|Validator|ReadOnly|ShellSelection|Nonblocking|RawSecret|Ambiguous|Generation)' -count=1
 
   shadow-macos:
     runs-on: macos-14
@@ -105,7 +105,7 @@ jobs:
           uname -a
           sw_vers
       - name: Run macOS shadow matrix
-        run: go test ./cmd/alias-lens -run '^TestShadow(MacOSMatrix|NeverExecutes|Validator|ReadOnly|ShellSelection|Nonblocking|RawSecret|Ambiguous|Generation)' -count=1
+        run: go test ./cmd/alias-lens ./internal/app ./internal/shell -run '^TestShadow(MacOSMatrix|NeverExecutes|Validator|ReadOnly|ShellSelection|Nonblocking|RawSecret|Ambiguous|Generation)' -count=1
 
   release-candidate:
     runs-on: ubuntu-24.04

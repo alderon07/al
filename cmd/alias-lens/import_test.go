@@ -4,52 +4,14 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
-	"strings"
+
 	"testing"
-
-	tea "alias-lens/internal/tea"
 )
-
-func TestBuildImportPlanReportsDuplicatesConflictsAndSyntax(t *testing.T) {
-	current := []byte("alias gs='git status'\nalias ll='ls -la'\n")
-	source := []byte("alias gs='git switch'\nalias status='git status'\nalias one='echo ok'\nalias two='echo ok'\nalias broken='unterminated\n")
-	plan := buildImportPlan(source, current, mustShellAdapter("bash"))
-
-	joined := ""
-	for _, issue := range plan.Issues {
-		joined += issue.Kind + ":" + issue.Message + "\n"
-	}
-	for _, expected := range []string{"conflict:alias \"gs\"", "duplicate command:alias \"status\"", "duplicate command:aliases \"one\" and \"two\"", "error:quoted alias command"} {
-		if !strings.Contains(joined, expected) {
-			t.Errorf("issues missing %q:\n%s", expected, joined)
-		}
-	}
-}
-
-func TestImportPreviewEscapesTerminalControlBytes(t *testing.T) {
-	input := "git status\x1b]52;c;clipboard\x07"
-	got := terminalSafeText(input)
-	if strings.ContainsAny(got, "\x1b\x07") {
-		t.Fatalf("preview retained terminal control bytes: %q", got)
-	}
-	if !strings.Contains(got, `\x1b`) || !strings.Contains(got, `\x07`) {
-		t.Fatalf("preview did not make control bytes visible: %q", got)
-	}
-}
-
-func TestTabSelectsWithoutExecuting(t *testing.T) {
-	initial := model{aliases: []Alias{{Name: "gs", Command: "git status"}}, width: 80, height: 24, executeMode: true}
-	updated, command := initial.Update(tea.KeyMsg{Type: tea.KeyTab})
-	selected := updated.(model)
-	if selected.selected == nil || selected.selected.Name != "gs" || !selected.editSelection || command == nil {
-		t.Fatalf("tab selection = %#v, command nil = %t", selected.selected, command == nil)
-	}
-}
 
 func TestImportApplyWritesOnceAndKeepsMetadata(t *testing.T) {
 	home := privateTestHome(t)
 	t.Setenv("HOME", home)
-	t.Setenv(activeShellEnvironment, "bash")
+	t.Setenv("ALIAS_LENS_SHELL", "bash")
 	aliasPath := filepath.Join(home, ".bash_aliases")
 	original := []byte("alias ll='ls -la'\n")
 	if err := os.WriteFile(aliasPath, original, 0o600); err != nil {
@@ -76,7 +38,7 @@ func TestImportApplyWritesOnceAndKeepsMetadata(t *testing.T) {
 	if backup, err := os.ReadFile(aliasPath + ".alias-lens.bak"); err != nil || !bytes.Equal(backup, original) {
 		t.Fatalf("backup = %q, %v", backup, err)
 	}
-	revisions, err := listRevisions(aliasPath)
+	revisions, err := applicationServices().RevisionList()
 	if err != nil || len(revisions) != 1 {
 		t.Fatalf("revisions = %#v, %v", revisions, err)
 	}

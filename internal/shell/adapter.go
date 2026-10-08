@@ -62,14 +62,31 @@ type BindingSpec struct {
 }
 
 type bashShellAdapter struct{}
-type zshShellAdapter struct{}
+type zshShellAdapter struct{ runtime Runtime }
 
-func New(name string) (Adapter, error) {
+type Runtime struct {
+	Environment func(string) string
+	WorkingDir  func() (string, error)
+}
+
+func defaultRuntime(runtime Runtime) Runtime {
+	if runtime.Environment == nil {
+		runtime.Environment = os.Getenv
+	}
+	if runtime.WorkingDir == nil {
+		runtime.WorkingDir = os.Getwd
+	}
+	return runtime
+}
+
+func New(name string) (Adapter, error) { return NewWithRuntime(name, Runtime{}) }
+
+func NewWithRuntime(name string, runtime Runtime) (Adapter, error) {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "bash":
 		return bashShellAdapter{}, nil
 	case "zsh":
-		return zshShellAdapter{}, nil
+		return zshShellAdapter{runtime: defaultRuntime(runtime)}, nil
 	default:
 		return nil, fmt.Errorf("unsupported shell %q (use bash or zsh)", name)
 	}
@@ -195,8 +212,8 @@ func (zshShellAdapter) PromptSpec() PromptSpec {
 func (zshShellAdapter) BindingSpec() BindingSpec {
 	return BindingSpec{Key: "Ctrl+G", DisableEnvironment: "ALIAS_LENS_NOBIND"}
 }
-func (zshShellAdapter) StartupPaths(home, _ string) ([]string, error) {
-	path, err := ZshStartupPath(home)
+func (adapter zshShellAdapter) StartupPaths(home, _ string) ([]string, error) {
+	path, err := zshStartupPath(home, defaultRuntime(adapter.runtime))
 	if err != nil {
 		return nil, err
 	}
@@ -233,16 +250,23 @@ func (adapter zshShellAdapter) StartupStatus(home, platform string) (bool, strin
 	return true, path + " loads .zsh_aliases"
 }
 func ZshStartupPath(home string) (string, error) {
-	directory := strings.TrimSpace(os.Getenv("ZDOTDIR"))
+	return zshStartupPath(home, defaultRuntime(Runtime{}))
+}
+func zshStartupPath(home string, runtime Runtime) (string, error) {
+	directory := strings.TrimSpace(runtime.Environment("ZDOTDIR"))
 	if directory == "" {
 		directory = home
 	} else if directory == "~" || strings.HasPrefix(directory, "~/") {
 		directory = filepath.Join(home, strings.TrimPrefix(directory, "~/"))
 	} else if !filepath.IsAbs(directory) {
-		absolute, err := filepath.Abs(directory)
+		working, err := runtime.WorkingDir()
 		if err != nil {
 			return "", err
 		}
+		if !filepath.IsAbs(working) {
+			return "", fmt.Errorf("working directory must be absolute")
+		}
+		absolute := filepath.Clean(filepath.Join(working, directory))
 		directory = absolute
 	}
 	return filepath.Join(directory, ".zshrc"), nil
@@ -352,7 +376,7 @@ func (adapter zshShellAdapter) CatalogStartupPaths(home, platform string, explic
 	if len(explicit) > 0 {
 		return catalogExplicitStartupPaths(explicit)
 	}
-	path, err := CatalogZshStartupPath(home)
+	path, err := catalogZshStartupPath(home, defaultRuntime(adapter.runtime))
 	if err != nil {
 		return nil, err
 	}

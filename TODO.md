@@ -122,6 +122,14 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [ ] Benchmark startup, large alias files, and search before considering a language rewrite.
 - [ ] Design end-to-end encryption before adding any hosted sync service.
 
+## Keep package responsibilities clear
+
+- [x] Extract managed Git, providers, shared entries and shell adapters with independent review and verification.
+- [x] Separate shared presentation and shortcut settings from persistence and terminal models.
+- [x] Move persistent operations behind typed `internal/app` services under `docs/acceptance/APPLICATION_PACKAGE.md`.
+- [x] Move terminal models and views into `internal/tui` under `docs/acceptance/TERMINAL_PACKAGE.md`.
+- [x] Verify unchanged CLI outputs, JSON contracts, shell behavior and narrow/wide terminal flows after both moves; record review resolutions and full checks.
+
 ## Prepare the 1.0 contract
 
 - [x] Version `config.json` and reject unsupported pre-release formats without changing them.

@@ -4,12 +4,11 @@ package main
 
 import (
 	"fmt"
+	"github.com/creack/pty/v2"
 	"os"
 	"os/exec"
 	"testing"
 	"time"
-
-	"github.com/creack/pty/v2"
 )
 
 func TestPlainCommandStartupDoesNotProbeTerminal(t *testing.T) {

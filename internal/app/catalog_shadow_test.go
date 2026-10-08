@@ -1,0 +1,945 @@
+//go:build !windows
+
+package app
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+
+	"encoding/json"
+
+	"errors"
+	"fmt"
+
+	"os"
+	"os/exec"
+
+	"path/filepath"
+
+	"reflect"
+	"runtime"
+
+	"strings"
+	"sync"
+	"syscall"
+
+	neutralcatalog "alias-lens/internal/catalog"
+	"testing"
+	"time"
+	"unicode/utf8"
+)
+
+func TestShadowLineCountRejectsNewlineExpansion(t *testing.T) {
+	source := bytes.Repeat([]byte{'\n'}, shadowMaxLines+1)
+	if count := sourceLineCount(source); count != shadowMaxLines+1 {
+		t.Fatalf("line count = %d", count)
+	}
+}
+
+func TestUnterminatedShadowFunctionConsumesInputOnce(t *testing.T) {
+	source := []byte("broken() {\n" + strings.Repeat("echo still-open\n", 20000))
+	results := importShadowSource("bash", source)
+	if len(results) != 1 || results[0].Status != "unsupported" || results[0].EndByte != len(source) {
+		t.Fatalf("unterminated function produced %d results", len(results))
+	}
+}
+
+func TestShadowSecretMappingHandlesLargeResultSets(t *testing.T) {
+	const count = 5000
+	source := bytes.Repeat([]byte("x\n"), count)
+	results := make([]shadowResult, count)
+	findings := make([]SecretFinding, count)
+	for index := 0; index < count; index++ {
+		results[index] = shadowResult{StartLine: index + 1, EndLine: index + 1, Status: "equivalent", Entry: &neutralcatalog.Entry{}}
+		findings[index] = SecretFinding{Line: index + 1, Kind: "test secret"}
+	}
+	results = blockShadowSecrets(results, findings, source)
+	for index, result := range results {
+		if result.Status != "blocked" || result.Entry != nil || len(result.Diagnostics) != 1 {
+			t.Fatalf("result %d was not blocked once: %#v", index, result)
+		}
+	}
+}
+
+func TestShadowImportSupportedDefinitions(t *testing.T) {
+	source := []byte("# Show files\n# al: tags=files platforms=linux favorite=true category=files\nalias ll='ls -la'\n\ncproj() {\n cd \"$HOME/code\"\n}\n")
+	results := importShadowSource("bash", source)
+	if len(results) != 2 {
+		t.Fatalf("results = %#v", results)
+	}
+	if results[0].Name != "ll" || results[0].Kind != "command" || results[0].Entry.Description != "Show files" {
+		t.Fatalf("alias result = %#v", results[0])
+	}
+	if results[1].Name != "cproj" || results[1].Kind != "function" {
+		t.Fatalf("function result = %#v", results[1])
+	}
+	body := *results[1].Entry.Native["bash"].FunctionBody
+	if body != "\n cd \"$HOME/code\"\n" {
+		t.Fatalf("function body changed: %q", body)
+	}
+}
+
+func TestShadowCommentOwnershipAndHorizontalWhitespace(t *testing.T) {
+	source := []byte("## section\n#ordinary-without-required-space\n\t# Describes x\nalias\tx='echo x' # trailing\n")
+	results := importShadowSource("bash", source)
+	if len(results) != 1 || results[0].Entry == nil {
+		t.Fatalf("results = %#v", results)
+	}
+	if results[0].Entry.Description != "Describes x" || results[0].StartLine != 3 {
+		t.Fatalf("comment ownership = %#v", results[0])
+	}
+	for _, invalid := range []string{"alias x='echo x'#not-comment\n", "alias x='echo x'\\\nalias y='true'\n"} {
+		results = importShadowSource("bash", []byte(invalid))
+		if len(results) != 1 || results[0].Status != "unsupported" || results[0].EndByte != len(invalid) {
+			t.Errorf("invalid trailing syntax = %#v", results)
+		}
+	}
+}
+
+func TestShadowRejectsUnsafeAliasSyntax(t *testing.T) {
+	for _, source := range []string{"alias x=\"$(touch /tmp/no)\"\n", "alias x='one' y='two'\n", "alias x=$HOME\n"} {
+		results := importShadowSource("bash", []byte(source))
+		if len(results) != 1 || results[0].Status != "unsupported" {
+			t.Errorf("source %q = %#v", source, results)
+		}
+	}
+}
+
+func TestShadowAmbiguousRangeConsumesEOF(t *testing.T) {
+	for _, source := range []string{
+		"broken() {\n echo nope\nalias recovered='false'\n",
+		"alias broken='unterminated\nalias recovered='false'\n",
+	} {
+		results := importShadowSource("bash", []byte(source))
+		if len(results) != 1 || results[0].Status != "unsupported" || results[0].EndByte != len(source) {
+			t.Fatalf("ambiguous source produced %#v", results)
+		}
+		if results[0].Name == "recovered" {
+			t.Fatal("recovered a definition from an ambiguous range")
+		}
+	}
+}
+
+func TestShadowHeredocRanges(t *testing.T) {
+	source := []byte("show() {\n cat <<'EOF'\n } inside data\nEOF\n echo done\n}\nalias next='true'\n")
+	results := importShadowSource("bash", source)
+	if len(results) != 2 || results[0].Name != "show" || results[1].Name != "next" {
+		t.Fatalf("closed heredoc ranges = %#v", results)
+	}
+	body := *results[0].Entry.Native["bash"].FunctionBody
+	if body != "\n cat <<'EOF'\n } inside data\nEOF\n echo done\n" {
+		t.Fatalf("heredoc body changed: %q", body)
+	}
+
+	unclosed := []byte("show() {\n cat <<EOF\n } inside data\nalias hidden='true'\n")
+	results = importShadowSource("bash", unclosed)
+	if len(results) != 1 || results[0].Status != "unsupported" || results[0].EndByte != len(unclosed) {
+		t.Fatalf("unclosed heredoc = %#v", results)
+	}
+}
+
+func TestShadowArithmeticShiftIsNotHeredoc(t *testing.T) {
+	source := []byte("shifted() {\n echo $((8 << 2))\n}\nalias next='true'\n")
+	results := importShadowSource("bash", source)
+	if len(results) != 2 || results[0].Name != "shifted" || results[1].Name != "next" {
+		t.Fatalf("arithmetic shift ranges = %#v", results)
+	}
+}
+
+func TestShadowUnsupportedHeredocRange(t *testing.T) {
+	closed := []byte("cat <<EOF\nnot an alias }\nEOF\nalias next='true'\n")
+	results := importShadowSource("bash", closed)
+	if len(results) != 2 || results[0].EndLine != 3 || results[1].Name != "next" {
+		t.Fatalf("closed unsupported heredoc = %#v", results)
+	}
+	unclosed := []byte("cat <<EOF\nnot an alias\nalias hidden='true'\n")
+	results = importShadowSource("bash", unclosed)
+	if len(results) != 1 || results[0].EndByte != len(unclosed) || results[0].Diagnostics[0].Code != "ambiguous_syntax" {
+		t.Fatalf("unclosed unsupported heredoc = %#v", results)
+	}
+}
+
+func TestShadowMetadataGrammar(t *testing.T) {
+	valid := "# al: tags=git,files platforms=linux,wsl favorite=true category=tools\nalias x='echo x'\n"
+	results := importShadowSource("bash", []byte(valid))
+	if len(results) != 1 || results[0].Entry == nil || results[0].Entry.Category != "tools" {
+		t.Fatalf("valid metadata = %#v", results)
+	}
+	invalid := []string{
+		"# al: category=tools tags=git",
+		"# al: tags=Git",
+		"# al: tags=git,git",
+		"# al: platforms=wsl,linux",
+		"# al: favorite=false",
+		"# al: tags=git  category=tools",
+	}
+	for _, metadata := range invalid {
+		results = importShadowSource("bash", []byte(metadata+"\nalias x='echo x'\n"))
+		if len(results) != 1 || results[0].Status != "unsupported" || results[0].Entry != nil {
+			t.Errorf("metadata %q = %#v", metadata, results)
+		}
+	}
+}
+
+func TestShadowDuplicateSetIsExcluded(t *testing.T) {
+	results := importShadowSource("bash", []byte("alias x='one'\nalias x='two'\n"))
+	markShadowDuplicates(results)
+	for _, result := range results {
+		if result.Status != "duplicate" || result.Entry != nil {
+			t.Fatalf("duplicate result = %#v", result)
+		}
+	}
+}
+
+func TestShadowUnitsFollowSourceRanges(t *testing.T) {
+	secret := "ghp_abcdefghijklmnopqrstuvwxyz123456"
+	source := []byte("# " + secret + "\n\nalias x='true'\n")
+	results := blockShadowSecrets(importShadowSource("bash", source), findSecretFindings(source), source)
+	assignShadowUnits(results)
+	if len(results) != 2 {
+		t.Fatalf("results = %#v", results)
+	}
+	for _, result := range results {
+		if result.Status == "blocked" && result.Unit != 0 {
+			t.Fatalf("blocked source unit = %d", result.Unit)
+		}
+		if result.Name == "x" && result.Unit != 1 {
+			t.Fatalf("alias source unit = %d", result.Unit)
+		}
+	}
+}
+
+func TestShadowInspectionIsReadOnly(t *testing.T) {
+	originalValidator := shadowValidatorPath
+	shadowValidatorPath = func(shell string) (string, error) { return exec.LookPath(shell) }
+	t.Cleanup(func() { shadowValidatorPath = originalValidator })
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, "config"))
+	aliasPath := filepath.Join(home, ".bash_aliases")
+	contents := []byte("alias ok='echo OK'\n")
+	if err := os.WriteFile(aliasPath, contents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	report, err := DefaultServices().inspectCatalogShadow("bash")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(report.Results) != 1 || report.Results[0].Status != "equivalent" {
+		t.Fatalf("report = %#v", report)
+	}
+	after, err := os.ReadFile(aliasPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(contents, after) {
+		t.Fatal("alias file changed")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config")); !os.IsNotExist(err) {
+		t.Fatalf("shadow created config state: %v", err)
+	}
+}
+
+func TestShadowReadOnlyManifest(t *testing.T) {
+	originalValidator := shadowValidatorPath
+	shadowValidatorPath = func(shell string) (string, error) { return exec.LookPath("bash") }
+	t.Cleanup(func() { shadowValidatorPath = originalValidator })
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	files := map[string]string{
+		".bash_aliases":                              "alias ok='echo OK'\n",
+		".bashrc":                                    "# user startup\n",
+		".bash_history":                              "echo private\n",
+		".config/alias-lens/config.json":             `{"version":2,"shell":"bash"}`,
+		".local/share/alias-lens/usage.json":         "{}\n",
+		".local/share/alias-lens/revisions/keep.txt": "private revision\n",
+		"dotfiles/.git/index":                        "private index\n",
+		"dotfiles/unrelated.txt":                     "keep\n",
+	}
+	for name, contents := range files {
+		path := filepath.Join(home, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	before := shadowTreeManifest(t, home)
+	if _, err := DefaultServices().inspectCatalogShadow(""); err != nil {
+		t.Fatal(err)
+	}
+	after := shadowTreeManifest(t, home)
+	if !reflect.DeepEqual(before, after) {
+		t.Fatalf("home changed\nbefore: %#v\nafter: %#v", before, after)
+	}
+}
+
+func shadowTreeManifest(t *testing.T, root string) map[string]string {
+	t.Helper()
+	manifest := map[string]string{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			manifest[relative] = fmt.Sprintf("directory:%o", info.Mode().Perm())
+			return nil
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(contents)
+		manifest[relative] = fmt.Sprintf("file:%o:%x", info.Mode().Perm(), sum)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return manifest
+}
+
+func TestShadowMissingAliasDoesNotCreateFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	_, err := DefaultServices().inspectCatalogShadow("bash")
+	if err == nil {
+		t.Fatal("missing alias file passed")
+	}
+	if _, statErr := os.Stat(filepath.Join(home, ".bash_aliases")); !os.IsNotExist(statErr) {
+		t.Fatalf("missing alias file was created: %v", statErr)
+	}
+}
+
+func TestShadowReadOnlyConfigSelection(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configDirectory := filepath.Join(home, ".config", "alias-lens")
+	if err := os.MkdirAll(configDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	config := []byte(`{"version":2,"shell":"zsh"}`)
+	path := filepath.Join(configDirectory, "config.json")
+	if err := os.WriteFile(path, config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := DefaultServices().shadowShellAdapter("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if adapter.Name() != "zsh" {
+		t.Fatalf("adapter = %s", adapter.Name())
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(config, after) {
+		t.Fatal("shadow changed config")
+	}
+	if _, err := os.Stat(path + ".alias-lens.bak"); !os.IsNotExist(err) {
+		t.Fatal("shadow created config backup")
+	}
+}
+
+func TestShadowReadOnlyConfigMatrix(t *testing.T) {
+	tests := []struct {
+		name, config, shell, errorText string
+	}{
+		{name: "current", config: `{"version":2,"shell":"zsh"}`, shell: "zsh"},
+		{name: "empty shell", config: `{"version":2,"shell":""}`, shell: "bash"},
+		{name: "versionless", config: `{"shell":"zsh"}`, errorText: "invalid configuration version"},
+		{name: "version zero", config: `{"version":0,"shell":"bash"}`, errorText: "configuration version unsupported"},
+		{name: "version one", config: `{"version":1,"shell":"zsh"}`, errorText: "configuration version unsupported"},
+		{name: "negative", config: `{"version":-1}`, errorText: "configuration version unsupported"},
+		{name: "future", config: fmt.Sprintf(`{"version":%d}`, currentConfigVersion+1), errorText: "configuration version unsupported"},
+		{name: "null version", config: `{"version":null}`, errorText: "invalid configuration"},
+		{name: "null shell", config: `{"shell":null}`, errorText: "invalid configuration"},
+		{name: "wrong type", config: `{"version":"one"}`, errorText: "invalid configuration"},
+		{name: "duplicate", config: `{"version":2,"shell":"bash","shell":"zsh"}`, errorText: "duplicate configuration field"},
+		{name: "unsupported shell", config: `{"version":2,"shell":"fish"}`, errorText: "unsupported configured shell"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			directory := filepath.Join(home, ".config", "alias-lens")
+			if err := os.MkdirAll(directory, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(directory, "config.json")
+			before := []byte(test.config)
+			if err := os.WriteFile(path, before, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			adapter, err := DefaultServices().shadowShellAdapter("")
+			if test.errorText != "" {
+				if err == nil || !strings.Contains(err.Error(), test.errorText) {
+					t.Fatalf("error = %v", err)
+				}
+			} else if err != nil || adapter.Name() != test.shell {
+				t.Fatalf("adapter = %v, error = %v", adapter, err)
+			}
+			after, readErr := os.ReadFile(path)
+			if readErr != nil || !bytes.Equal(before, after) {
+				t.Fatalf("configuration changed: %v", readErr)
+			}
+		})
+	}
+}
+
+func TestShadowShellSelectionMatrix(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configDirectory := filepath.Join(home, ".config", "alias-lens")
+	if err := os.MkdirAll(configDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configDirectory, "config.json"), []byte(`{"version":99,"shell":"zsh"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	adapter, err := DefaultServices().shadowShellAdapter("bash")
+	if err != nil || adapter.Name() != "bash" {
+		t.Fatalf("explicit selection did not bypass config: %v, %v", adapter, err)
+	}
+}
+
+func TestShadowNonblockingFileTypeMatrix(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix file type test")
+	}
+	directory := t.TempDir()
+	regular := filepath.Join(directory, "regular")
+	if err := os.WriteFile(regular, []byte("ok"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := readShadowRegular(regular, 2); err != nil || string(got) != "ok" {
+		t.Fatalf("regular read = %q, %v", got, err)
+	}
+	link := filepath.Join(directory, "link")
+	if err := os.Symlink(regular, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := readShadowRegular(link, 2); err != nil {
+		t.Fatalf("leaf symlink failed: %v", err)
+	}
+	fifo := filepath.Join(directory, "fifo")
+	if err := syscall.Mkfifo(fifo, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	if _, err := readShadowRegular(fifo, 2); err == nil {
+		t.Fatal("FIFO was accepted")
+	}
+	if time.Since(started) > time.Second {
+		t.Fatal("FIFO read blocked")
+	}
+	if _, err := readShadowRegular(directory, 2); err == nil {
+		t.Fatal("directory was accepted")
+	}
+	if _, err := readShadowRegular(regular, 1); err == nil {
+		t.Fatal("oversized file was accepted")
+	}
+}
+
+func TestShadowConfigResourceLimits(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	directory := filepath.Join(home, ".config", "alias-lens")
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "config.json")
+	if err := os.WriteFile(path, bytes.Repeat([]byte(" "), shadowConfigLimit+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DefaultServices().shadowShellAdapter(""); err == nil || !strings.Contains(err.Error(), "configuration unreadable") {
+		t.Fatalf("oversized config error = %v", err)
+	}
+	if info, err := os.Stat(path); err != nil || info.Size() != shadowConfigLimit+1 {
+		t.Fatalf("config was changed: %v, %v", info, err)
+	}
+}
+
+func TestShadowResourceLimits(t *testing.T) {
+	tests := []struct {
+		name, contents, want string
+	}{
+		{name: "source bytes", contents: string(bytes.Repeat([]byte("x"), ShadowSourceLimit+1)), want: "unreadable"},
+		{name: "physical line", contents: string(bytes.Repeat([]byte("x"), shadowLineLimit+1)), want: "line over 1 MiB"},
+		{name: "definitions", contents: repeatedShadowLines("alias x%d='true'\n", shadowMaxEntries+1), want: "more than 10000"},
+		{name: "ranges", contents: repeatedShadowLines("unsupported%d\n", shadowMaxResults+1), want: "more than 20000"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
+			path := filepath.Join(home, ".bash_aliases")
+			if err := os.WriteFile(path, []byte(test.contents), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, inspectErr := DefaultServices().inspectCatalogShadow("bash")
+			if inspectErr == nil || !strings.Contains(inspectErr.Error(), test.want) {
+				t.Fatalf("error = %v", inspectErr)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatalf("source changed: %v", err)
+			}
+		})
+	}
+}
+
+func repeatedShadowLines(format string, count int) string {
+	var output strings.Builder
+	for index := 0; index < count; index++ {
+		fmt.Fprintf(&output, format, index)
+	}
+	return output.String()
+}
+
+func TestShadowNeverExecutesBashContent(t *testing.T) {
+	originalValidator := shadowValidatorPath
+	shadowValidatorPath = func(shell string) (string, error) { return exec.LookPath("bash") }
+	t.Cleanup(func() { shadowValidatorPath = originalValidator })
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sentinel := filepath.Join(home, "sentinel")
+	source := "alias dangerous='touch " + sentinel + "'\nfn() { touch " + sentinel + "; }\n"
+	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DefaultServices().inspectCatalogShadow("bash"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
+		t.Fatalf("inspected content executed: %v", err)
+	}
+}
+
+func TestShadowNeverExecutesZshContent(t *testing.T) {
+	zsh, err := exec.LookPath("zsh")
+	if err != nil {
+		t.Skip("zsh is not installed")
+	}
+	originalValidator := shadowValidatorPath
+	shadowValidatorPath = func(shell string) (string, error) { return zsh, nil }
+	t.Cleanup(func() { shadowValidatorPath = originalValidator })
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	sentinel := filepath.Join(home, "sentinel")
+	source := "alias dangerous='touch " + sentinel + "'\nfn() { touch " + sentinel + "; }\n"
+	if err := os.WriteFile(filepath.Join(home, ".zsh_aliases"), []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DefaultServices().inspectCatalogShadow("zsh"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(sentinel); !os.IsNotExist(err) {
+		t.Fatalf("inspected content executed: %v", err)
+	}
+}
+
+func TestShadowValidatorIsolation(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix validator test")
+	}
+	directory := t.TempDir()
+	record := filepath.Join(directory, "record")
+	script := filepath.Join(directory, "validator")
+	scriptBody := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$@\" > '" + record + ".args'\n" +
+		"env | sort > '" + record + ".env'\n" +
+		"cat > '" + record + ".stdin'\n"
+	if err := os.WriteFile(script, []byte(scriptBody), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	originalValidator := shadowValidatorPath
+	shadowValidatorPath = func(string) (string, error) { return script, nil }
+	t.Cleanup(func() { shadowValidatorPath = originalValidator })
+	input := []byte("alias x='echo safe'\n")
+	if err := validateShadowSyntax(context.Background(), "bash", input); err != nil {
+		t.Fatal(err)
+	}
+	arguments, err := os.ReadFile(record + ".args")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(arguments) != "--noprofile\n--norc\n-n\n" {
+		t.Fatalf("arguments = %q", arguments)
+	}
+	environment, err := os.ReadFile(record + ".env")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(environment), "PATH=/usr/bin:/bin") || !strings.Contains(string(environment), "BASH_ENV=/dev/null") || !strings.Contains(string(environment), "LC_ALL=C") {
+		t.Fatalf("environment = %q", environment)
+	}
+	stdin, err := os.ReadFile(record + ".stdin")
+	if err != nil || !bytes.Equal(stdin, input) {
+		t.Fatalf("stdin = %q, %v", stdin, err)
+	}
+}
+
+func TestShadowValidatorOutputLimits(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix validator test")
+	}
+	for _, test := range []struct {
+		name, command string
+	}{
+		{name: "stdout", command: "printf output"},
+		{name: "stderr limit", command: "head -c 65537 /dev/zero >&2"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			directory := t.TempDir()
+			script := filepath.Join(directory, "validator")
+			if err := os.WriteFile(script, []byte("#!/bin/sh\n"+test.command+"\n"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			originalValidator := shadowValidatorPath
+			shadowValidatorPath = func(string) (string, error) { return script, nil }
+			t.Cleanup(func() { shadowValidatorPath = originalValidator })
+			if err := validateShadowSyntax(context.Background(), "bash", []byte("alias x='true'\n")); err == nil || !shadowValidationBlocked(err) {
+				t.Fatalf("validator error = %v", err)
+			}
+		})
+	}
+}
+
+func TestShadowValidatorBisectsFailures(t *testing.T) {
+	original := shadowSyntaxValidator
+	launches := 0
+	shadowSyntaxValidator = func(_ context.Context, _ string, contents []byte) error {
+		launches++
+		if bytes.Contains(contents, []byte("broken")) {
+			return &exec.ExitError{}
+		}
+		return nil
+	}
+	t.Cleanup(func() { shadowSyntaxValidator = original })
+	results := importShadowSource("bash", []byte("alias good='true'\nalias bad='broken'\nalias also_good='true'\n"))
+	validateShadowCandidates(results)
+	DefaultServices().validateShadowRendered("bash", results)
+	statuses := map[string]string{}
+	for _, result := range results {
+		statuses[result.Name] = result.Status
+	}
+	if statuses["good"] != "equivalent" || statuses["also_good"] != "equivalent" || statuses["bad"] != "invalid" {
+		t.Fatalf("statuses = %#v", statuses)
+	}
+	if launches != 5 {
+		t.Fatalf("bisection launches = %d", launches)
+	}
+}
+
+func TestShadowValidatorLaunchAndConcurrencyCaps(t *testing.T) {
+	original := shadowSyntaxValidator
+	launches := 0
+	active := 0
+	maximumActive := 0
+	shadowSyntaxValidator = func(_ context.Context, _ string, _ []byte) error {
+		launches++
+		active++
+		if active > maximumActive {
+			maximumActive = active
+		}
+		active--
+		return &exec.ExitError{}
+	}
+	t.Cleanup(func() { shadowSyntaxValidator = original })
+	results := make([]shadowResult, 10000)
+	for index := range results {
+		value := "broken"
+		entry := neutralcatalog.Entry{ID: fmt.Sprintf("%032x", index), Name: fmt.Sprintf("x%d", index), Kind: "command", Native: map[string]neutralcatalog.NativeImplementation{"bash": {AliasValue: &value}}}
+		results[index] = shadowResult{Status: "equivalent", StartByte: index, EndByte: index + 1, StartLine: index + 1, EndLine: index + 1, Origin: strings.Repeat("b", 64), Entry: &entry, Diagnostics: []shadowDiagnostic{}}
+	}
+	validateShadowCandidates(results)
+	DefaultServices().validateShadowRendered("bash", results)
+	if launches != shadowMaxLaunches {
+		t.Fatalf("launches = %d", launches)
+	}
+	if maximumActive != 1 {
+		t.Fatalf("validator concurrency = %d", maximumActive)
+	}
+	blocked := 0
+	for _, result := range results {
+		if result.Status == "blocked" {
+			blocked++
+		}
+	}
+	if blocked == 0 {
+		t.Fatal("launch cap did not block unresolved batches")
+	}
+}
+
+func TestShadowValidatorMatrix(t *testing.T) {
+	original := shadowSyntaxValidator
+	defer func() { shadowSyntaxValidator = original }()
+	for _, test := range []struct {
+		name   string
+		err    error
+		status string
+	}{
+		{name: "success", status: "equivalent"},
+		{name: "syntax", err: &exec.ExitError{}, status: "invalid"},
+		{name: "missing", err: os.ErrNotExist, status: "blocked"},
+		{name: "timeout", err: context.DeadlineExceeded, status: "blocked"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			shadowSyntaxValidator = func(context.Context, string, []byte) error { return test.err }
+			results := importShadowSource("bash", []byte("alias x='true'\n"))
+			validateShadowCandidates(results)
+			DefaultServices().validateShadowRendered("bash", results)
+			if results[0].Status != test.status {
+				t.Fatalf("status = %s", results[0].Status)
+			}
+		})
+	}
+}
+
+func TestShadowComparisonIdentityFailures(t *testing.T) {
+	results := importShadowSource("bash", []byte("alias x='true'\n"))
+	validateShadowCandidates(results)
+	for _, mutate := range []func([]byte) []byte{
+		func(rendered []byte) []byte {
+			return bytes.Replace(rendered, []byte("# al-shadow-origin:"), []byte("# moved-origin:"), 1)
+		},
+		func(rendered []byte) []byte { return append([]byte("# ordinary\n"), rendered...) },
+		func(rendered []byte) []byte { return append(rendered, rendered...) },
+	} {
+		result := results[0]
+		result.Rendered = mutate(append([]byte(nil), result.Rendered...))
+		compareShadowRoundTrip("bash", &result)
+		if result.Status != "invalid" {
+			t.Fatalf("identity mutation status = %s", result.Status)
+		}
+	}
+}
+
+func TestShadowComparisonFieldMatrix(t *testing.T) {
+	results := importShadowSource("bash", []byte("# Original\nalias x='true'\n"))
+	validateShadowCandidates(results)
+	result := results[0]
+	result.Rendered = bytes.Replace(result.Rendered, []byte("# Original\n"), []byte("# Changed\n"), 1)
+	compareShadowRoundTrip("bash", &result)
+	if result.Status != "different" || !reflect.DeepEqual(result.DifferentFields, []string{"description"}) {
+		t.Fatalf("comparison = %#v", result)
+	}
+}
+
+func TestShadowValidatorKillsProcessGroup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix process-group test")
+	}
+	directory := t.TempDir()
+	pidPath := filepath.Join(directory, "child.pid")
+	script := filepath.Join(directory, "validator")
+	contents := "#!/bin/sh\nsleep 30 &\necho $! > '" + pidPath + "'\nwait\n"
+	if err := os.WriteFile(script, []byte(contents), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	originalValidator := shadowValidatorPath
+	shadowValidatorPath = func(string) (string, error) { return script, nil }
+	t.Cleanup(func() { shadowValidatorPath = originalValidator })
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		result <- validateShadowSyntax(ctx, "bash", []byte("alias x='true'\n"))
+	}()
+
+	var pid int
+	readyDeadline := time.Now().Add(5 * time.Second)
+	for pid == 0 {
+		payload, err := os.ReadFile(pidPath)
+		if err == nil {
+			_, _ = fmt.Sscanf(strings.TrimSpace(string(payload)), "%d", &pid)
+		} else if !errors.Is(err, os.ErrNotExist) {
+			cancel()
+			<-result
+			t.Fatal(err)
+		}
+		if time.Now().After(readyDeadline) {
+			cancel()
+			err := <-result
+			t.Fatalf("validator child did not become ready: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	cancel()
+	if err := <-result; !errors.Is(err, context.Canceled) {
+		t.Fatalf("validator error = %v", err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		err := syscall.Kill(pid, 0)
+		if errors.Is(err, syscall.ESRCH) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("validator child %d survived process-group cleanup: %v", pid, err)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestShadowDiagnosticTruncation(t *testing.T) {
+	report := ShadowReport{SchemaVersion: 1, Shell: "bash", Diagnostics: []shadowDiagnostic{}, Results: []shadowResult{}}
+	for index := 0; index < 101; index++ {
+		report.Results = append(report.Results, shadowResult{Unit: index, Status: "unsupported", StartByte: index, EndByte: index + 1, StartLine: index + 1, EndLine: index + 1, Diagnostics: []shadowDiagnostic{{Code: "unsupported", Message: "safe"}}})
+	}
+	finalizeShadowReport(&report)
+	ordinary := 0
+	for _, result := range report.Results {
+		ordinary += len(result.Diagnostics)
+	}
+	if ordinary != 100 || len(report.Diagnostics) != 1 || report.Diagnostics[0].Code != "diagnostics_truncated" || !strings.Contains(report.Diagnostics[0].Message, "1") {
+		t.Fatalf("diagnostic limit = %#v, ordinary = %d", report.Diagnostics, ordinary)
+	}
+}
+
+func TestShadowForbiddenCallGraph(t *testing.T) {
+	paths := []string{"catalog_shadow.go"}
+	moved, err := filepath.Glob("../../internal/shell/*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths = append(paths, moved...)
+	for _, path := range paths {
+		if strings.HasSuffix(path, "_test.go") {
+			continue
+		}
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, forbidden := range []string{"loadConfig(", "loadAliases(", "saveConfig(", "saveRevision(", "syncRepository(", "writeAliasFile("} {
+			if bytes.Contains(contents, []byte(forbidden)) {
+				t.Fatalf("%s calls %s", path, forbidden)
+			}
+		}
+	}
+}
+
+func TestShadowConcurrentPureReader(t *testing.T) {
+	source := []byte("# Safe\nalias x='echo x'\nfn() { echo y; }\n")
+	const readers = 32
+	var group sync.WaitGroup
+	group.Add(readers)
+	for index := 0; index < readers; index++ {
+		go func() {
+			defer group.Done()
+			results := importShadowSource("bash", source)
+			markShadowDuplicates(results)
+			validateShadowCandidates(results)
+			if len(results) != 2 {
+				t.Errorf("results = %d", len(results))
+			}
+		}()
+	}
+	group.Wait()
+}
+
+func TestShadowSecretsAreBlockedWithoutValue(t *testing.T) {
+	secret := "ghp_abcdefghijklmnopqrstuvwxyz123456"
+	source := []byte("alias token='echo " + secret + "'\n")
+	results := importShadowSource("bash", source)
+	results = blockShadowSecrets(results, findSecretFindings(source), source)
+	if results[0].Status != "blocked" || results[0].Entry != nil {
+		t.Fatalf("result = %#v", results[0])
+	}
+	report := ShadowReport{SchemaVersion: 1, Shell: "bash", Diagnostics: []shadowDiagnostic{}, Results: results}
+	finalizeShadowReport(&report)
+	output, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(output, []byte(secret)) {
+		t.Fatal("JSON report leaked secret")
+	}
+	if bytes.Contains(output, []byte("origin")) {
+		t.Fatal("JSON report exposed internal origin")
+	}
+}
+
+func TestShadowRawSecretScanMatrix(t *testing.T) {
+	secret := "ghp_abcdefghijklmnopqrstuvwxyz123456"
+	for _, source := range []string{
+		"# " + secret + "\n",
+		"# " + secret + "\nalias x='echo safe'\n",
+		"broken() { # " + secret + "\n",
+	} {
+		contents := []byte(source)
+		results := blockShadowSecrets(importShadowSource("bash", contents), findSecretFindings(contents), contents)
+		found := false
+		for _, result := range results {
+			found = found || result.Status == "blocked"
+		}
+		if !found {
+			t.Errorf("secret was not blocked for fixture %d", len(source))
+		}
+		report := ShadowReport{SchemaVersion: 1, Shell: "bash", Diagnostics: []shadowDiagnostic{}, Results: results}
+		finalizeShadowReport(&report)
+		output, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if bytes.Contains(output, []byte(secret)) {
+			t.Fatal("report leaked raw secret")
+		}
+	}
+}
+
+func TestShadowJSONSchemaOmitsPrivateFingerprints(t *testing.T) {
+	report := ShadowReport{SchemaVersion: 1, Shell: "bash", Diagnostics: []shadowDiagnostic{}, Results: []shadowResult{{Unit: 0, Name: "x", Kind: "command", Status: "equivalent", StartByte: 0, EndByte: 10, StartLine: 1, EndLine: 1, Diagnostics: []shadowDiagnostic{}, Origin: "private"}}}
+	finalizeShadowReport(&report)
+	output, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded map[string]any
+	if err := json.Unmarshal(output, &decoded); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"source_sha256", "origin_key"} {
+		if _, ok := decoded[field]; ok {
+			t.Fatalf("report contains %s", field)
+		}
+	}
+	if strings.Contains(string(output), "private") {
+		t.Fatal("report contains internal fingerprint")
+	}
+}
+
+func FuzzShadowImporter(f *testing.F) {
+	for _, seed := range [][]byte{
+		[]byte("alias x='true'\n"),
+		[]byte("x() { echo ok; }\n"),
+		[]byte("alias x='unterminated\n"),
+		[]byte("# al: tags=git platforms=linux\nalias g='git status'\n"),
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, source []byte) {
+		if len(source) > 1<<20 || !utf8.Valid(source) || bytes.IndexByte(source, 0) >= 0 {
+			t.Skip()
+		}
+		results := importShadowSource("bash", source)
+		if len(results) > shadowMaxResults {
+			t.Skip()
+		}
+		markShadowDuplicates(results)
+		validateShadowCandidates(results)
+	})
+}

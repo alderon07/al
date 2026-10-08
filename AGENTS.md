@@ -37,26 +37,25 @@ Keep shell behavior behind `ShellAdapter`. Bash owns `.bash_aliases`, `.bash_his
 
 ## Code map
 
-- `cmd/alias-lens/main.go` loads entries and routes CLI commands.
-- `cmd/alias-lens/tui.go` contains the Bubble Tea alias browser and picker.
-- `cmd/alias-lens/alias_writer.go` performs validated, atomic alias-file edits.
-- `cmd/alias-lens/shell.go` selects shell adapters and applies startup edits under the application mutation session.
+- `cmd/alias-lens/main.go` routes CLI commands. Command files own argument handling, plain output, credential prompts, embedded browser assets and linker version.
+- `cmd/alias-lens/terminal.go` starts the terminal interface with the same application services used by CLI commands.
+- `internal/app/` owns configuration, entry queries, catalog lifecycle, bootstrap, revisions, private data, sync and mutation sessions.
+- `internal/app/alias_writer.go` performs validated, atomic alias-file edits under the shared mutation session.
+- `internal/app/shell.go` selects shell adapters and applies startup edits under the application mutation session.
+- `internal/app/{metadata,history,security}.go` handles entry metadata, local history analysis and secret detection without exposing secret values.
+- `internal/app/{repository,autosync}.go` owns path-isolated synchronization, background reconciliation, status, retries and conflict copies.
+- `internal/tui/` owns private Bubble Tea models and views for the alias browser, picker, statistics, settings, catalog review and conflicts.
+- `internal/tui/github_picker.go` contains the provider-neutral remote repository picker. The filename remains for Git history.
+- `internal/presentation/` owns theme palettes, appearance/footer schemas, icons and shared display formatting.
+- `internal/shortcuts/` owns shortcut profiles, declarations, matching and shared validation.
 - `internal/shell/` owns Bash and Zsh parsing, rendering, history syntax, integration, validation, handoff and read-only startup planning.
 - `internal/entry/` owns shared entry data, metadata and display defaults.
-- `cmd/alias-lens/metadata.go` handles shell functions, tags, collections, favorites, and platforms.
-- `cmd/alias-lens/history.go` analyzes local shell history and creates suggestions.
-- `cmd/alias-lens/security.go` detects likely secrets without returning their values.
-- `cmd/alias-lens/revisions.go` stores and restores private alias revisions.
-- `cmd/alias-lens/repository.go` handles alias-only Git synchronization and comparison.
-- `cmd/alias-lens/autosync.go` owns background reconciliation, locking, status, offline retries, and conflict copies.
-- `cmd/alias-lens/providers.go` adapts app configuration to provider services; `providers_connect.go` owns interactive connection and config persistence.
 - `internal/providers/` owns GitHub, Bitbucket Cloud, and GitLab repository discovery, immutable catalog reads, and provider transport policy.
 - `internal/managedgit/` owns restricted Git execution, configuration audits, credential handoff, SSH policy, output bounds, and process cancellation.
+- `internal/{catalog,catalogrender,catalogstore,plan,state,transaction}/` owns catalog formats, generation rendering and storage, plans, observations and durable transactions.
 - `internal/{tea,usagelog,exportfile}/` contains the terminal compatibility adapter, private usage log, and export codecs shared by application packages.
-- `cmd/alias-lens/github_picker.go` contains the provider-neutral remote repository picker. The filename remains for Git history.
-- `cmd/alias-lens/config.go` owns app and provider configuration.
-- `cmd/alias-lens/theme.go` contains verified dark Codex palettes, Alias Lens originals, selection order, and overrides.
 - `cmd/alias-lens/web/` contains the optional local browser view.
+- `docs/PACKAGE_ORGANIZATION.md` records package boundaries, acceptance criteria and verification evidence.
 - `TODO.md` tracks user-facing work and acceptance criteria.
 
 ## Implementation style

@@ -3,14 +3,16 @@
 package main
 
 import (
-	workflowplan "alias-lens/internal/plan"
 	"alias-lens/internal/transaction"
+
 	"crypto/sha256"
+
 	"encoding/json"
-	"errors"
+
 	"fmt"
 	"os"
 	"os/exec"
+
 	"path/filepath"
 	"strings"
 	"testing"
@@ -24,7 +26,7 @@ func TestMutationCommandProcess(t *testing.T) {
 	if e := json.Unmarshal([]byte(os.Getenv("AL_MUTATION_ARGS")), &args); e != nil {
 		t.Fatal(e)
 	}
-	shadowValidatorPath = func(shell string) (string, error) { return exec.LookPath(shell) }
+	applicationDependencies.FindTrustedShell = func(shell string) (string, error) { return exec.LookPath(shell) }
 	os.Args = append([]string{"alias-lens"}, args...)
 	os.Exit(runMain())
 }
@@ -64,10 +66,11 @@ func mutationInventory(t *testing.T, home string) string {
 	}
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
+
 func TestMutationSubprocessContentionLeavesManagedFilesUnchanged(t *testing.T) {
 	home := privateTestHome(t)
 	t.Setenv("HOME", home)
-	t.Setenv(activeShellEnvironment, "bash")
+	t.Setenv("ALIAS_LENS_SHELL", "bash")
 	t.Setenv("SHELL", "/bin/bash")
 	if e := saveConfig(defaultConfig()); e != nil {
 		t.Fatal(e)
@@ -103,71 +106,5 @@ func TestMutationSubprocessContentionLeavesManagedFilesUnchanged(t *testing.T) {
 				t.Fatal("blocked subprocess changed managed files")
 			}
 		})
-	}
-}
-
-func TestRecoveryObservationPreservesWorkflowAndStageInventory(t *testing.T) {
-	home := privateTestHome(t)
-	t.Setenv("HOME", home)
-	if e := withMutation(func(*mutationSession) error { return nil }); e != nil {
-		t.Fatal(e)
-	}
-	root := filepath.Join(home, ".local", "state", "alias-lens")
-	target := filepath.Join(home, ".config", "alias-lens", "fixture")
-	interrupted := errors.New("boundary")
-	spec := transaction.WorkflowSpec{OperationID: "op-11111111111111111111111111111111", StateRoot: root, PrivateRoots: []string{filepath.Dir(target)}, Targets: []transaction.WorkflowTarget{{Path: target, Role: transaction.WorkflowPrivate, Mode: 0o600, Planned: []byte("synthetic")}}}
-	e := transaction.ApplyWorkflow(spec, func(b transaction.WorkflowBoundary) error {
-		if b.Stage == "target_synced" {
-			return interrupted
-		}
-		return nil
-	})
-	if !errors.Is(e, interrupted) {
-		t.Fatal(e)
-	}
-	stageDir := filepath.Join(root, "catalog-stages")
-	if e := os.Mkdir(stageDir, 0o700); e != nil {
-		t.Fatal(e)
-	}
-	if e := os.WriteFile(filepath.Join(stageDir, "bad.json"), []byte("{}\n"), 0o600); e != nil {
-		t.Fatal(e)
-	}
-	parent := filepath.Join(home, ".local", "share", "alias-lens", "catalog-repos")
-	if e := os.MkdirAll(parent, 0o700); e != nil {
-		t.Fatal(e)
-	}
-	stageRoot := filepath.Join(parent, ".stage-synthetic")
-	if e := os.Mkdir(stageRoot, 0o700); e != nil {
-		t.Fatal(e)
-	}
-	stageID := "op-22222222222222222222222222222222"
-	stageIdentity := observePlanIdentity(stageRoot)
-	intent := catalogStageIntent{Version: 1, ID: stageID, Root: stageRoot, Device: stageIdentity.Device, Inode: stageIdentity.Inode, Revision: strings.Repeat("a", 40), Blob: strings.Repeat("b", 40), Destination: filepath.Join(parent, strings.Repeat("c", 64)), CreatedParents: []string{}, ParentIdentities: []workflowplan.Identity{}}
-	if e := os.WriteFile(filepath.Join(stageRoot, ".operation"), []byte(stageID+"\n"), 0o600); e != nil {
-		t.Fatal(e)
-	}
-	data, _ := json.MarshalIndent(intent, "", "  ")
-	data = append(data, '\n')
-	if e := os.WriteFile(filepath.Join(stageDir, stageID+".json"), data, 0o600); e != nil {
-		t.Fatal(e)
-	}
-	if e := os.Remove(filepath.Join(stageDir, "bad.json")); e != nil {
-		t.Fatal(e)
-	}
-	valid := inspectStageRecovery(home)
-	if !valid.Required || valid.Blocked {
-		t.Fatalf("valid stage rejected: %#v", valid)
-	}
-	if e := os.WriteFile(filepath.Join(stageDir, "bad.json"), []byte("{}\n"), 0o600); e != nil {
-		t.Fatal(e)
-	}
-	before := mutationInventory(t, home)
-	workflow := inspectWorkflowRecovery(root)
-	stage := inspectStageRecovery(home)
-	if !workflow.Required || workflow.Blocked || !stage.Required || !stage.Blocked {
-		t.Fatalf("recovery observations: %#v %#v", workflow, stage)
-	}
-	if after := mutationInventory(t, home); after != before {
-		t.Fatal("observational recovery changed files")
 	}
 }

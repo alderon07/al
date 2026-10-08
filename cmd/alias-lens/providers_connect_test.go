@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,9 +71,9 @@ func TestBitbucketConnectKeepsPromptedTokenOutOfConfig(t *testing.T) {
 	}
 	defer func() { readProviderSecret = originalReader }()
 
-	originalTransport := catalogProviderTransport
-	t.Cleanup(func() { catalogProviderTransport = originalTransport })
-	catalogProviderTransport = catalogProviderRoundTrip(func(request *http.Request) (*http.Response, error) {
+	originalTransport := applicationDependencies.Transport
+	t.Cleanup(func() { applicationDependencies.Transport = originalTransport })
+	applicationDependencies.Transport = catalogProviderRoundTrip(func(request *http.Request) (*http.Response, error) {
 		if request.URL.Host != "api.bitbucket.org" || request.Header.Get("Authorization") != "Bearer temporary-session-value" {
 			t.Fatal("temporary token was not retained by connection runtime")
 		}

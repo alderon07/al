@@ -54,5 +54,5 @@ for selected_shell in bash zsh; do
     done
 done
 
-AL_REQUIRE_PTY_SHELLS=1 go test ./cmd/alias-lens -run '^(TestCatalog.*PTY|Test.*Init.*PTY)$' -count=1
+AL_REQUIRE_PTY_SHELLS=1 go test ./cmd/alias-lens ./internal/app ./internal/tui -run '^(TestCatalog.*PTY|Test.*Init.*PTY)' -count=1
 printf 'Catalog bootstrap, read-only preview, installed entries, rollback, and Bash/Zsh PTY verification passed.\n'

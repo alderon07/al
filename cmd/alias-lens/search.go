@@ -1,5 +1,7 @@
 package main
 
+import "alias-lens/internal/presentation"
+
 import (
 	"encoding/json"
 	"fmt"
@@ -26,7 +28,7 @@ func runSearchCommand(arguments []string) error {
 	if len(arguments) > 1 {
 		return fmt.Errorf("usage: al search [--json] [--global] [QUERY]")
 	}
-	aliases, err := loadAliases()
+	aliases, err := applicationServices().Entries()
 	if err != nil {
 		return err
 	}
@@ -35,7 +37,7 @@ func runSearchCommand(arguments []string) error {
 		if global {
 			results = filterAliases(aliases, arguments[0])
 		} else {
-			ranking, err := currentContextRanking()
+			ranking, err := applicationServices().CurrentContextRanking()
 			if err != nil {
 				return fmt.Errorf("load context ranking: %w; use --global to search without it", err)
 			}
@@ -59,20 +61,20 @@ func runSearchCommand(arguments []string) error {
 		if len(alias.Tags) > 0 {
 			safeTags := make([]string, len(alias.Tags))
 			for index, tag := range alias.Tags {
-				safeTags[index] = terminalSafeText(tag)
+				safeTags[index] = presentation.TerminalSafeText(tag)
 			}
 			metadata = "  #" + strings.Join(safeTags, " #")
 		}
 		if !cliStyled() {
-			fmt.Printf("%s\t%s\t%s%s\n", terminalSafeText(alias.Name), terminalSafeText(alias.Command), terminalSafeText(alias.Description), metadata)
+			fmt.Printf("%s\t%s\t%s%s\n", presentation.TerminalSafeText(alias.Name), presentation.TerminalSafeText(alias.Command), presentation.TerminalSafeText(alias.Description), metadata)
 			continue
 		}
-		fmt.Println(cliAccent(terminalSafeText(alias.Name)) + cliMuted(metadata))
-		for _, line := range strings.Split(ansi.Wrap(terminalSafeText(alias.Command), cliColumns()-2, ""), "\n") {
+		fmt.Println(cliAccent(presentation.TerminalSafeText(alias.Name)) + cliMuted(metadata))
+		for _, line := range strings.Split(ansi.Wrap(presentation.TerminalSafeText(alias.Command), cliColumns()-2, ""), "\n") {
 			fmt.Println("  " + line)
 		}
 		if alias.Description != "" {
-			for _, line := range strings.Split(ansi.Wrap(terminalSafeText(alias.Description), cliColumns()-2, ""), "\n") {
+			for _, line := range strings.Split(ansi.Wrap(presentation.TerminalSafeText(alias.Description), cliColumns()-2, ""), "\n") {
 				fmt.Println("  " + cliMuted(line))
 			}
 		}

@@ -2,6 +2,8 @@
 
 package main
 
+import "alias-lens/internal/app"
+
 import (
 	"fmt"
 	"strings"
@@ -19,7 +21,7 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 		if len(arguments) != 1 {
 			return true, 2, fmt.Errorf("usage: al catalog recover")
 		}
-		err := withMutation(func(*mutationSession) error { return nil })
+		err := applicationServices().RecoverWorkflows()
 		if err != nil {
 			return true, 1, err
 		}
@@ -60,7 +62,7 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 			name = arguments[i]
 		}
 	}
-	adapter, err := requestedShellAdapter(shell)
+	adapter, err := applicationServices().RequestedShellAdapter(shell)
 	if err != nil {
 		return true, 2, err
 	}
@@ -69,12 +71,12 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 		code, err := runCatalogRollback(shell, apply, jsonOutput)
 		return true, code, err
 	}
-	value, err := readCatalogFile(localCatalogPath())
+	value, err := applicationServices().Catalog()
 	if err != nil {
 		return true, 1, err
 	}
 	sourceCanonical, _ := neutralcatalog.Encode(value)
-	decisions := catalogLifecycleDecisions{ConfirmedAt: lifecycleTimestamp()}
+	decisions := app.CatalogLifecycleDecisions{ConfirmedAt: applicationServices().LifecycleTimestamp()}
 	if operation == "approve" || operation == "adopt" {
 		if name == "" {
 			return true, 2, fmt.Errorf("usage: al catalog %s NAME --shell bash|zsh", operation)
@@ -92,11 +94,11 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 	}
 	if operation == "review" || operation == "approve" || operation == "adopt" {
 		decisions, err = guidedCatalogLifecycleReview(value, shell, operation == "adopt")
-		decisions.SourceSHA256 = hashBytes(sourceCanonical)
+		decisions.SourceSHA256 = applicationServices().HashBytes(sourceCanonical)
 		if err != nil {
 			return true, 1, err
 		}
-		preview, err := buildCatalogDecisionPlan(decisions)
+		preview, err := applicationServices().BuildCatalogDecisionPlan(decisions)
 		if err != nil {
 			return true, 1, err
 		}
@@ -111,7 +113,7 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 		if !yes {
 			return true, 0, nil
 		}
-		err = applyMutationPlan(preview, func() (workflowplan.OperationPlan, error) { return buildCatalogDecisionPlan(decisions) })
+		err = applicationServices().ApplyCatalogDecisions(preview, decisions)
 		if err == nil {
 			fmt.Fprintln(catalogWorkflowStdout, "Review decisions saved. Enter al catalog enable --shell "+shell+" to install them.")
 		}
@@ -129,7 +131,7 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 		}
 	}
 	decisions.StartupPaths = explicit
-	preview, err := buildCatalogEnablePlan(shell, decisions)
+	preview, err := applicationServices().BuildCatalogEnablePlan(shell, decisions)
 	if err != nil {
 		return true, 1, err
 	}
@@ -158,7 +160,7 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 			return true, 0, nil
 		}
 	}
-	if err := applyMutationPlan(preview, func() (workflowplan.OperationPlan, error) { return buildCatalogEnablePlan(shell, decisions) }); err != nil {
+	if err := applicationServices().ApplyCatalogInstallation(preview, shell, decisions); err != nil {
 		return true, 1, err
 	}
 	fmt.Fprintln(catalogWorkflowStdout, "Catalog installed for new "+adapter.DisplayName()+" shells. Start a new shell to use it.")
@@ -171,22 +173,22 @@ func buildCatalogRequestedPlan(arguments []string) (workflowplan.OperationPlan, 
 		if err != nil {
 			return workflowplan.OperationPlan{}, true, err
 		}
-		decisions := catalogLifecycleDecisions{ConfirmedAt: lifecycleTimestamp(), StartupPaths: options.StartupPaths}
-		if catalogInitRemoteSource(options.Source) {
+		decisions := app.CatalogLifecycleDecisions{ConfirmedAt: applicationServices().LifecycleTimestamp(), StartupPaths: options.StartupPaths}
+		if applicationServices().CatalogInitRemoteSource(options.Source) {
 			config, e := loadConfig()
 			if e != nil {
 				return workflowplan.OperationPlan{}, true, e
 			}
-			ctx, cancel := interruptContext()
+			ctx, cancel := applicationServices().InterruptContext()
 			defer cancel()
-			remote, e := discoverRemoteCatalog(ctx, config, options.Source, options.CatalogPath)
+			remote, e := applicationServices().DiscoverRemoteCatalog(ctx, config, options.Source, options.CatalogPath)
 			if e != nil {
 				return workflowplan.OperationPlan{}, true, e
 			}
-			plan, e := buildRemoteCatalogInitPlan(options, remote, decisions, "")
+			plan, e := applicationServices().BuildRemoteCatalogInitPlan(options, remote, decisions, "")
 			return plan, true, e
 		}
-		plan, err := buildLocalCatalogInitPlan(options, decisions)
+		plan, err := applicationServices().BuildLocalCatalogInitPlan(options, decisions)
 		return plan, true, err
 	}
 	if len(arguments) < 2 || arguments[0] != "catalog" {
@@ -213,15 +215,15 @@ func buildCatalogRequestedPlan(arguments []string) (workflowplan.OperationPlan, 
 			return workflowplan.OperationPlan{}, true, fmt.Errorf("unknown catalog plan option")
 		}
 	}
-	adapter, err := requestedShellAdapter(shell)
+	adapter, err := applicationServices().RequestedShellAdapter(shell)
 	if err != nil {
 		return workflowplan.OperationPlan{}, true, err
 	}
 	shell = adapter.Name()
 	if operation == "rollback" {
-		value, err := buildCatalogRollbackPlan(shell)
+		value, err := applicationServices().BuildCatalogRollbackPlan(shell)
 		return value, true, err
 	}
-	value, err := buildCatalogEnablePlan(shell, catalogLifecycleDecisions{ConfirmedAt: lifecycleTimestamp(), StartupPaths: explicit})
+	value, err := applicationServices().BuildCatalogEnablePlan(shell, app.CatalogLifecycleDecisions{ConfirmedAt: applicationServices().LifecycleTimestamp(), StartupPaths: explicit})
 	return value, true, err
 }

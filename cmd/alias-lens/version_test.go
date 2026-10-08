@@ -1,6 +1,8 @@
 package main
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestResolveVersionPrefersReleaseBuildValue(t *testing.T) {
 	if got := resolveVersion("1.2.3", "v9.9.9"); got != "1.2.3" {

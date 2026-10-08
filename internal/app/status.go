@@ -1,0 +1,427 @@
+package app
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
+
+	neutralcatalog "alias-lens/internal/catalog"
+	"alias-lens/internal/catalogrender"
+	workflowstate "alias-lens/internal/state"
+	"alias-lens/internal/transaction"
+)
+
+type catalogStateFile struct {
+	SchemaVersion   int                             `json:"schema_version"`
+	InstalledShells map[string]installedShellRecord `json:"installed_shells"`
+	CatalogSync     catalogSyncRecord               `json:"catalog_sync"`
+}
+
+type installedShellRecord struct {
+	ActiveGenerationSHA256 string `json:"active_generation_sha256"`
+	SourceCatalogSHA256    string `json:"source_catalog_sha256"`
+	ResolvedStateSHA256    string `json:"resolved_state_sha256"`
+	LoaderSHA256           string `json:"loader_sha256"`
+}
+
+type catalogSyncRecord struct {
+	RepositoryPath     string `json:"repository_path"`
+	BaseCatalogSHA256  string `json:"base_catalog_sha256"`
+	LocalCatalogSHA256 string `json:"local_catalog_sha256"`
+	RemoteCatalogHash  string `json:"remote_catalog_sha256"`
+}
+
+var errInvalidObservedCatalog = errors.New("catalog contents are invalid")
+
+func (svc *Services) inspectWorkflowStatus() workflowstate.Report {
+	inputs := workflowstate.Inputs{
+		Mode: workflowstate.ModeLegacy,
+		Config: workflowstate.ConfigObservation{
+			Present:       true,
+			SchemaVersion: currentConfigVersion,
+		},
+		Sync: workflowstate.SyncObservation{},
+	}
+	observed, configErr := svc.observeConfig()
+	if configErr != nil {
+		if errors.Is(configErr, os.ErrPermission) {
+			inputs.Config.Unreadable = true
+		} else {
+			inputs.Config.Invalid = true
+		}
+	} else {
+		inputs.Config.Present = observed.Present
+		version := observed.Config.Version
+		if !observed.Present {
+			version = currentConfigVersion
+		}
+		inputs.Config.SchemaVersion = version
+		inputs.Sync.Configured = observed.Config.Repository != ""
+	}
+
+	catalog, catalogHash, catalogErr := svc.inspectLocalCatalog()
+	switch {
+	case errors.Is(catalogErr, os.ErrNotExist):
+		inputs.Catalog.Present = false
+	case errors.Is(catalogErr, errInvalidObservedCatalog):
+		inputs.Catalog.Present = true
+		inputs.Catalog.Invalid = true
+	case catalogErr != nil:
+		inputs.Catalog.Present = true
+		inputs.Catalog.Unreadable = true
+	default:
+		inputs.Catalog = workflowstate.CatalogObservation{
+			Present: true, SchemaVersion: catalog.SchemaVersion,
+			EntryCount: len(catalog.Entries), SHA256: catalogHash,
+		}
+	}
+
+	home, homeErr := svc.dependencies.HomeDir()
+	var stored catalogStateFile
+	var storedErr error
+	if homeErr == nil {
+		stored, storedErr = svc.inspectCatalogState(filepath.Join(home, ".local", "state", "alias-lens", "catalog-state.json"))
+		inputs.Recovery = combineRecovery(
+			inspectRecovery(filepath.Join(home, ".local", "state", "alias-lens"), filepath.Join(home, ".local", "state", "alias-lens", "transactions")),
+			inspectRecovery(filepath.Join(home, ".config", "alias-lens"), filepath.Join(home, ".config", "alias-lens", "transactions")),
+			inspectWorkflowRecovery(filepath.Join(home, ".local", "state", "alias-lens")),
+			inspectStageRecovery(home),
+		)
+		if storedErr != nil {
+			inputs.Recovery.Blocked = true
+		}
+	}
+	if len(stored.InstalledShells) > 0 {
+		inputs.Mode = workflowstate.ModeCatalog
+		if configErr == nil {
+			if _, installed := stored.InstalledShells[observed.Config.Shell]; !installed {
+				inputs.Mode = workflowstate.ModeMixed
+			}
+		}
+	}
+	if inputs.Mode == workflowstate.ModeLegacy {
+		// Legacy synchronization has its own stable status command. The catalog
+		// status contract must not reinterpret a legacy alias repository.
+		inputs.Sync = workflowstate.SyncObservation{}
+	}
+	if inputs.Catalog.Present {
+		approvals, approvalsErr := svc.inspectNativeApprovals(home)
+		shellNames := []string{}
+		for shell := range stored.InstalledShells {
+			shellNames = append(shellNames, shell)
+		}
+		if len(shellNames) == 0 && configErr == nil {
+			shellNames = append(shellNames, observed.Config.Shell)
+		}
+		sort.Strings(shellNames)
+		for _, shell := range shellNames {
+			record, installed := stored.InstalledShells[shell]
+			resolved, renderDiagnostics := catalogrender.Render(catalog, catalogrender.RenderContext{Shell: shell, Platform: svc.currentPlatform(), Profiles: observed.Config.Profiles, Approvals: approvals})
+			observation := workflowstate.ShellObservation{Name: shell, Resolved: workflowstate.ResolvedSummary{SHA256: resolved.ResolvedSHA256, EligibleEntries: len(resolved.IncludedEntryIDs), PendingApprovals: len(resolved.PendingApprovals)}, Unreadable: configErr != nil || storedErr != nil || approvalsErr != nil || len(renderDiagnostics) > 0}
+			if installed {
+				observation.Installed = &workflowstate.InstalledObservation{
+					GenerationSHA256:       record.ActiveGenerationSHA256,
+					ResolvedStateSHA256:    record.ResolvedStateSHA256,
+					RecordedLoaderSHA256:   record.LoaderSHA256,
+					ActiveGenerationSHA256: svc.inspectActiveGeneration(home, shell),
+					OnDiskGenerationSHA256: svc.inspectGeneratedFile(home, shell, record.ActiveGenerationSHA256),
+					OnDiskLoaderSHA256:     svc.inspectLoaderHash(home, shell),
+				}
+			}
+			inputs.Shells = append(inputs.Shells, observation)
+		}
+	}
+	svc.observeLifecycleStatus(&inputs)
+	_, catalogEnrollmentErr := os.Lstat(svc.catalogSyncPath())
+	if inputs.Sync.Configured && configErr == nil && errors.Is(catalogEnrollmentErr, os.ErrNotExist) {
+		inputs.Sync.BaseSHA256 = stored.CatalogSync.BaseCatalogSHA256
+		inputs.Sync.LocalSHA256 = catalogHash
+		path := stored.CatalogSync.RepositoryPath
+		if path == "" {
+			path = filepath.Join("alias-lens", "catalog.json")
+		}
+		path, pathErr := cleanRepositoryRelativePath(path, "catalog repository path")
+		if pathErr != nil {
+			inputs.Sync.Invalid = true
+			return workflowstate.Resolve(inputs)
+		}
+		repositoryCatalog, pathErr := repositoryFilePath(observed.Config.Repository, path)
+		if pathErr != nil {
+			inputs.Sync.Invalid = true
+			return workflowstate.Resolve(inputs)
+		}
+		_, remoteHash, err := inspectRepositoryCatalogAt(repositoryCatalog)
+		if err != nil {
+			inputs.Sync.Invalid = true
+		} else {
+			inputs.Sync.RemoteSHA256 = remoteHash
+		}
+	}
+	svc.observeCatalogSyncStatus(&inputs)
+	return workflowstate.Resolve(inputs)
+}
+
+func (svc *Services) inspectNativeApprovals(home string) (map[catalogrender.NativeApprovalKey]bool, error) {
+	result := map[catalogrender.NativeApprovalKey]bool{}
+	if home == "" {
+		return result, nil
+	}
+	contents, err := svc.readObservedPrivateFile(filepath.Join(home, ".local", "state", "alias-lens", "native-approvals.json"), 1<<20)
+	if errors.Is(err, os.ErrNotExist) {
+		return result, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var file struct {
+		SchemaVersion int `json:"schema_version"`
+		Approvals     []struct {
+			EntryID              string `json:"entry_id"`
+			Shell                string `json:"shell"`
+			Kind                 string `json:"kind"`
+			ImplementationSHA256 string `json:"implementation_sha256"`
+			Renderer             string `json:"renderer"`
+		} `json:"approvals"`
+	}
+	if json.Unmarshal(contents, &file) != nil || file.SchemaVersion != 1 {
+		return nil, fmt.Errorf("native approvals are invalid")
+	}
+	for _, item := range file.Approvals {
+		key := catalogrender.NativeApprovalKey{EntryID: item.EntryID, Shell: item.Shell, Kind: item.Kind, ImplementationSHA256: item.ImplementationSHA256, Renderer: item.Renderer}
+		result[key] = true
+	}
+	return result, nil
+}
+
+func (svc *Services) inspectLoaderHash(home, shell string) string {
+	adapter, err := svc.shellAdapter(shell)
+	if err != nil {
+		return ""
+	}
+	paths, err := adapter.StartupPaths(home, svc.currentPlatform())
+	if err != nil || len(paths) == 0 {
+		return ""
+	}
+	block := bashAliasLoader
+	if shell == "zsh" {
+		block = zshAliasLoader
+	}
+	contents, err := readRegularFile(paths[0], 1<<20)
+	if err != nil || !strings.Contains(string(contents), block) {
+		return ""
+	}
+	return hashBytes([]byte(block))
+}
+
+func combineRecovery(values ...workflowstate.RecoveryObservation) workflowstate.RecoveryObservation {
+	result := workflowstate.RecoveryObservation{}
+	for _, value := range values {
+		result.Required = result.Required || value.Required
+		result.Blocked = result.Blocked || value.Blocked
+	}
+	return result
+}
+
+func (svc *Services) inspectLocalCatalog() (neutralcatalog.Catalog, string, error) {
+	return svc.inspectCatalogAt(svc.localCatalogPath())
+}
+
+func (svc *Services) inspectCatalogAt(path string) (neutralcatalog.Catalog, string, error) {
+	contents, err := svc.readObservedPrivateFile(path, neutralcatalog.MaxDocumentBytes)
+	return decodeObservedCatalog(contents, err)
+}
+
+func inspectRepositoryCatalogAt(path string) (neutralcatalog.Catalog, string, error) {
+	contents, err := readRegularFile(path, neutralcatalog.MaxDocumentBytes)
+	return decodeObservedCatalog(contents, err)
+}
+
+func decodeObservedCatalog(contents []byte, err error) (neutralcatalog.Catalog, string, error) {
+	if err != nil {
+		return neutralcatalog.Catalog{}, "", err
+	}
+	value, diagnostics := neutralcatalog.Decode(contents)
+	if len(diagnostics) > 0 {
+		return neutralcatalog.Catalog{}, "", errInvalidObservedCatalog
+	}
+	canonical, diagnostics := neutralcatalog.Encode(value)
+	if len(diagnostics) > 0 {
+		return neutralcatalog.Catalog{}, "", errInvalidObservedCatalog
+	}
+	sum := sha256.Sum256(canonical)
+	return value, hex.EncodeToString(sum[:]), nil
+}
+
+func (svc *Services) inspectCatalogState(path string) (catalogStateFile, error) {
+	contents, err := svc.readObservedPrivateFile(path, 1<<20)
+	if errors.Is(err, os.ErrNotExist) {
+		return catalogStateFile{}, nil
+	}
+	if err != nil {
+		return catalogStateFile{}, err
+	}
+	var state catalogStateFile
+	if json.Unmarshal(contents, &state) != nil || state.SchemaVersion != 1 {
+		return catalogStateFile{}, fmt.Errorf("catalog state is invalid")
+	}
+	return state, nil
+}
+
+func inspectRecovery(root, directory string) workflowstate.RecoveryObservation {
+	entries, err := os.ReadDir(directory)
+	if errors.Is(err, os.ErrNotExist) {
+		return workflowstate.RecoveryObservation{}
+	}
+	if err != nil {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	result := workflowstate.RecoveryObservation{}
+	for _, entry := range entries {
+		if !entry.IsDir() && filepath.Ext(entry.Name()) == ".journal" {
+			analysis, analyzeErr := transaction.AnalyzeRecovery(root, filepath.Join(directory, entry.Name()))
+			if analyzeErr != nil || analysis.State == transaction.RecoveryAmbiguous {
+				result.Blocked = true
+				continue
+			}
+			result.Required = true
+		}
+	}
+	return result
+}
+
+func inspectWorkflowRecovery(root string) workflowstate.RecoveryObservation {
+	dir := filepath.Join(root, "workflows")
+	if _, e := os.Lstat(dir); errors.Is(e, os.ErrNotExist) {
+		return workflowstate.RecoveryObservation{}
+	}
+	identity, e := transaction.InspectWorkflowDirectoryMetadata(dir)
+	if e != nil || identity.Mode != 0o700 {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	entries, e := os.ReadDir(dir)
+	if e != nil || len(entries) > 20000 {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	result := workflowstate.RecoveryObservation{}
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) != ".workflow" {
+			continue
+		}
+		result.Required = true
+		if entry.IsDir() {
+			result.Blocked = true
+			continue
+		}
+		if _, _, e := transaction.ReadWorkflowJournal(root, filepath.Join(dir, entry.Name())); e != nil {
+			result.Blocked = true
+		}
+	}
+	return result
+}
+func inspectStageRecovery(home string) workflowstate.RecoveryObservation {
+	dir := filepath.Join(home, ".local", "state", "alias-lens", "catalog-stages")
+	if _, e := os.Lstat(dir); errors.Is(e, os.ErrNotExist) {
+		return workflowstate.RecoveryObservation{}
+	}
+	identity, e := transaction.InspectWorkflowDirectoryMetadata(dir)
+	if e != nil || identity.Mode != 0o700 {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	entries, e := os.ReadDir(dir)
+	if e != nil || len(entries) > 1000 {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	result := workflowstate.RecoveryObservation{}
+	for _, entry := range entries {
+		result.Required = true
+		data, e := readManagedPrivateFile(filepath.Join(dir, entry.Name()), 1<<20)
+		if e != nil || entry.IsDir() {
+			result.Blocked = true
+			continue
+		}
+		intent, e := decodeCatalogStageIntent(data, entry.Name(), home)
+		if e != nil || inspectManagedStageParents(intent) != nil {
+			result.Blocked = true
+			continue
+		}
+		current := observePlanIdentity(intent.Root)
+		if current.FileType == "missing" {
+			continue
+		}
+		if current.FileType != "directory" || current.Device != intent.Device || current.Inode != intent.Inode || current.Owner != uint64(os.Geteuid()) || current.Mode != 0o700 {
+			result.Blocked = true
+			continue
+		}
+		marker, e := readManagedPrivateFile(filepath.Join(intent.Root, ".operation"), 256)
+		if e != nil || string(marker) != intent.ID+"\n" {
+			result.Blocked = true
+		}
+	}
+	return result
+}
+
+func (svc *Services) inspectActiveGeneration(home, shell string) string {
+	contents, err := svc.readObservedPrivateFile(filepath.Join(home, ".config", "alias-lens", "generated", shell, "active"), 65)
+	if err != nil {
+		return ""
+	}
+	value := string(contents)
+	for len(value) > 0 && (value[len(value)-1] == '\n' || value[len(value)-1] == '\r') {
+		value = value[:len(value)-1]
+	}
+	return value
+}
+
+func (svc *Services) inspectGeneratedFile(home, shell, generation string) string {
+	if len(generation) != 64 || len(hexOnly(generation)) != 64 {
+		return ""
+	}
+	extension := ".sh"
+	if shell == "zsh" {
+		extension = ".zsh"
+	}
+	contents, err := svc.readObservedPrivateFile(filepath.Join(home, ".config", "alias-lens", "generated", shell, generation+extension), neutralcatalog.MaxDocumentBytes)
+	if err != nil {
+		return ""
+	}
+	marker := []byte("# generation-sha256: " + generation + "\n")
+	if !bytesContains(contents, marker) {
+		return ""
+	}
+	return generation
+}
+
+func bytesContains(contents, needle []byte) bool {
+	if len(needle) == 0 || len(contents) < len(needle) {
+		return false
+	}
+	for index := 0; index <= len(contents)-len(needle); index++ {
+		matched := true
+		for offset := range needle {
+			if contents[index+offset] != needle[offset] {
+				matched = false
+				break
+			}
+		}
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
+func hexOnly(value string) string {
+	result := ""
+	for _, character := range value {
+		if (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f') {
+			result += string(character)
+		}
+	}
+	return result
+}

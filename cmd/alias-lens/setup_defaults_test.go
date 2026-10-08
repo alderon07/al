@@ -8,20 +8,6 @@ import (
 	"testing"
 )
 
-func TestMissingDefaultsSkipExistingNamesAndCommands(t *testing.T) {
-	t.Setenv("HOME", privateTestHome(t))
-	contents := []byte("alias gs='git status'\nalias stage='git add'\n")
-	missing := missingDefaultAliases(contents)
-	for _, candidate := range missing {
-		if candidate.Name == "gs" {
-			t.Fatal("default replaced an existing alias name")
-		}
-		if candidate.Name == "ga" {
-			t.Fatal("default duplicated an existing command")
-		}
-	}
-}
-
 func TestDefaultAliasOfferExplainsAndDefaultsToNo(t *testing.T) {
 	t.Setenv("HOME", privateTestHome(t))
 	path := filepath.Join(privateTestHome(t), ".bash_aliases")
@@ -61,7 +47,7 @@ func TestAcceptingDefaultsAddsOnlyMissingAliases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	aliases := aliasDefinitionMap(contents)
+	aliases := applicationServices().AliasCommandMap(contents)
 	if aliases["gs"] != "custom status" {
 		t.Fatal("accepting defaults replaced an existing alias")
 	}

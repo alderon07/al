@@ -1,184 +1,12 @@
 package main
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
 	"os"
-	"sort"
+
 	"strings"
 	"time"
 )
-
-type usageEvent struct {
-	Name string
-	Time time.Time
-}
-
-type statsRow struct {
-	Alias   Alias
-	Count   int
-	LastRun time.Time
-}
-
-type statsData struct {
-	Aliases []Alias
-	Events  []usageEvent
-}
-
-type aliasUsageSummary struct {
-	All     int
-	Today   int
-	Week    int
-	LastRun time.Time
-}
-
-func summarizeAliasUses(events []usageEvent, now time.Time) map[string]aliasUsageSummary {
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
-	week := now.AddDate(0, 0, -7)
-	summaries := make(map[string]aliasUsageSummary)
-	for _, event := range events {
-		summary := summaries[event.Name]
-		summary.All++
-		if !event.Time.IsZero() {
-			if !event.Time.Before(today) {
-				summary.Today++
-			}
-			if !event.Time.Before(week) {
-				summary.Week++
-			}
-			if event.Time.After(summary.LastRun) {
-				summary.LastRun = event.Time
-			}
-		}
-		summaries[event.Name] = summary
-	}
-	return summaries
-}
-
-func hasUntimestampedUsage(events []usageEvent) bool {
-	for _, event := range events {
-		if event.Time.IsZero() {
-			return true
-		}
-	}
-	return false
-}
-
-func usageCountsSince(events []usageEvent, since time.Time) map[string]int {
-	counts := make(map[string]int)
-	for _, event := range events {
-		if since.IsZero() || !event.Time.Before(since) {
-			counts[event.Name]++
-		}
-	}
-	return counts
-}
-
-func loadHistoryUsageEvents(aliases []Alias) ([]usageEvent, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, err
-	}
-	adapter := activeShellAdapter()
-	return historyUsageEventsFromShell(historyPathFor(adapter, home), adapter.Name(), aliases)
-}
-
-func historyUsageEventsFromShell(path, shell string, aliases []Alias) ([]usageEvent, error) {
-	adapter, err := shellAdapter(shell)
-	if err != nil {
-		return nil, err
-	}
-	file, err := os.Open(path)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	known := make(map[string]bool, len(aliases))
-	for _, alias := range aliases {
-		known[alias.Name] = true
-	}
-	var events []usageEvent
-	state := shellHistoryState{}
-	scanner := bufio.NewScanner(file)
-	buffer := make([]byte, 64*1024)
-	scanner.Buffer(buffer, 1024*1024)
-	for scanner.Scan() {
-		line, eventTime, skip := adapter.HistoryUsageLine(scanner.Text(), &state)
-		if skip {
-			continue
-		}
-
-		fields := strings.Fields(strings.TrimSpace(line))
-		if len(fields) > 0 && known[fields[0]] {
-			events = append(events, usageEvent{Name: fields[0], Time: eventTime})
-		}
-	}
-	return events, scanner.Err()
-}
-
-func statsPeriodSince(period string, now time.Time) (time.Time, error) {
-	switch period {
-	case "all":
-		return time.Time{}, nil
-	case "today":
-		return time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location()), nil
-	case "week":
-		return now.AddDate(0, 0, -7), nil
-	case "month":
-		return now.AddDate(0, -1, 0), nil
-	case "year":
-		return now.AddDate(-1, 0, 0), nil
-	default:
-		return time.Time{}, fmt.Errorf("period must be all, today, week, month, or year")
-	}
-}
-
-func rankedStatsRows(data statsData, period string, now time.Time) ([]statsRow, error) {
-	since, err := statsPeriodSince(period, now)
-	if err != nil {
-		return nil, err
-	}
-	counts := usageCountsSince(data.Events, since)
-	lastRuns := make(map[string]time.Time, len(counts))
-	for _, event := range data.Events {
-		if event.Time.IsZero() || (!since.IsZero() && event.Time.Before(since)) {
-			continue
-		}
-		if event.Time.After(lastRuns[event.Name]) {
-			lastRuns[event.Name] = event.Time
-		}
-	}
-	rows := make([]statsRow, 0, len(data.Aliases))
-	for _, alias := range data.Aliases {
-		if count := counts[alias.Name]; count > 0 {
-			rows = append(rows, statsRow{Alias: alias, Count: count, LastRun: lastRuns[alias.Name]})
-		}
-	}
-	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Count == rows[j].Count {
-			return rows[i].Alias.Name < rows[j].Alias.Name
-		}
-		return rows[i].Count > rows[j].Count
-	})
-	return rows, nil
-}
-
-func loadStatsData() (statsData, error) {
-	aliases, err := loadAliases()
-	if err != nil {
-		return statsData{}, err
-	}
-	historyEvents, err := loadHistoryUsageEvents(aliases)
-	if err != nil {
-		return statsData{}, err
-	}
-	return statsData{Aliases: aliases, Events: historyEvents}, nil
-}
 
 func runStatsCommand(arguments []string) error {
 	period := "all"
@@ -196,11 +24,11 @@ func runStatsCommand(arguments []string) error {
 		periodSet = true
 	}
 	now := time.Now()
-	data, err := loadStatsData()
+	data, err := applicationServices().LoadStatsData()
 	if err != nil {
 		return err
 	}
-	rows, err := rankedStatsRows(data, period, now)
+	rows, err := applicationServices().RankedStatsRows(data, period, now)
 	if err != nil {
 		return err
 	}
@@ -208,7 +36,7 @@ func runStatsCommand(arguments []string) error {
 		return runStatsTUI(data, period, now)
 	}
 	if len(rows) == 0 {
-		if period != "all" && hasUntimestampedUsage(data.Events) {
+		if period != "all" && applicationServices().HasUntimestampedUsage(data.Events) {
 			fmt.Printf("Alias uses exist, but your shell history has no dates for them. Start a new shell so Alias Lens can date future commands, then try again.\n")
 			return nil
 		}

@@ -1,70 +1,16 @@
 package main
 
 import (
-	"bytes"
 	"fmt"
-	"os"
-	"regexp"
-	"strings"
 )
 
-type SecretFinding struct {
-	Line int
-	Kind string
-}
-
-var secretPatterns = []struct {
-	name    string
-	pattern *regexp.Regexp
-}{
-	{"GitHub token", regexp.MustCompile(`(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})`)},
-	{"AWS access key", regexp.MustCompile(`AKIA[0-9A-Z]{16}`)},
-	{"private key", regexp.MustCompile(`BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY`)},
-	{"credential in URL", regexp.MustCompile(`https?://[^\s/:]+:[^\s/@]+@`)},
-	{"assigned secret", regexp.MustCompile(`(?i)(?:[a-z0-9_]*(?:password|passwd|secret|token|api[_-]?key|private[_-]?key)[a-z0-9_]*)\s*=\s*['"]?[^'$"\s][^\s;]*`)},
-	{"npm credential", regexp.MustCompile(`(?i)(?:^|[:/\s])_auth(?:token)?\s*=\s*\S+`)},
-	{"netrc credential", regexp.MustCompile(`(?i)^\s*(?:machine\s+\S+\s+)?(?:login|password|account)\s+\S+`)},
-}
-
-func findSecretFindings(contents []byte) []SecretFinding {
-	var findings []SecretFinding
-	for index, line := range bytes.Split(contents, []byte("\n")) {
-		for _, candidate := range secretPatterns {
-			if candidate.pattern.Match(line) {
-				findings = append(findings, SecretFinding{Line: index + 1, Kind: candidate.name})
-			}
-		}
-	}
-	return findings
-}
-
-func secretFindingsError(findings []SecretFinding) error {
-	return secretFindingsErrorFor(aliasDisplayPath(), findings)
-}
-
-func secretFindingsErrorFor(path string, findings []SecretFinding) error {
-	if len(findings) == 0 {
-		return nil
-	}
-	labels := make([]string, 0, len(findings))
-	for _, finding := range findings {
-		labels = append(labels, fmt.Sprintf("line %d: %s", finding.Line, finding.Kind))
-	}
-	return fmt.Errorf("push blocked because %s may contain a secret (%s); run al scan", path, strings.Join(labels, ", "))
-}
-
 func runSecretScan() error {
-	path, err := aliasesPath()
+	findings, err := applicationServices().ScanEntries()
 	if err != nil {
 		return err
 	}
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		return err
-	}
-	findings := findSecretFindings(contents)
 	if len(findings) == 0 {
-		cliResult(fmt.Sprintf("No likely secrets found in %s.", aliasDisplayPath()))
+		cliResult(fmt.Sprintf("No likely secrets found in %s.", applicationServices().AliasDisplayPath()))
 		return nil
 	}
 	cliHeading("Review these lines before syncing. Secret values are hidden:")

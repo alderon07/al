@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+
+	neutralcatalog "alias-lens/internal/catalog"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
-
-	neutralcatalog "alias-lens/internal/catalog"
 )
 
 func TestCompletionCommandMetadataCoversDetailedHelp(t *testing.T) {
@@ -160,8 +160,8 @@ func TestCompletionRefusesToOverwriteOrRemoveEditedFile(t *testing.T) {
 func TestCompletionRefusesEditedShellIntegration(t *testing.T) {
 	home := privateTestHome(t)
 	t.Setenv("HOME", home)
-	adapter := mustShellAdapter("bash")
-	path, err := aliasPathFor(adapter)
+	adapter := testShellAdapter("bash")
+	path, err := aliasPathFixture(adapter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,8 +181,8 @@ func TestCompletionRefusesEditedShellIntegration(t *testing.T) {
 func TestCompletionRecognizesHealthyShellIntegration(t *testing.T) {
 	home := privateTestHome(t)
 	t.Setenv("HOME", home)
-	adapter := mustShellAdapter("bash")
-	path, err := aliasPathFor(adapter)
+	adapter := testShellAdapter("bash")
+	path, err := aliasPathFixture(adapter)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,7 @@ func TestCompletionRecognizesHealthyShellIntegration(t *testing.T) {
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if state := completionIntegrationState(adapter); state != "ready" {
+	if state := applicationServices().CompletionIntegrationState(adapter.Name()); state != "ready" {
 		t.Fatalf("integration state = %q, want ready", state)
 	}
 	var output bytes.Buffer
@@ -222,27 +222,10 @@ func TestCompletionRejectsProfilesInVersionOneSettings(t *testing.T) {
 	}
 }
 
-func TestShellIntegrationLoadsOnlyInstalledCompletionFile(t *testing.T) {
-	for _, test := range []struct {
-		name        string
-		integration string
-		path        string
-	}{
-		{name: "bash", integration: bashIntegration, path: "$HOME/.config/alias-lens/completion.bash"},
-		{name: "zsh", integration: zshIntegration, path: "$HOME/.config/alias-lens/completion.zsh"},
-	} {
-		t.Run(test.name, func(t *testing.T) {
-			if !strings.Contains(test.integration, test.path) || !strings.Contains(test.integration, "-s \"") {
-				t.Fatalf("integration does not guard and load %s", test.path)
-			}
-		})
-	}
-}
-
 func TestCompletionCandidatesReadLegacyEntriesWithoutRunningThem(t *testing.T) {
 	home := privateTestHome(t)
 	t.Setenv("HOME", home)
-	t.Setenv(activeShellEnvironment, "bash")
+	t.Setenv("ALIAS_LENS_SHELL", "bash")
 	sentinel := filepath.Join(home, "must-not-exist")
 	contents := "alias gs='git status'\n" +
 		"alias inert='touch " + sentinel + "'\n" +
@@ -317,7 +300,7 @@ func TestCompletionCandidatesUseResolvedCatalogNames(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(configDirectory, "catalog.json"), encoded, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	snapshotHash := hashBytes(encoded)
+	snapshotHash := applicationServices().HashBytes(encoded)
 	state := fmt.Sprintf(`{"schema_version":1,"installed_shells":{"bash":{"source_catalog_sha256":%q}}}`, snapshotHash)
 	if err := os.WriteFile(filepath.Join(stateDirectory, "catalog-state.json"), []byte(state), 0o600); err != nil {
 		t.Fatal(err)
@@ -342,7 +325,7 @@ func TestCompletionCandidatesAreBounded(t *testing.T) {
 	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	var source strings.Builder
-	for index := 0; index < completionMaxResults+25; index++ {
+	for index := 0; index < 1000+25; index++ {
 		fmt.Fprintf(&source, "alias a%04d='true'\n", index)
 	}
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte(source.String()), 0o600); err != nil {
@@ -352,10 +335,10 @@ func TestCompletionCandidatesAreBounded(t *testing.T) {
 	if !runCompletionCandidates([]string{"--shell", "bash", "--command", "entries", "--prefix", ""}, &output) {
 		t.Fatal("candidate reader failed")
 	}
-	if got := strings.Count(output.String(), "\n"); got != completionMaxResults {
-		t.Fatalf("candidate count = %d, want %d", got, completionMaxResults)
+	if got := strings.Count(output.String(), "\n"); got != 1000 {
+		t.Fatalf("candidate count = %d, want %d", got, 1000)
 	}
-	if output.Len() > completionOutputLimit {
+	if output.Len() > 1<<20 {
 		t.Fatalf("candidate output is %d bytes", output.Len())
 	}
 }

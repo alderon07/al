@@ -155,7 +155,10 @@ func CatalogStartupPlacementAt(contents []byte, shell, home, nativePath string, 
 }
 
 func CatalogZshStartupPath(home string) (string, error) {
-	directory := os.Getenv("ZDOTDIR")
+	return catalogZshStartupPath(home, defaultRuntime(Runtime{}))
+}
+func catalogZshStartupPath(home string, runtime Runtime) (string, error) {
+	directory := runtime.Environment("ZDOTDIR")
 	if directory != "" && !filepath.IsAbs(directory) {
 		return "", fmt.Errorf("ZDOTDIR must be absolute; set it before al catalog enable")
 	}

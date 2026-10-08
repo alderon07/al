@@ -1,25 +1,14 @@
 package main
 
+import "alias-lens/internal/presentation"
+
 import (
-	"alias-lens/internal/shell"
+	"alias-lens/internal/app"
+
 	"fmt"
-	"os"
-	"os/exec"
-	"regexp"
+
 	"sort"
-	"strings"
 )
-
-type checkSeverity = shell.CheckSeverity
-
-const (
-	checkError   = shell.CheckError
-	checkWarning = shell.CheckWarning
-)
-
-type aliasCheckFinding = shell.CheckFinding
-
-var executableName = regexp.MustCompile(`^[A-Za-z0-9_.+-]+$`)
 
 func runAliasCheck(arguments []string) (int, error) {
 	strict := false
@@ -28,22 +17,16 @@ func runAliasCheck(arguments []string) (int, error) {
 	} else if len(arguments) != 0 {
 		return 2, fmt.Errorf("usage: al check [--strict]")
 	}
-	if active, err := catalogManagedEditing(); err != nil {
+	if active, err := applicationServices().CatalogManagedEditing(); err != nil {
 		return 2, err
 	} else if active {
 		return runCatalogCheck(strict)
 	}
-	path, err := aliasesPath()
+	findings, err := applicationServices().CheckEntries()
 	if err != nil {
 		return 2, err
 	}
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		return 2, err
-	}
-	adapter := activeShellAdapter()
-	findings := checkAliasContents(contents)
-	findings = appendNativeSyntaxFinding(findings, checkNativeShellSyntax(path, adapter.Name()))
+	adapter := applicationServices().ActiveShellAdapter()
 	sort.SliceStable(findings, func(i, j int) bool {
 		if findings[i].Line == findings[j].Line {
 			return findings[i].Severity < findings[j].Severity
@@ -52,7 +35,7 @@ func runAliasCheck(arguments []string) (int, error) {
 	})
 	errors, warnings := 0, 0
 	for _, finding := range findings {
-		if finding.Severity == checkError {
+		if finding.Severity == app.CheckError {
 			errors++
 		} else {
 			warnings++
@@ -62,7 +45,7 @@ func runAliasCheck(arguments []string) (int, error) {
 			location = fmt.Sprintf(" line %d", finding.Line)
 		}
 		severity := fmt.Sprintf("%-5s", finding.Severity)
-		if finding.Severity == checkError {
+		if finding.Severity == app.CheckError {
 			severity = cliAttention(severity)
 		} else {
 			severity = cliAccent(severity)
@@ -70,200 +53,12 @@ func runAliasCheck(arguments []string) (int, error) {
 		fmt.Printf("%s%s  %s\n", severity, location, finding.Message)
 	}
 	if len(findings) == 0 {
-		fmt.Printf("%s  %s is valid for %s.\n", cliPositive("OK"), aliasDisplayPath(), adapter.DisplayName())
+		fmt.Printf("%s  %s is valid for %s.\n", cliPositive("OK"), applicationServices().AliasDisplayPath(), adapter.DisplayName())
 		return 0, nil
 	}
-	fmt.Printf("Found %s and %s in %s.\n", findingCount(errors, "error"), findingCount(warnings, "warning"), aliasDisplayPath())
+	fmt.Printf("Found %s and %s in %s.\n", presentation.FindingCount(errors, "error"), presentation.FindingCount(warnings, "warning"), applicationServices().AliasDisplayPath())
 	if errors > 0 || strict && warnings > 0 {
 		return 1, nil
 	}
 	return 0, nil
-}
-
-func checkAliasContents(contents []byte) []aliasCheckFinding {
-	lines := strings.Split(string(contents), "\n")
-	seen := make(map[string]int)
-	var findings []aliasCheckFinding
-	for index, line := range lines {
-		lineNumber := index + 1
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(strings.ToLower(trimmed), "# al:") {
-			findings = append(findings, checkMetadataSyntax(line, lineNumber)...)
-			continue
-		}
-		if strings.HasPrefix(trimmed, "alias ") {
-			if strings.HasSuffix(trimmed, "\\") {
-				findings = append(findings, aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: "multiline alias definitions are not supported"})
-				continue
-			}
-			if valueFinding := checkAliasValueSyntax(line, lineNumber); valueFinding != nil {
-				findings = append(findings, *valueFinding)
-				continue
-			}
-			name, command, ok := parseAliasDefinition(line)
-			if !ok {
-				findings = append(findings, aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: "malformed alias definition"})
-				continue
-			}
-			findings = append(findings, duplicateNameFinding(seen, name, lineNumber)...)
-			findings = append(findings, executableFinding(command, lineNumber)...)
-			continue
-		}
-		if match := functionStart.FindStringSubmatch(line); match != nil {
-			findings = append(findings, duplicateNameFinding(seen, match[1], lineNumber)...)
-		}
-	}
-	for _, secret := range findSecretFindings(contents) {
-		findings = append(findings, aliasCheckFinding{Line: secret.Line, Severity: checkWarning, Message: "possible " + secret.Kind + "; run al scan"})
-	}
-	return findings
-}
-
-func checkMetadataSyntax(line string, lineNumber int) []aliasCheckFinding {
-	trimmed := strings.TrimSpace(line)
-	body := strings.TrimSpace(trimmed[len("# al:"):])
-	if body == "" {
-		return []aliasCheckFinding{{Line: lineNumber, Severity: checkError, Message: "metadata comment has no fields"}}
-	}
-	validKeys := map[string]bool{"tags": true, "collections": true, "platforms": true, "favorite": true, "category": true}
-	seenKeys := make(map[string]bool)
-	var findings []aliasCheckFinding
-	for _, field := range strings.Fields(body) {
-		key, value, found := strings.Cut(field, "=")
-		key = strings.ToLower(strings.TrimSpace(key))
-		value = strings.TrimSpace(value)
-		if !found || key == "" || value == "" {
-			findings = append(findings, aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: "metadata fields must use key=value"})
-			continue
-		}
-		if !validKeys[key] {
-			findings = append(findings, aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: fmt.Sprintf("unknown metadata field %q", key)})
-			continue
-		}
-		if seenKeys[key] {
-			findings = append(findings, aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: fmt.Sprintf("metadata field %q is repeated", key)})
-			continue
-		}
-		seenKeys[key] = true
-		switch key {
-		case "favorite":
-			if !validBooleanMetadata(value) {
-				findings = append(findings, aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: "favorite must be true, false, yes, no, 1, or 0"})
-			}
-		case "category":
-			if !aliasName.MatchString(value) {
-				findings = append(findings, aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: "category may only use letters, numbers, dot, dash, and underscore"})
-			}
-		case "tags", "collections", "platforms":
-			for _, item := range strings.Split(value, ",") {
-				if item == "" || !aliasName.MatchString(item) {
-					findings = append(findings, aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: key + " must be a comma-separated list of names"})
-					break
-				}
-			}
-		}
-	}
-	return findings
-}
-
-func checkAliasValueSyntax(line string, lineNumber int) *aliasCheckFinding {
-	definition := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "alias "))
-	_, value, found := strings.Cut(definition, "=")
-	value = strings.TrimSpace(value)
-	if !found || value == "" {
-		return nil
-	}
-	if strings.HasPrefix(value, "'") && !strings.HasSuffix(value, "'") || strings.HasPrefix(value, `"`) && !strings.HasSuffix(value, `"`) {
-		return &aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: "quoted alias command must end on the same line"}
-	}
-	if !strings.HasPrefix(value, "'") && !strings.HasPrefix(value, `"`) && strings.ContainsAny(value, " \t") {
-		return &aliasCheckFinding{Line: lineNumber, Severity: checkError, Message: "alias commands that contain spaces must be quoted"}
-	}
-	return nil
-}
-
-func validBooleanMetadata(value string) bool {
-	switch strings.ToLower(value) {
-	case "true", "false", "yes", "no", "1", "0":
-		return true
-	default:
-		return false
-	}
-}
-
-func duplicateNameFinding(seen map[string]int, name string, line int) []aliasCheckFinding {
-	first, exists := seen[name]
-	if !exists {
-		seen[name] = line
-		return nil
-	}
-	return []aliasCheckFinding{{Line: line, Severity: checkError, Message: fmt.Sprintf("duplicate entry %q; first defined on line %d", name, first)}}
-}
-
-func executableFinding(command string, line int) []aliasCheckFinding {
-	fields := strings.Fields(command)
-	if len(fields) == 0 || !executableName.MatchString(fields[0]) || !shouldCheckExecutable(fields[0]) {
-		return nil
-	}
-	if _, err := exec.LookPath(fields[0]); err != nil {
-		return []aliasCheckFinding{{Line: line, Severity: checkWarning, Message: "alias references a missing executable"}}
-	}
-	return nil
-}
-
-func appendNativeSyntaxFinding(findings []aliasCheckFinding, native *aliasCheckFinding) []aliasCheckFinding {
-	if native == nil {
-		return findings
-	}
-	for _, finding := range findings {
-		if native.Line > 0 && finding.Line == native.Line && finding.Severity == checkError {
-			return findings
-		}
-	}
-	return append(findings, *native)
-}
-
-func findingCount(count int, noun string) string {
-	if count == 1 {
-		return "1 " + noun
-	}
-	return fmt.Sprintf("%d %ss", count, noun)
-}
-
-func checkNativeShellSyntax(path, shell string) *aliasCheckFinding {
-	adapter, err := shellAdapter(shell)
-	if err != nil {
-		return &aliasCheckFinding{Severity: checkWarning, Message: err.Error()}
-	}
-	return adapter.CheckSyntax(path)
-}
-
-func shellCheckEnvironment() []string { return shell.LegacyCheckEnvironment() }
-
-func shellSyntaxLine(output []byte) int { return shell.SyntaxLine(output) }
-
-func aliasSyntaxDoctorCheck(path, shell string) DoctorCheck {
-	contents, err := os.ReadFile(path)
-	if err != nil {
-		return DoctorCheck{Name: "alias syntax", OK: false, Message: "run al check"}
-	}
-	findings := checkAliasContents(contents)
-	native := checkNativeShellSyntax(path, shell)
-	if native != nil && native.Severity == checkWarning {
-		return DoctorCheck{Name: "alias syntax", OK: false, Message: native.Message}
-	}
-	findings = appendNativeSyntaxFinding(findings, native)
-	errors := 0
-	for _, finding := range findings {
-		if finding.Severity == checkError {
-			errors++
-		}
-	}
-	if errors > 0 {
-		return DoctorCheck{Name: "alias syntax", OK: false, Message: fmt.Sprintf("%d errors; run al check", errors)}
-	}
-	return DoctorCheck{Name: "alias syntax", OK: true, Message: "valid for " + shell}
 }

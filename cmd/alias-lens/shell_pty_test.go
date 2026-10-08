@@ -8,14 +8,15 @@ import (
 	"io"
 	"os"
 	"os/exec"
+
+	shellapi "alias-lens/internal/shell"
+	"github.com/creack/pty/v2"
 	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/creack/pty/v2"
 )
 
 const ptyPrompt = "ALIAS_LENS_TEST> "
@@ -139,7 +140,7 @@ func TestBashPTYExecution(t *testing.T) {
 		seen[resolved] = true
 		major := bashMajorVersion(t, resolved)
 		t.Run(fmt.Sprintf("%s-bash-%d", filepath.Base(filepath.Dir(resolved)), major), func(t *testing.T) {
-			runShellPTYExecutionChecks(t, "bash", resolved, []string{"--noprofile", "--norc", "-i"}, bashIntegration, major >= 4)
+			runShellPTYExecutionChecks(t, "bash", resolved, []string{"--noprofile", "--norc", "-i"}, shellapi.BashIntegration, major >= 4)
 		})
 		tested++
 	}
@@ -153,7 +154,7 @@ func TestZshPTYExecution(t *testing.T) {
 	if zsh == "" {
 		t.Skip("zsh is not installed")
 	}
-	runShellPTYExecutionChecks(t, "zsh", zsh, []string{"-f"}, zshIntegration, true)
+	runShellPTYExecutionChecks(t, "zsh", zsh, []string{"-f"}, shellapi.ZshIntegration, true)
 }
 
 func bashMajorVersion(t *testing.T, executable string) int {
@@ -297,7 +298,7 @@ esac
 		t.Fatalf("%s executed a stale definition: %v", shellName, err)
 	}
 
-	if err := os.WriteFile(selectionPath, []byte(editSelectionPrefix+"ok\n"), 0o600); err != nil {
+	if err := os.WriteFile(selectionPath, []byte("__alias_lens_edit__:"+"ok\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	editOffset := session.mark()

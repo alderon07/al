@@ -1,20 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"alias-lens/internal/app"
 
-type catalogInitOptions struct {
-	Source            string
-	Shell             string
-	CatalogPath       string
-	Apply             bool
-	ReviewedSourceSHA string
-	ReviewedHEAD      string
-	ReviewedBlob      string
-	StartupPaths      []string
-}
+	"fmt"
+)
 
-func parseCatalogInitOptions(arguments []string) (catalogInitOptions, error) {
-	o := catalogInitOptions{CatalogPath: "alias-lens/catalog.json"}
+func parseCatalogInitOptions(arguments []string) (app.CatalogInitOptions, error) {
+	o := app.CatalogInitOptions{CatalogPath: "alias-lens/catalog.json"}
 	for i := 0; i < len(arguments); i++ {
 		switch arguments[i] {
 		case "--shell", "--catalog-path", "--startup-path":
@@ -48,7 +41,7 @@ func parseCatalogInitOptions(arguments []string) (catalogInitOptions, error) {
 	return o, nil
 }
 
-var catalogInitImplementation = func(catalogInitOptions) error {
+var catalogInitImplementation = func(app.CatalogInitOptions) error {
 	return fmt.Errorf("catalog init supports Bash and Zsh on Linux, WSL, and macOS")
 }
 

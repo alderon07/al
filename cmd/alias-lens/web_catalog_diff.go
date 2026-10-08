@@ -32,7 +32,7 @@ type catalogDiffDetailFile struct {
 }
 
 func newCatalogDiffWebView(before, after neutralcatalog.Catalog, report neutralcatalog.SemanticDiffReport) (*catalogDiffWebView, error) {
-	summary, err := encodeCatalogJSON(report)
+	summary, err := applicationServices().EncodeCatalogJSON(report)
 	if err != nil {
 		return nil, err
 	}

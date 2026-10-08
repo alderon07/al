@@ -1,5 +1,7 @@
 package main
 
+import "alias-lens/internal/presentation"
+
 import (
 	"alias-lens/internal/providers"
 	"context"
@@ -31,12 +33,12 @@ func connectRepoProvider(ctx context.Context, config AppConfig, id string) (prov
 	token := ""
 	switch id {
 	case "github":
-		settings.Host = defaultString(settings.Host, "github.com")
+		settings.Host = presentation.DefaultString(settings.Host, "github.com")
 		if err := connectGitHub(ctx, settings.Host); err != nil {
 			return nil, config, err
 		}
 	case "gitlab":
-		settings.Host = defaultString(settings.Host, "gitlab.com")
+		settings.Host = presentation.DefaultString(settings.Host, "gitlab.com")
 		hostProvider := providers.New(map[string]providers.Settings{"gitlab": {Enabled: true, Host: settings.Host}}, providers.Runtime{}).ByID("gitlab")
 		if err := connectGitLab(ctx, hostProvider.Host()); err != nil {
 			return nil, config, err
@@ -52,7 +54,7 @@ func connectRepoProvider(ctx context.Context, config AppConfig, id string) (prov
 		return nil, config, fmt.Errorf("unsupported provider %q", id)
 	}
 	settings.Enabled = true
-	settings.Protocol = defaultString(settings.Protocol, "auto")
+	settings.Protocol = presentation.DefaultString(settings.Protocol, "auto")
 	if config.Providers == nil {
 		config.Providers = make(map[string]ProviderConfig)
 	}
@@ -60,16 +62,7 @@ func connectRepoProvider(ctx context.Context, config AppConfig, id string) (prov
 	if err := saveConfig(config); err != nil {
 		return nil, config, err
 	}
-	runtime := providers.Runtime{Transport: catalogProviderTransport}
-	if token != "" {
-		runtime.Getenv = func(key string) string {
-			if key == "BITBUCKET_API_TOKEN" {
-				return token
-			}
-			return os.Getenv(key)
-		}
-	}
-	return providers.New(providerSettings(config), runtime).ByID(id), config, nil
+	return applicationServices().ConnectedProvider(config, id, token), config, nil
 }
 func connectBitbucket(ctx context.Context) (string, error) {
 	if token := strings.TrimSpace(os.Getenv("BITBUCKET_API_TOKEN")); token != "" {

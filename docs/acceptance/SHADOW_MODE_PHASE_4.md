@@ -305,7 +305,7 @@ Reports may contain a safe entry name, finding kind, and line number. They never
 | --- | --- |
 | Ubuntu 24.04 | CI job `shadow-ubuntu` records OS, Go, Bash, and Zsh versions, runs `TestShadowLinuxMatrix`, and compares plain and JSON output with committed golden hashes. |
 | macOS 14 | CI job `shadow-macos` records OS, Go, Apple Bash, and Zsh versions, runs `TestShadowMacOSMatrix`, and compares plain and JSON output with committed golden hashes. |
-| Windows 11 WSL 2 | From a clean checkout run `wsl.exe --version`, `uname -a`, `bash --version`, `go version`, `GOCACHE=/tmp/alias-lens-shadow-cache go test ./cmd/alias-lens -run 'TestShadow(Bash|WSL)'`, then `./scripts/verify-shadow-wsl.sh`. The script uses a disposable home, prints `PASS shadow-wsl`, and prints manifest, plain-report, and JSON-report SHA-256 values that must equal committed `testdata/phase4/wsl.sha256` lines. Record exact keystrokes, exit statuses, and output. |
+| Windows 11 WSL 2 | From a clean checkout run `wsl.exe --version`, `uname -a`, `bash --version`, `go version`, `GOCACHE=/tmp/alias-lens-shadow-cache go test ./cmd/alias-lens ./internal/app ./internal/shell -run '^TestShadow(LinuxMatrix|NeverExecutes|Validator|ReadOnly|ShellSelection|Nonblocking|RawSecret|Ambiguous|Generation)' -count=1`, then `./scripts/verify-shadow-wsl.sh`. The script uses a disposable home, prints `PASS shadow-wsl`, and prints manifest, plain-report, and JSON-report SHA-256 values that must equal committed `testdata/phase4/wsl.sha256` lines. Record exact keystrokes, exit statuses, and output. |
 | Approval | Sol/high approved on 2026-09-17. |
 
 ### SA4-014 keeps implementation scope narrow

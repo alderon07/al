@@ -1,5 +1,81 @@
 # Package organization review evidence
 
+## Application and terminal extraction, 2026-10-07
+
+The user authorized completion of stages 4 and 5 after the reviewed catalog and earlier package changes were pushed. Acceptance criteria were written in `docs/acceptance/APPLICATION_PACKAGE.md` and `docs/acceptance/TERMINAL_PACKAGE.md` before source edits.
+
+An independent high architecture review approved the dependency direction `cmd -> tui -> app -> existing lower packages`. It required separating shared appearance and shortcut schemas, preserving observed configuration bytes and plan/revision identities, keeping command routing and terminal prompts outside app, and moving revision restore and repository clone policy into application operations. Windows stubs must split between app and TUI. Compiled-binary PTY tests must explicitly build the executable after relocation.
+
+A baseline matrix recorded output, exit codes and filesystem observations for 27 CLI invocations using the committed compiled binary and a disposable home with synthetic entries. It includes the explicitly empty tracked repository path found during settings review. All invocations left the recursive filesystem manifest unchanged. The final candidate comparison passed all 27 invocations without changing the disposable filesystem. Both stage gates are recorded below.
+
+### Shared settings prerequisites
+
+Medium implementation moved theme palettes, appearance/footer schemas and icon validation into `internal/presentation`. High review found no blocking differences in palette values, JSON fields, defaults or validation. The replacement width function preserves the existing Lip Gloss terminal-cell calculation. Focused theme, appearance, footer and icon tests passed. Pure tests moved beside the extracted code.
+
+A separate medium implementation moved shortcut profiles, declarations, validation, matching and translation into `internal/shortcuts`. High source review compared 30 moved functions and the complete registries against the baseline. Literal labels, action scopes, default order and OS/WSL detection were preserved. Public descriptors return copies and profile overrides remain immutable. Focused tests passed in the command and shortcut packages; the shortcut race check passed. Actual shortcut editor, search-mode and configured Bash/Zsh launcher PTYs passed in 1.245 seconds.
+
+Temporary command adapters remain during application extraction and must be removed as their callers move. These prerequisites do not close the application or terminal stage gates.
+
+### Settings service review
+
+The first application tranche moved configuration schemas, observation, defaults, validation, tracking and the three-way merge into `SettingsService`. Existing command mutation sessions compose with it through a temporary settings-only writer. High review verified that observed bytes, fresh reload under the lock and saves within an existing transaction retain their earlier behavior.
+
+Review reproduced a regression with compiled before/after binaries: an explicitly empty tracked repository destination was incorrectly treated as omitted and created settings. Medium correction added a typed optional destination that distinguishes omission from an empty argument. Independent re-review and the no-mutation regression passed. Broader configuration, mutation, observation and profile tests passed in 1.680 seconds. The complete application gate remains open until the temporary dependencies and helper adapters become app-private and tests move to their implementation.
+
+### Query service review
+
+Medium implementation moved search, suggestion ranking and edit-distance matching from terminal code into the application query service. High review compared all nine moved functions with the original implementation. The explicit scorer retains favorite priority, context ordering, stable ties, dangerous-command exclusions, Unicode normalization and empty-context behavior. Only operations used by callers are public; normalization and edit-distance helpers remain private. Three pure tests moved beside the implementation. Independent focused tests passed in the app and command packages, including context ranking and pending-entry selection.
+
+The compiled prerequisite checkpoint passed all 27 baseline CLI comparisons, including output and exit codes. Its disposable home retained the complete initial filesystem manifest. `go mod verify` also passed. These are intermediate checks; the full backend and terminal moves still require their final gates.
+
+### Write-operation precursor review
+
+Typed setup requests/results, description-update results, reviewed revision restore and repository clone/configure were prepared before moving the private backend. High review found no remaining bounded blockers. Focused tests passed in 22.912 seconds, including actual Bash/Zsh setup and revision PTYs. Nine additional compiled CLI comparisons preserved exit codes, stdout, stderr and alias bytes for setup, repair/removal, startup failure, description changes and restore outcomes. Setup preserves partial-failure notices in order and prompts after releasing the mutation lock. Reviewed restoration checks the selected revision and hashes inside one mutation session; catalog restoration reuses that session.
+
+### Runtime and test ownership review
+
+The backend extraction compiles in a disposable source tree before replacing the working source. Application dependencies cover home, working directory, environment, executable, time, provider transport, validators, watcher startup and operation notices. The compiled runtime checkpoint passed all 27 original CLI comparisons without changing the disposable home's recursive filesystem manifest.
+
+High review reproduced inconsistent runtime boundaries with two synthetic homes. Settings, locks, catalog records and revisions correctly used the service home, but watcher startup inherited the process home and ignored an injected watcher callback. Provider token lookup also bypassed the injected environment. Medium corrections passed independent re-review for home isolation, read-only behavior, watcher callbacks, child environment and synthetic credential lookup. Zsh environment and working-directory isolation now uses a narrow shell adapter runtime constructor that preserves existing defaults. Independent tests cover absolute and relative legacy ZDOTDIR, the catalog's narrower discovery rule and unchanged process-home files.
+
+Test relocation initially separated some subprocess tests from their helper entry points. Medium correction keeps each test and its helper in the same package. The inventory retains all 534 original command-package test/helper names with no duplicates. Expanded actual PTY and subprocess verification passed in 4.569 seconds, covering catalog narrow/wide cancellation, mutation and watch contention, shortcuts, editor/search modes, diff and revision previews, favorites, wide redraw and startup inspection. Nine further CLI PTY checks passed with disposable homes for import, context changes, private export, cleanup and autosync settings. Focused import/export/catalog and context race checks passed.
+
+The full app suite subsequently found an environment-only bootstrap helper dispatch missed by the initial inventory. Guided bootstrap tests and the compiled Zsh test now remain beside command `TestMain`; no app test dispatches its own executable. The frozen full suite passed after this correction.
+
+### Stage 4 final gate, 2026-10-08
+
+Independent high review approved AP-001 through AP-007 with no unresolved findings. It verified application ownership, private sessions and settings writers, explicit runtime dependencies, read-only repository comparison, immutable generation verification, installed membership, unchanged field tags and literals, path-isolated sync and uncertain-push handling. Command routing, credential prompts, embedded browser assets and linker version remain in the executable package. No app code imports terminal models or rendering. Shared shortcut validation may depend on the lower terminal protocol adapter; app exposes no key events or terminal types.
+
+- Required root `make fmt check` passed: command package 27.731 seconds, app 61.242 seconds, shell 0.412 seconds, all packages, vet, executable build and whitespace checks.
+- Application-stage race checks passed: app 47.129 seconds, shell 1.067 seconds, presentation 1.041 seconds and shortcuts 1.047 seconds. Actual PTYs run in the full suite and bounded checks above.
+- Linux, Windows amd64 and Darwin amd64 production builds passed.
+- The final app binary passed all 27 baseline output and exit-code comparisons; the complete disposable-home filesystem manifest remained unchanged.
+- All 534 original test/helper names remain present, with no duplicates; private core tests moved beside implementation and compiled tests target the executable package.
+
+These results close AP-008 and stage 4. Terminal extraction and its final gate remain in progress. Native macOS, WSL and trusted system Zsh evidence remain separate release gates.
+
+
+### Stage 5 review and final gate, 2026-10-08
+
+Medium implementation moved private terminal models and views into `internal/tui`. The public surface contains five operations (`Browser`, `Picker`, `Stats`, `RepositoryPicker` and `CatalogConflict`) and two option types. Each launcher receives the same explicit application services used by command routing. Models, diff helpers and asynchronous review/clone work retain that service instance. Terminal code contains no persistent writers, Git transport, shell execution policy or fallback service factory.
+
+Independent high review checked TP-001 through TP-006 against the pre-terminal snapshot. It compared 232 normalized production function bodies exactly and manually checked the remaining ten differences: removal of the temporary shortcut JSON adapter and explicit service parameters for metadata/query helpers. Review retained keyboard behavior, layouts, installed versus pending labels, confirmation, cancellation and asynchronous messages. A combined inventory preserved all 277 command test/helper names remaining after stage 4 and added one regression for an injected application home; 188 tests moved beside their terminal implementation. The complete 534-name command baseline also has no missing or duplicate test/helper names after both stages.
+
+Race-instrumented shortcut PTYs exposed a test capture boundary: waiting for the screen title could return before its footer rendered. Medium correction waits for the existing `enter change` footer on the initial frame and each resized frame before checking layout. This prevents output from an older incomplete frame from satisfying the next capture. Separate high re-review approved the fixture change; three repeated normal runs passed in 0.726 seconds and three race runs passed in 2.163 seconds. Product rendering and timing are unchanged.
+
+Final root verification:
+
+- A fresh full `make fmt check` passed: command package 19.127 seconds, app 64.071 seconds, transaction 6.599 seconds and TUI 13.140 seconds, with all other packages, vet, executable build and whitespace checks passing. The full suite includes actual Bash/Zsh shell behavior and compiled narrow/wide terminal PTYs.
+- Repository-wide `go test -race -count=1 -skip PTY ./...` passed, including command 13.641 seconds, app 49.566 seconds, transaction 7.181 seconds and TUI 9.082 seconds. Actual PTYs ran separately in the full suite; independent focused terminal PTYs passed in 8.606 seconds and targeted injected-home/shortcut race checks passed in 3.085 seconds.
+- Production compilation passed for Linux amd64/arm64, Darwin amd64/arm64 and Windows amd64. Cross-compilation supplies build evidence only.
+- The final binary passed all 27 saved CLI output and exit-code comparisons, with no filesystem mutations in the synthetic home. A linker-injected `main.version` build reported `alias-lens package-boundary-test` and created no home files. Embedded browser assets remain in the executable package.
+- `go mod verify` passed. No dependency or public/private format versions changed.
+- Final production ownership is 50 command files / 4,675 lines, 99 app files / 13,269 lines, 26 TUI files / 6,125 lines, seven presentation files / 697 lines and three shortcut files / 807 lines.
+
+CI shadow selectors now include command, application and shell owners. The catalog verifier includes command, application and terminal owners and accepts suffixes after `PTY`, so the moved narrow/wide cancellation tests are selected. Independent high review approved the selector corrections. Both shadow selectors passed on Linux (the native macOS matrix retains its platform skip). With `PATH=/tmp/al-zsh-runtime/build/bin:$PATH`, `AL_REQUIRE_PTY_SHELLS=1 go test ./cmd/alias-lens ./internal/app ./internal/tui -run '^(TestCatalog.*PTY|Test.*Init.*PTY)' -skip '^TestCompiledZshInitGuidedPTY$' -count=1` passed with only the unavailable fixed-path Zsh bootstrap test explicitly skipped: command 6.096 seconds, app 17.893 seconds and TUI 1.556 seconds. The final repeated `make fmt check` also passed after the PTY fixture correction, including TUI 11.206 seconds. The full catalog verifier’s fixed-path Zsh bootstrap test needs trusted system Zsh. The local disposable Zsh 5.9 runtime supports actual shell PTYs but does not meet that production validator requirement; the policy remains unchanged. Native macOS and WSL evidence and the full verifier with trusted system Zsh remain release gates.
+
+Stage 5 source review has no unresolved findings. The evidence above closes TP-007 for this package refactor; it does not declare platform release readiness. Changes remain uncommitted and unpushed at this verification checkpoint.
+
 ## Baseline and scope
 
 The catalog workflow implementation and the user's `AGENTS.md` changes were already uncommitted when this refactor began. Reviews compare the organization changes with disposable pre-extraction source snapshots, not with the older Git HEAD.

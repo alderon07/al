@@ -2,7 +2,7 @@
 
 ## Current pass
 
-Stages 1 and 2 completed the selected Git/provider extraction and shared helper promotion. The user then asked to continue; stage 3 completed shared entry and shell adapter extraction against `docs/acceptance/SHELL_PACKAGE.md`. All three stages passed repeated high review and full checks. Application services and the terminal UI remain later stages. The implementation and verification are recorded in `docs/testing/evidence/PACKAGE_ORGANIZATION.md`.
+Stages 1 and 2 completed the selected Git/provider extraction and shared helper promotion. Stage 3 completed shared entry and shell adapter extraction. Stage 4 completed application operations under `docs/acceptance/APPLICATION_PACKAGE.md`, with explicit runtime dependencies and private mutation sessions. Stage 5 completed terminal models and views under `docs/acceptance/TERMINAL_PACKAGE.md`. All five stages passed independent high review and full checks. The implementation and verification are recorded in `docs/testing/evidence/PACKAGE_ORGANIZATION.md`.
 
 ## Intended dependency direction
 
@@ -28,13 +28,15 @@ Moving a Go file into a directory creates a new package boundary. Expose only th
 
 The existing `tea`, `usagelog`, and `exportfile` packages now live at root-level `internal`. Their old command-scoped paths prevented `internal/app` and `internal/tui` from importing them under Go internal visibility rules.
 
-Shell adapters use shared entry types and return read-only startup plans. One application adapter applies those plans under the existing mutation session. Providers receive copied settings and runtime dependencies; application code owns credential prompts, config persistence, catalog decoding, secret scanning and transport selection. The TUI still directly calls lifecycle and configuration functions. Application services must expose those operations before the TUI moves.
+Shell adapters use shared entry types and return read-only startup plans. One application adapter applies those plans under the existing mutation session. Providers receive copied settings and runtime dependencies. Application code owns config persistence, catalog decoding, secret scanning and transport selection; command code owns credential prompts. The TUI uses typed application operations for persistence and observations. Its private models and views live in `internal/tui`, whose public API contains five launch operations and two option types.
 
 The shell package preserves distinct legacy and catalog validator trust policies, separate legacy versus catalog ZDOTDIR handling and Bash login precedence.
 
 Keep platform build tags, shell declaration bytes, generation identities, record formats, JSON contracts and command behavior unchanged. Preserve compiled-binary tests and embedded browser assets when moving command/application files. The existing platform release gates remain required.
 
 ## Evidence
+
+Stage 4 and stage 5 were authorized on 2026-10-07. Their contracts are in `docs/acceptance/APPLICATION_PACKAGE.md` and `docs/acceptance/TERMINAL_PACKAGE.md`. Both require typed application services, private implementation helpers, no application dependency on terminal models or rendering, and unchanged configuration and plan freshness. Stages 4 and 5 passed their gates on 2026-10-08. Native macOS and WSL runtime checks and trusted system Zsh evidence remain release requirements.
 
 Acceptance criteria: `docs/acceptance/PACKAGE_ORGANIZATION.md`.
 

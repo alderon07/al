@@ -11,7 +11,7 @@ import (
 func TestRepositoryDiffClearsStaleConflictForExactMatch(t *testing.T) {
 	local := []byte("# Status\nalias gs='git status'\n")
 	setupRepositoryDiffTest(t, local, local)
-	if err := writeSyncStatus("conflict", "both local and remote aliases changed; run al diff", "old-local", "old-remote"); err != nil {
+	if err := seedSyncStateFixture("conflict", "both local and remote aliases changed; run al diff", "old-local", "old-remote"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -22,11 +22,11 @@ func TestRepositoryDiffClearsStaleConflictForExactMatch(t *testing.T) {
 	if !strings.Contains(output.String(), "files match") {
 		t.Fatalf("diff output = %q", output.String())
 	}
-	state, err := loadSyncState()
+	state, err := primarySyncStateFixture()
 	if err != nil {
 		t.Fatal(err)
 	}
-	wantHash := contentHash(local)
+	wantHash := applicationServices().ContentHash(local)
 	if state.Status != "synced" || state.LocalHash != wantHash || state.RemoteHash != wantHash || state.Message != "files match" {
 		t.Fatalf("sync state was not refreshed: %#v", state)
 	}
@@ -36,7 +36,7 @@ func TestRepositoryDiffReportsWholeFileDifferences(t *testing.T) {
 	local := []byte("# Local description\nalias gs='git status'\n")
 	remote := []byte("# Tracked description\nalias gs='git status'\n")
 	setupRepositoryDiffTest(t, local, remote)
-	if err := writeSyncStatus("conflict", "both local and remote aliases changed; run al diff", contentHash(local), contentHash(remote)); err != nil {
+	if err := seedSyncStateFixture("conflict", "both local and remote aliases changed; run al diff", applicationServices().ContentHash(local), applicationServices().ContentHash(remote)); err != nil {
 		t.Fatal(err)
 	}
 
@@ -49,7 +49,7 @@ func TestRepositoryDiffReportsWholeFileDifferences(t *testing.T) {
 			t.Fatalf("diff output does not contain %q: %s", expected, output.String())
 		}
 	}
-	state, err := loadSyncState()
+	state, err := primarySyncStateFixture()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func setupRepositoryDiffTest(t *testing.T, local, remote []byte) {
 	t.Helper()
 	home := privateTestHome(t)
 	t.Setenv("HOME", home)
-	t.Setenv(activeShellEnvironment, "bash")
+	t.Setenv("ALIAS_LENS_SHELL", "bash")
 	repository := filepath.Join(home, "dotfiles")
 	if err := os.MkdirAll(repository, 0o700); err != nil {
 		t.Fatal(err)

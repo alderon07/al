@@ -1,8 +1,10 @@
 package main
 
 import (
+	"alias-lens/internal/app"
+
 	"alias-lens/internal/entry"
-	"alias-lens/internal/shell"
+
 	"crypto/rand"
 	"crypto/subtle"
 	"embed"
@@ -13,9 +15,8 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/exec"
+
 	"runtime/debug"
-	"sort"
 
 	"strings"
 	"time"
@@ -83,7 +84,7 @@ func runMain() int {
 			}
 			return 0
 		}
-		if err := configureRepository(os.Args[2]); err != nil {
+		if err := applicationServices().ConfigureRepository(os.Args[2]); err != nil {
 			cliError(err)
 			return 1
 		}
@@ -229,7 +230,7 @@ func runMain() int {
 			fmt.Fprintln(os.Stderr, "Usage: alias-lens record-use NAME")
 			return 2
 		}
-		if err := recordAliasUse(os.Args[2]); err != nil {
+		if err := applicationServices().RecordAliasUse(os.Args[2]); err != nil {
 			cliError(err)
 			return 1
 		}
@@ -320,7 +321,7 @@ func runMain() int {
 		if len(os.Args) == 3 && os.Args[2] == "--ensure" {
 			config, err := loadConfig()
 			if err == nil && config.AutoSync.Enabled {
-				err = ensureWatchProcess()
+				err = applicationServices().EnsureWatchProcess()
 			}
 			if err != nil {
 				cliError(err)
@@ -333,7 +334,7 @@ func runMain() int {
 			fmt.Fprintln(os.Stderr, "Usage: al watch")
 			return 2
 		}
-		if err := runWatch(daemon); err != nil {
+		if err := applicationServices().RunWatch(daemon); err != nil {
 			if !daemon {
 				cliError(err)
 			}
@@ -357,7 +358,7 @@ func runMain() int {
 			return 2
 		}
 		if len(os.Args) == 3 && os.Args[2] == "--pull" {
-			message, err := withCLIProgress("Pulling aliases", pullRepository)
+			message, err := withCLIProgress("Pulling aliases", applicationServices().PullRepository)
 			if err != nil {
 				cliError(err)
 				return 1
@@ -366,7 +367,7 @@ func runMain() int {
 			return 0
 		}
 		push := len(os.Args) == 3 && os.Args[2] == "--push"
-		message, err := withCLIProgress("Syncing aliases", func() (string, error) { return syncRepository(push) })
+		message, err := withCLIProgress("Syncing aliases", func() (string, error) { return applicationServices().SyncRepository(push) })
 		if err != nil {
 			cliError(err)
 			return 1
@@ -414,7 +415,7 @@ func resolveVersion(injected, moduleVersion string) string {
 }
 
 func printShellIntegration(name string) error {
-	adapter, err := shellAdapter(name)
+	adapter, err := applicationServices().ShellAdapter(name)
 	if err != nil {
 		return err
 	}
@@ -430,7 +431,7 @@ func printShellIntegration(name string) error {
 	return err
 }
 
-func shellIntegrationForConfig(adapter ShellAdapter, config AppConfig) (string, error) {
+func shellIntegrationForConfig(adapter app.ShellAdapter, config AppConfig) (string, error) {
 	letter, err := parseLauncherKey(launcherLabel(config))
 	if err != nil {
 		return "", err
@@ -474,7 +475,7 @@ func runWeb() error {
 	}
 
 	fmt.Printf("Alias Lens web mode is running at http://%s/#token=%s\n", address, token)
-	fmt.Println("Reading aliases from", aliasDisplayPath())
+	fmt.Println("Reading aliases from", applicationServices().AliasDisplayPath())
 	return serveLocalWeb(address, handler)
 }
 
@@ -572,7 +573,7 @@ func newWebHandlerWithCatalogDiff(token, expectedHost string, catalogDiff *catal
 }
 
 func aliasesHandler(w http.ResponseWriter, r *http.Request) {
-	aliases, err := loadAliases()
+	aliases, err := applicationServices().Entries()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -580,164 +581,3 @@ func aliasesHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(aliases)
 }
-
-func loadAliases() ([]Alias, error) {
-	adapter := activeShellAdapter()
-	path, err := aliasesPath()
-	if err != nil {
-		return nil, fmt.Errorf("find alias file: %w", err)
-	}
-	contents, err := readFileLimited(path, aliasFileLimit)
-	if os.IsNotExist(err) {
-		if createErr := ensureAliasFileExists(path); createErr != nil {
-			return nil, createErr
-		}
-		contents, err = readFileLimited(path, aliasFileLimit)
-	}
-	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", path, err)
-	}
-
-	var aliases []Alias
-	var notes []string
-	metadata := EntryMetadata{}
-	for _, line := range strings.Split(string(contents), "\n") {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if strings.HasPrefix(trimmed, "#") {
-			if parsed, ok := parseMetadataComment(line); ok {
-				metadata = parsed
-				continue
-			}
-			note := strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
-			if strings.Contains(note, "===") || strings.Contains(note, "---") || isSectionHeading(note) {
-				notes = nil
-				continue
-			}
-			if note != "" {
-				notes = append(notes, note)
-			}
-			continue
-		}
-
-		name, command, ok := adapter.ParseAliasDefinition(line)
-		if !ok {
-			notes = nil
-			metadata = EntryMetadata{}
-			continue
-		}
-		description := describe(name, command)
-		if len(notes) > 0 {
-			description = notes[len(notes)-1]
-		}
-		alias := Alias{
-			Name:        name,
-			Command:     command,
-			Description: description,
-			Category:    category(command),
-			Type:        "alias",
-		}
-		applyMetadata(&alias, metadata)
-		aliases = append(aliases, alias)
-		notes = nil
-		metadata = EntryMetadata{}
-	}
-	aliases = append(aliases, adapter.ParseFunctions(string(contents))...)
-
-	sort.Slice(aliases, func(i, j int) bool { return strings.ToLower(aliases[i].Name) < strings.ToLower(aliases[j].Name) })
-	aliases, err = catalogEntryFacade(adapter.Name(), aliases)
-	if err != nil {
-		return nil, err
-	}
-	annotateUsage(aliases, loadHistoryCounts())
-	annotateHealth(aliases)
-	return aliases, nil
-}
-
-func annotateHealth(aliases []Alias) {
-	counts := make(map[string]int, len(aliases))
-	for _, alias := range aliases {
-		counts[alias.Name]++
-	}
-	for index := range aliases {
-		alias := &aliases[index]
-		if counts[alias.Name] > 1 {
-			alias.Issues = append(alias.Issues, "duplicate definition")
-		}
-		if isDangerousCommand(alias.Command) {
-			alias.Issues = append(alias.Issues, "review before running")
-		}
-		if !platformSupported(alias.Platforms) {
-			alias.Issues = append(alias.Issues, "not for "+currentPlatform())
-		}
-		fields := strings.Fields(alias.Command)
-		if len(fields) > 0 && shouldCheckExecutable(fields[0]) {
-			if _, err := exec.LookPath(fields[0]); err != nil {
-				alias.Issues = append(alias.Issues, "missing executable: "+fields[0])
-			}
-		}
-	}
-}
-
-func isDangerousCommand(command string) bool {
-	return len(dangerousCommandReasons(command)) > 0
-}
-
-func dangerousCommandReasons(command string) []string {
-	lower := strings.ToLower(command)
-	patterns := []struct {
-		needle string
-		reason string
-	}{
-		{"sudo ", "runs with elevated privileges"},
-		{"--force", "uses a force option"},
-		{"reset --hard", "discards uncommitted Git changes"},
-		{"clean -fd", "deletes untracked Git files"},
-		{"rm -rf", "recursively deletes files"},
-		{"chmod -r", "recursively changes file permissions"},
-		{"chown -r", "recursively changes file ownership"},
-		{"docker system prune", "deletes unused Docker data"},
-	}
-	var reasons []string
-	for _, pattern := range patterns {
-		if strings.Contains(lower, pattern.needle) {
-			reasons = append(reasons, pattern.reason)
-		}
-	}
-	if strings.Contains(command, "branch -D") {
-		reasons = append(reasons, "force-deletes a Git branch")
-	}
-	if strings.TrimSpace(lower) == "sudo" {
-		reasons = append(reasons, "runs with elevated privileges")
-	}
-	return reasons
-}
-
-func shouldCheckExecutable(command string) bool {
-	builtins := map[string]bool{
-		".": true, "alias": true, "cd": true, "command": true, "echo": true, "export": true,
-		"for": true, "if": true, "local": true, "printf": true, "pwd": true, "read": true,
-		"return": true, "source": true, "test": true, "type": true,
-	}
-	return !builtins[command] && !strings.ContainsAny(command, "$()`")
-}
-
-func parseAliasDefinition(line string) (string, string, bool) {
-	return parseLegacyAliasDefinition(line)
-}
-
-func parseLegacyAliasDefinition(line string) (string, string, bool) {
-	return shell.ParseLegacyAliasDefinition(line)
-}
-
-func isSectionHeading(note string) bool { return entry.IsSectionHeading(note) }
-
-func firstNonEmpty(values ...string) string { return entry.FirstNonEmpty(values...) }
-
-func category(command string) string { return entry.Category(command) }
-
-func describe(name, command string) string { return entry.Describe(name, command) }
-
-func legacyDescription(name, command string) string { return entry.LegacyDescription(name, command) }

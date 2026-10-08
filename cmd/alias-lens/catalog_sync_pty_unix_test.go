@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/creack/pty/v2"
+
 	"io"
 	"os"
 	"os/exec"
@@ -11,6 +12,18 @@ import (
 	"strings"
 	"testing"
 )
+
+func TestCatalogSyncPTYHelper(t *testing.T) {
+	if os.Getenv("AL_CATALOG_SYNC_PTY") != "1" {
+		return
+	}
+	repo, value := setupCatalogSyncFixture(t)
+	value.Entries[0].Description = "remote synthetic edit"
+	writeCatalogFixture(t, filepath.Join(repo, "catalog.json"), value)
+	if err := runCatalogSyncPull(false); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func TestCatalogSemanticPullPTY(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCatalogSyncPTYHelper$")
@@ -28,16 +41,5 @@ func TestCatalogSemanticPullPTY(t *testing.T) {
 	output := <-read
 	if !strings.Contains(output, "catalog") || !strings.Contains(output, "al sync --pull --apply") {
 		t.Fatal("PTY preview missing", output)
-	}
-}
-func TestCatalogSyncPTYHelper(t *testing.T) {
-	if os.Getenv("AL_CATALOG_SYNC_PTY") != "1" {
-		return
-	}
-	repo, value := setupCatalogSyncFixture(t)
-	value.Entries[0].Description = "remote synthetic edit"
-	writeCatalogFixture(t, filepath.Join(repo, "catalog.json"), value)
-	if err := runCatalogSyncPull(false); err != nil {
-		t.Fatal(err)
 	}
 }
