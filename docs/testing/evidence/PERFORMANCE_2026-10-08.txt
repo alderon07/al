@@ -1,0 +1,297 @@
+Alias Lens performance baseline
+UTC: 2026-10-08T18:31:09Z
+Commit: e90ec6f607eda746275f600f3ce5d7701aba535b
+Worktree: dirty
+go version go1.27.1 linux/amd64
+Platform: linux/amd64
+Kernel: Linux 7.0.0-34-generic
+CPU: 13th Gen Intel(R) Core(TM) i7-13705H
+GNU bash, version 5.2.21(1)-release (x86_64-pc-linux-gnu)
+zsh 5.9 (x86_64-pc-linux-gnu)
+Benchtime: 200ms; repetitions: 3
+Fresh shell processes; filesystem cache is not flushed. Go allocations exclude child processes.
+goos: linux
+goarch: amd64
+pkg: alias-lens/internal/catalog
+cpu: 13th Gen Intel(R) Core(TM) i7-13705H
+BenchmarkCatalogDecode/100-20 	     158	   1470258 ns/op	  26.18 MB/s	       100.0 entries	  476354 B/op	    6345 allocs/op
+BenchmarkCatalogDecode/100-20 	     204	   1306281 ns/op	  29.46 MB/s	       100.0 entries	  476183 B/op	    6345 allocs/op
+BenchmarkCatalogDecode/100-20 	     151	   1764078 ns/op	  21.82 MB/s	       100.0 entries	  476297 B/op	    6345 allocs/op
+BenchmarkCatalogDecode/1000-20         	      14	  18592284 ns/op	  20.68 MB/s	      1000 entries	 4614025 B/op	   62671 allocs/op
+BenchmarkCatalogDecode/1000-20         	      18	  13763490 ns/op	  27.93 MB/s	      1000 entries	 4612496 B/op	   62669 allocs/op
+BenchmarkCatalogDecode/1000-20         	      19	  14510772 ns/op	  26.49 MB/s	      1000 entries	 4612594 B/op	   62669 allocs/op
+BenchmarkCatalogDecode/10000-20        	       3	  93110822 ns/op	  41.28 MB/s	     10000 entries	46195088 B/op	  625866 allocs/op
+BenchmarkCatalogDecode/10000-20        	       3	  87181965 ns/op	  44.09 MB/s	     10000 entries	46192338 B/op	  625862 allocs/op
+BenchmarkCatalogDecode/10000-20        	       3	  90820853 ns/op	  42.33 MB/s	     10000 entries	46192354 B/op	  625862 allocs/op
+BenchmarkCatalogResolve/100-20         	    2019	    152674 ns/op	       100.0 entries	     38485 input-B	   60131 B/op	     323 allocs/op
+BenchmarkCatalogResolve/100-20         	    1774	    135711 ns/op	       100.0 entries	     38485 input-B	   60128 B/op	     323 allocs/op
+BenchmarkCatalogResolve/100-20         	    2205	    140915 ns/op	       100.0 entries	     38485 input-B	   60129 B/op	     323 allocs/op
+BenchmarkCatalogResolve/1000-20        	     156	   1383060 ns/op	      1000 entries	    384445 input-B	  674592 B/op	    3045 allocs/op
+BenchmarkCatalogResolve/1000-20        	     152	   1700714 ns/op	      1000 entries	    384445 input-B	  674587 B/op	    3045 allocs/op
+BenchmarkCatalogResolve/1000-20        	     175	   1428748 ns/op	      1000 entries	    384445 input-B	  674599 B/op	    3045 allocs/op
+BenchmarkCatalogResolve/10000-20       	      20	  10585218 ns/op	     10000 entries	   3844045 input-B	 6239456 B/op	   30165 allocs/op
+BenchmarkCatalogResolve/10000-20       	      20	  11465851 ns/op	     10000 entries	   3844045 input-B	 6238760 B/op	   30164 allocs/op
+BenchmarkCatalogResolve/10000-20       	      18	  14003735 ns/op	     10000 entries	   3844045 input-B	 6238936 B/op	   30164 allocs/op
+PASS
+ok  	alias-lens/internal/catalog	9.089s
+goos: linux
+goarch: amd64
+pkg: alias-lens/internal/shell
+cpu: 13th Gen Intel(R) Core(TM) i7-13705H
+BenchmarkShellParse/bash/aliases/100-20         	   12202	     18751 ns/op	 218.65 MB/s	       100.0 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/aliases/100-20         	   12844	     18750 ns/op	 218.67 MB/s	       100.0 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/aliases/100-20         	   12490	     18654 ns/op	 219.79 MB/s	       100.0 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/functions/100-20       	    2316	    110842 ns/op	  42.40 MB/s	       100.0 entries	   78328 B/op	     409 allocs/op
+BenchmarkShellParse/bash/functions/100-20       	    1999	    116371 ns/op	  40.39 MB/s	       100.0 entries	   78252 B/op	     409 allocs/op
+BenchmarkShellParse/bash/functions/100-20       	    2216	     99972 ns/op	  47.01 MB/s	       100.0 entries	   78258 B/op	     409 allocs/op
+BenchmarkShellParse/bash/structural/100-20      	     560	    569798 ns/op	   7.20 MB/s	       100.0 entries	  163200 B/op	    1516 allocs/op
+BenchmarkShellParse/bash/structural/100-20      	     566	    459550 ns/op	   8.92 MB/s	       100.0 entries	  163203 B/op	    1516 allocs/op
+BenchmarkShellParse/bash/structural/100-20      	     493	    588789 ns/op	   6.96 MB/s	       100.0 entries	  163204 B/op	    1516 allocs/op
+BenchmarkShellParse/bash/aliases/1000-20        	    1120	    188050 ns/op	 218.03 MB/s	      1000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/aliases/1000-20        	    1261	    188447 ns/op	 217.57 MB/s	      1000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/aliases/1000-20        	    1194	    186890 ns/op	 219.38 MB/s	      1000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/functions/1000-20      	     198	   1251186 ns/op	  37.56 MB/s	      1000 entries	  909842 B/op	    4014 allocs/op
+BenchmarkShellParse/bash/functions/1000-20      	     182	   1248376 ns/op	  37.65 MB/s	      1000 entries	  911843 B/op	    4014 allocs/op
+BenchmarkShellParse/bash/functions/1000-20      	     184	   1410603 ns/op	  33.32 MB/s	      1000 entries	  913214 B/op	    4014 allocs/op
+BenchmarkShellParse/bash/structural/1000-20     	       9	  24007827 ns/op	   1.71 MB/s	      1000 entries	 1714058 B/op	   15024 allocs/op
+BenchmarkShellParse/bash/structural/1000-20     	       9	  23629106 ns/op	   1.74 MB/s	      1000 entries	 1714069 B/op	   15025 allocs/op
+BenchmarkShellParse/bash/structural/1000-20     	       9	  25597867 ns/op	   1.60 MB/s	      1000 entries	 1714080 B/op	   15025 allocs/op
+BenchmarkShellParse/bash/aliases/10000-20       	     127	   1869694 ns/op	 219.29 MB/s	     10000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/aliases/10000-20       	     127	   1864761 ns/op	 219.87 MB/s	     10000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/aliases/10000-20       	     127	   1923892 ns/op	 213.11 MB/s	     10000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/bash/functions/10000-20     	      15	  13689850 ns/op	  34.33 MB/s	     10000 entries	12600507 B/op	   40033 allocs/op
+BenchmarkShellParse/bash/functions/10000-20     	      19	  15355170 ns/op	  30.61 MB/s	     10000 entries	12587402 B/op	   40031 allocs/op
+BenchmarkShellParse/bash/functions/10000-20     	      27	  15136779 ns/op	  31.05 MB/s	     10000 entries	12588312 B/op	   40031 allocs/op
+BenchmarkShellParse/bash/structural/10000-20    	       1	2244717777 ns/op	   0.18 MB/s	     10000 entries	21452688 B/op	  150054 allocs/op
+BenchmarkShellParse/bash/structural/10000-20    	       1	2240517844 ns/op	   0.18 MB/s	     10000 entries	21444672 B/op	  150046 allocs/op
+BenchmarkShellParse/bash/structural/10000-20    	       1	2242571779 ns/op	   0.18 MB/s	     10000 entries	21444864 B/op	  150048 allocs/op
+BenchmarkShellParse/zsh/aliases/100-20          	   12626	     18578 ns/op	 220.69 MB/s	       100.0 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/aliases/100-20          	   12824	     18475 ns/op	 221.92 MB/s	       100.0 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/aliases/100-20          	   12927	     18521 ns/op	 221.37 MB/s	       100.0 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/functions/100-20        	    2967	     81610 ns/op	  57.59 MB/s	       100.0 entries	   77874 B/op	     409 allocs/op
+BenchmarkShellParse/zsh/functions/100-20        	    3662	     93576 ns/op	  50.23 MB/s	       100.0 entries	   77837 B/op	     409 allocs/op
+BenchmarkShellParse/zsh/functions/100-20        	    2404	     97061 ns/op	  48.42 MB/s	       100.0 entries	   77882 B/op	     409 allocs/op
+BenchmarkShellParse/zsh/structural/100-20       	     439	    513324 ns/op	   7.99 MB/s	       100.0 entries	  163202 B/op	    1516 allocs/op
+BenchmarkShellParse/zsh/structural/100-20       	     490	    422943 ns/op	   9.69 MB/s	       100.0 entries	  163204 B/op	    1516 allocs/op
+BenchmarkShellParse/zsh/structural/100-20       	     591	    486790 ns/op	   8.42 MB/s	       100.0 entries	  163208 B/op	    1516 allocs/op
+BenchmarkShellParse/zsh/aliases/1000-20         	    1262	    186714 ns/op	 219.59 MB/s	      1000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/aliases/1000-20         	    1273	    186101 ns/op	 220.31 MB/s	      1000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/aliases/1000-20         	    1191	    186080 ns/op	 220.34 MB/s	      1000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/functions/1000-20       	     171	   1276519 ns/op	  36.82 MB/s	      1000 entries	  914884 B/op	    4014 allocs/op
+BenchmarkShellParse/zsh/functions/1000-20       	     168	   1299298 ns/op	  36.17 MB/s	      1000 entries	  914183 B/op	    4014 allocs/op
+BenchmarkShellParse/zsh/functions/1000-20       	     206	   1276228 ns/op	  36.83 MB/s	      1000 entries	  912781 B/op	    4014 allocs/op
+BenchmarkShellParse/zsh/structural/1000-20      	       9	  23760541 ns/op	   1.73 MB/s	      1000 entries	 1714360 B/op	   15025 allocs/op
+BenchmarkShellParse/zsh/structural/1000-20      	       9	  23514816 ns/op	   1.74 MB/s	      1000 entries	 1714058 B/op	   15024 allocs/op
+BenchmarkShellParse/zsh/structural/1000-20      	       9	  23735450 ns/op	   1.73 MB/s	      1000 entries	 1714069 B/op	   15025 allocs/op
+BenchmarkShellParse/zsh/aliases/10000-20        	     128	   1863536 ns/op	 220.01 MB/s	     10000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/aliases/10000-20        	     128	   1912787 ns/op	 214.35 MB/s	     10000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/aliases/10000-20        	     127	   1874511 ns/op	 218.72 MB/s	     10000 entries	       0 B/op	       0 allocs/op
+BenchmarkShellParse/zsh/functions/10000-20      	      20	  11710333 ns/op	  40.14 MB/s	     10000 entries	12573150 B/op	   40028 allocs/op
+BenchmarkShellParse/zsh/functions/10000-20      	      20	  15315876 ns/op	  30.69 MB/s	     10000 entries	12586704 B/op	   40031 allocs/op
+BenchmarkShellParse/zsh/functions/10000-20      	      16	  13504990 ns/op	  34.80 MB/s	     10000 entries	12591619 B/op	   40031 allocs/op
+BenchmarkShellParse/zsh/structural/10000-20     	       1	2241292849 ns/op	   0.18 MB/s	     10000 entries	21447272 B/op	  150047 allocs/op
+BenchmarkShellParse/zsh/structural/10000-20     	       1	2240928478 ns/op	   0.18 MB/s	     10000 entries	21444672 B/op	  150046 allocs/op
+BenchmarkShellParse/zsh/structural/10000-20     	       1	2240482518 ns/op	   0.18 MB/s	     10000 entries	21444768 B/op	  150047 allocs/op
+PASS
+ok  	alias-lens/internal/shell	44.740s
+goos: linux
+goarch: amd64
+pkg: alias-lens/internal/app
+cpu: 13th Gen Intel(R) Core(TM) i7-13705H
+BenchmarkEntrySearch/prefix/100-20         	    4501	     57951 ns/op	       100.0 entries	     18281 input-B	   59376 B/op	     212 allocs/op
+BenchmarkEntrySearch/prefix/100-20         	    5301	     44624 ns/op	       100.0 entries	     18281 input-B	   59376 B/op	     212 allocs/op
+BenchmarkEntrySearch/prefix/100-20         	    5434	     40529 ns/op	       100.0 entries	     18281 input-B	   59376 B/op	     212 allocs/op
+BenchmarkEntrySearch/semantic/100-20       	    2241	    151959 ns/op	       100.0 entries	     18281 input-B	  107200 B/op	    1314 allocs/op
+BenchmarkEntrySearch/semantic/100-20       	    1468	    156671 ns/op	       100.0 entries	     18281 input-B	  107200 B/op	    1314 allocs/op
+BenchmarkEntrySearch/semantic/100-20       	    1251	    182694 ns/op	       100.0 entries	     18281 input-B	  107200 B/op	    1314 allocs/op
+BenchmarkEntrySearch/typo/100-20           	     561	    437743 ns/op	       100.0 entries	     18281 input-B	  199201 B/op	    3114 allocs/op
+BenchmarkEntrySearch/typo/100-20           	     830	    273055 ns/op	       100.0 entries	     18281 input-B	  199200 B/op	    3114 allocs/op
+BenchmarkEntrySearch/typo/100-20           	     964	    276120 ns/op	       100.0 entries	     18281 input-B	  199201 B/op	    3114 allocs/op
+BenchmarkEntrySearch/no-match/100-20       	     825	    331772 ns/op	       100.0 entries	     18281 input-B	  209657 B/op	    3103 allocs/op
+BenchmarkEntrySearch/no-match/100-20       	     721	    310091 ns/op	       100.0 entries	     18281 input-B	  209657 B/op	    3103 allocs/op
+BenchmarkEntrySearch/no-match/100-20       	     496	    437504 ns/op	       100.0 entries	     18281 input-B	  209657 B/op	    3103 allocs/op
+BenchmarkEntrySearch/prefix/1000-20        	     394	    663826 ns/op	      1000 entries	    182821 input-B	  719959 B/op	    2016 allocs/op
+BenchmarkEntrySearch/prefix/1000-20        	     403	    524845 ns/op	      1000 entries	    182821 input-B	  719958 B/op	    2016 allocs/op
+BenchmarkEntrySearch/prefix/1000-20        	     416	    538269 ns/op	      1000 entries	    182821 input-B	  719971 B/op	    2016 allocs/op
+BenchmarkEntrySearch/semantic/1000-20      	     133	   1600509 ns/op	      1000 entries	    182821 input-B	 1206825 B/op	   13018 allocs/op
+BenchmarkEntrySearch/semantic/1000-20      	     168	   1680546 ns/op	      1000 entries	    182821 input-B	 1206823 B/op	   13018 allocs/op
+BenchmarkEntrySearch/semantic/1000-20      	     129	   2126943 ns/op	      1000 entries	    182821 input-B	 1206823 B/op	   13018 allocs/op
+BenchmarkEntrySearch/typo/1000-20          	     100	   3036847 ns/op	      1000 entries	    182821 input-B	 1332199 B/op	   31015 allocs/op
+BenchmarkEntrySearch/typo/1000-20          	      69	   3079713 ns/op	      1000 entries	    182821 input-B	 1332199 B/op	   31015 allocs/op
+BenchmarkEntrySearch/typo/1000-20          	     100	   2723134 ns/op	      1000 entries	    182821 input-B	 1332204 B/op	   31015 allocs/op
+BenchmarkEntrySearch/no-match/1000-20      	      60	   3417966 ns/op	      1000 entries	    182821 input-B	 2096068 B/op	   31003 allocs/op
+BenchmarkEntrySearch/no-match/1000-20      	      72	   3255013 ns/op	      1000 entries	    182821 input-B	 2096072 B/op	   31003 allocs/op
+BenchmarkEntrySearch/no-match/1000-20      	      74	   3327965 ns/op	      1000 entries	    182821 input-B	 2096071 B/op	   31003 allocs/op
+BenchmarkEntrySearch/prefix/10000-20       	      28	   7506631 ns/op	     10000 entries	   1828301 input-B	10692831 B/op	   20024 allocs/op
+BenchmarkEntrySearch/prefix/10000-20       	      70	   5747947 ns/op	     10000 entries	   1828301 input-B	10692712 B/op	   20024 allocs/op
+BenchmarkEntrySearch/prefix/10000-20       	      33	   6304763 ns/op	     10000 entries	   1828301 input-B	10692632 B/op	   20024 allocs/op
+BenchmarkEntrySearch/semantic/10000-20     	      19	  14079083 ns/op	     10000 entries	   1828301 input-B	13030394 B/op	  130025 allocs/op
+BenchmarkEntrySearch/semantic/10000-20     	      20	  11964196 ns/op	     10000 entries	   1828301 input-B	13030396 B/op	  130025 allocs/op
+BenchmarkEntrySearch/semantic/10000-20     	      15	  14586501 ns/op	     10000 entries	   1828301 input-B	13030392 B/op	  130025 allocs/op
+BenchmarkEntrySearch/typo/10000-20         	      16	  19423622 ns/op	     10000 entries	   1828301 input-B	11736467 B/op	  310016 allocs/op
+BenchmarkEntrySearch/typo/10000-20         	      14	  24630901 ns/op	     10000 entries	   1828301 input-B	11736445 B/op	  310016 allocs/op
+BenchmarkEntrySearch/typo/10000-20         	      15	  22813379 ns/op	     10000 entries	   1828301 input-B	11736447 B/op	  310016 allocs/op
+BenchmarkEntrySearch/no-match/10000-20     	      13	  29896392 ns/op	     10000 entries	   1828301 input-B	20960128 B/op	  310003 allocs/op
+BenchmarkEntrySearch/no-match/10000-20     	       8	  27392812 ns/op	     10000 entries	   1828301 input-B	20960122 B/op	  310003 allocs/op
+BenchmarkEntrySearch/no-match/10000-20     	       8	  31726776 ns/op	     10000 entries	   1828301 input-B	20960134 B/op	  310003 allocs/op
+BenchmarkEntrySuggestions/100-20           	    2901	     78867 ns/op	       100.0 entries	     18281 input-B	   85576 B/op	      12 allocs/op
+BenchmarkEntrySuggestions/100-20           	    1878	    129871 ns/op	       100.0 entries	     18281 input-B	   85576 B/op	      12 allocs/op
+BenchmarkEntrySuggestions/100-20           	    2178	     92739 ns/op	       100.0 entries	     18281 input-B	   85576 B/op	      12 allocs/op
+BenchmarkEntrySuggestions/1000-20          	     158	   1526900 ns/op	      1000 entries	    182821 input-B	  990794 B/op	      16 allocs/op
+BenchmarkEntrySuggestions/1000-20          	     152	   1399776 ns/op	      1000 entries	    182821 input-B	  990794 B/op	      16 allocs/op
+BenchmarkEntrySuggestions/1000-20          	     169	   1546307 ns/op	      1000 entries	    182821 input-B	  990797 B/op	      16 allocs/op
+BenchmarkEntrySuggestions/10000-20         	      21	  12240777 ns/op	     10000 entries	   1828301 input-B	10870349 B/op	      23 allocs/op
+BenchmarkEntrySuggestions/10000-20         	      24	  11862541 ns/op	     10000 entries	   1828301 input-B	10870353 B/op	      23 allocs/op
+BenchmarkEntrySuggestions/10000-20         	      15	  14426598 ns/op	     10000 entries	   1828301 input-B	10870351 B/op	      23 allocs/op
+BenchmarkEntryLoad/bash/native/100-20      	     315	    850568 ns/op	       100.0 entries	     13690 fixture-B	  486791 B/op	    3461 allocs/op
+BenchmarkEntryLoad/bash/native/100-20      	     295	    932565 ns/op	       100.0 entries	     13690 fixture-B	  486122 B/op	    3461 allocs/op
+BenchmarkEntryLoad/bash/native/100-20      	     247	    836587 ns/op	       100.0 entries	     13690 fixture-B	  485186 B/op	    3460 allocs/op
+BenchmarkEntryLoad/bash/native/1000-20     	      46	   8772342 ns/op	      1000 entries	    136900 fixture-B	 4442893 B/op	   34098 allocs/op
+BenchmarkEntryLoad/bash/native/1000-20     	      33	  10925652 ns/op	      1000 entries	    136900 fixture-B	 4445554 B/op	   34098 allocs/op
+BenchmarkEntryLoad/bash/native/1000-20     	      16	  12690525 ns/op	      1000 entries	    136900 fixture-B	 4445910 B/op	   34098 allocs/op
+BenchmarkEntryLoad/bash/native/10000-20    	       4	  63355074 ns/op	     10000 entries	   1369000 fixture-B	45732580 B/op	  340205 allocs/op
+BenchmarkEntryLoad/bash/native/10000-20    	       4	  56222766 ns/op	     10000 entries	   1369000 fixture-B	45732520 B/op	  340205 allocs/op
+BenchmarkEntryLoad/bash/native/10000-20    	       4	  53724699 ns/op	     10000 entries	   1369000 fixture-B	45733290 B/op	  340206 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/100-20         	      27	   9169212 ns/op	       100.0 entries	    104898 fixture-B	 3040296 B/op	   27695 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/100-20         	      27	   7701971 ns/op	       100.0 entries	    104898 fixture-B	 3046654 B/op	   27693 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/100-20         	      27	   7495531 ns/op	       100.0 entries	    104897 fixture-B	 3045781 B/op	   27692 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/1000-20        	       3	  80814696 ns/op	      1000 entries	   1039099 fixture-B	32334992 B/op	  264109 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/1000-20        	       3	  71580839 ns/op	      1000 entries	   1039099 fixture-B	31670992 B/op	  264094 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/1000-20        	       3	  72985696 ns/op	      1000 entries	   1039099 fixture-B	31669210 B/op	  264094 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/10000-20       	       1	 398413275 ns/op	     10000 entries	  10381100 fixture-B	323891408 B/op	 2625881 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/10000-20       	       1	 392921412 ns/op	     10000 entries	  10381100 fixture-B	323874024 B/op	 2625854 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/10000-20       	       1	 384396856 ns/op	     10000 entries	  10381100 fixture-B	323866280 B/op	 2625846 allocs/op
+BenchmarkEntryLoad/zsh/native/100-20                     	     254	    878280 ns/op	       100.0 entries	     13990 fixture-B	  486613 B/op	    3365 allocs/op
+BenchmarkEntryLoad/zsh/native/100-20                     	     272	    940956 ns/op	       100.0 entries	     13990 fixture-B	  486218 B/op	    3365 allocs/op
+BenchmarkEntryLoad/zsh/native/100-20                     	     260	    933613 ns/op	       100.0 entries	     13990 fixture-B	  485838 B/op	    3365 allocs/op
+BenchmarkEntryLoad/zsh/native/1000-20                    	      20	  10845612 ns/op	      1000 entries	    139900 fixture-B	 4441512 B/op	   33103 allocs/op
+BenchmarkEntryLoad/zsh/native/1000-20                    	      22	   9134165 ns/op	      1000 entries	    139900 fixture-B	 4431542 B/op	   33102 allocs/op
+BenchmarkEntryLoad/zsh/native/1000-20                    	      24	   8926326 ns/op	      1000 entries	    139900 fixture-B	 4432804 B/op	   33103 allocs/op
+BenchmarkEntryLoad/zsh/native/10000-20                   	       4	  64397576 ns/op	     10000 entries	   1399000 fixture-B	45671930 B/op	  330213 allocs/op
+BenchmarkEntryLoad/zsh/native/10000-20                   	       4	  55185023 ns/op	     10000 entries	   1399000 fixture-B	45652672 B/op	  330210 allocs/op
+BenchmarkEntryLoad/zsh/native/10000-20                   	       4	  53818454 ns/op	     10000 entries	   1399000 fixture-B	45652540 B/op	  330209 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/100-20          	      32	   6968452 ns/op	       100.0 entries	    105191 fixture-B	 3087760 B/op	   27606 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/100-20          	      34	   7869784 ns/op	       100.0 entries	    105192 fixture-B	 3073228 B/op	   27599 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/100-20          	      28	   8053604 ns/op	       100.0 entries	    105192 fixture-B	 3053000 B/op	   27608 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/1000-20         	       4	  72109956 ns/op	      1000 entries	   1042093 fixture-B	32153854 B/op	  263115 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/1000-20         	       3	  80101059 ns/op	      1000 entries	   1042093 fixture-B	32320218 B/op	  263120 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/1000-20         	       3	  76242331 ns/op	      1000 entries	   1042093 fixture-B	32313730 B/op	  263108 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/10000-20        	       1	 424010792 ns/op	     10000 entries	  10411092 fixture-B	323790088 B/op	 2615867 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/10000-20        	       1	 390451766 ns/op	     10000 entries	  10411093 fixture-B	323779232 B/op	 2615853 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/10000-20        	       1	 400774528 ns/op	     10000 entries	  10411094 fixture-B	323792680 B/op	 2615872 allocs/op
+PASS
+ok  	alias-lens/internal/app	62.356s
+goos: linux
+goarch: amd64
+pkg: alias-lens/internal/tui
+cpu: 13th Gen Intel(R) Core(TM) i7-13705H
+BenchmarkPickerInitialView/100/width-60-20         	     162	   1433924 ns/op	   2.77 MB/s	        60.00 columns	       100.0 entries	  426832 B/op	    3742 allocs/op
+BenchmarkPickerInitialView/100/width-60-20         	     194	   1221148 ns/op	   3.25 MB/s	        60.00 columns	       100.0 entries	  429749 B/op	    3742 allocs/op
+BenchmarkPickerInitialView/100/width-60-20         	     193	   1398779 ns/op	   2.84 MB/s	        60.00 columns	       100.0 entries	  430953 B/op	    3743 allocs/op
+BenchmarkPickerInitialView/100/width-140-20        	      90	   2579343 ns/op	   3.71 MB/s	       140.0 columns	       100.0 entries	  811555 B/op	    4359 allocs/op
+BenchmarkPickerInitialView/100/width-140-20        	     103	   2109173 ns/op	   4.53 MB/s	       140.0 columns	       100.0 entries	  807558 B/op	    4359 allocs/op
+BenchmarkPickerInitialView/100/width-140-20        	     110	   1904033 ns/op	   5.02 MB/s	       140.0 columns	       100.0 entries	  813678 B/op	    4360 allocs/op
+BenchmarkPickerInitialView/1000/width-60-20        	      74	   3307037 ns/op	   1.20 MB/s	        60.00 columns	      1000 entries	 1578877 B/op	    6457 allocs/op
+BenchmarkPickerInitialView/1000/width-60-20        	     100	   3384668 ns/op	   1.17 MB/s	        60.00 columns	      1000 entries	 1582062 B/op	    6458 allocs/op
+BenchmarkPickerInitialView/1000/width-60-20        	      76	   3474732 ns/op	   1.14 MB/s	        60.00 columns	      1000 entries	 1591761 B/op	    6459 allocs/op
+BenchmarkPickerInitialView/1000/width-140-20       	      51	   4657356 ns/op	   2.08 MB/s	       140.0 columns	      1000 entries	 1967297 B/op	    7174 allocs/op
+BenchmarkPickerInitialView/1000/width-140-20       	      58	   4139175 ns/op	   2.35 MB/s	       140.0 columns	      1000 entries	 1957364 B/op	    7173 allocs/op
+BenchmarkPickerInitialView/1000/width-140-20       	      68	   4072494 ns/op	   2.38 MB/s	       140.0 columns	      1000 entries	 1978110 B/op	    7176 allocs/op
+BenchmarkPickerInitialView/10000/width-60-20       	      12	  19295590 ns/op	   0.21 MB/s	        60.00 columns	     10000 entries	13533395 B/op	   33475 allocs/op
+BenchmarkPickerInitialView/10000/width-60-20       	      16	  17436013 ns/op	   0.23 MB/s	        60.00 columns	     10000 entries	13528840 B/op	   33474 allocs/op
+BenchmarkPickerInitialView/10000/width-60-20       	      19	  17835476 ns/op	   0.22 MB/s	        60.00 columns	     10000 entries	13518656 B/op	   33472 allocs/op
+BenchmarkPickerInitialView/10000/width-140-20      	      13	  17751766 ns/op	   0.55 MB/s	       140.0 columns	     10000 entries	13912647 B/op	   34192 allocs/op
+BenchmarkPickerInitialView/10000/width-140-20      	      12	  17475477 ns/op	   0.56 MB/s	       140.0 columns	     10000 entries	13897204 B/op	   34187 allocs/op
+BenchmarkPickerInitialView/10000/width-140-20      	      16	  16212510 ns/op	   0.60 MB/s	       140.0 columns	     10000 entries	13872772 B/op	   34183 allocs/op
+PASS
+ok  	alias-lens/internal/tui	12.569s
+goos: linux
+goarch: amd64
+pkg: alias-lens/cmd/alias-lens
+cpu: 13th Gen Intel(R) Core(TM) i7-13705H
+BenchmarkShellStartup/bash/empty/0/nonlogin-20         	      55	   5983104 ns/op	         0 entries	         0 input-bytes	   44239 B/op	      66 allocs/op
+BenchmarkShellStartup/bash/empty/0/nonlogin-20         	      36	   5980188 ns/op	         0 entries	         0 input-bytes	   44172 B/op	      66 allocs/op
+BenchmarkShellStartup/bash/empty/0/nonlogin-20         	      32	   6401989 ns/op	         0 entries	         0 input-bytes	   44091 B/op	      66 allocs/op
+BenchmarkShellStartup/bash/empty/0/login-20            	       8	  36988585 ns/op	         0 entries	         0 input-bytes	   44006 B/op	      66 allocs/op
+BenchmarkShellStartup/bash/empty/0/login-20            	       6	  41432731 ns/op	         0 entries	         0 input-bytes	   43978 B/op	      66 allocs/op
+BenchmarkShellStartup/bash/empty/0/login-20            	       7	  32383332 ns/op	         0 entries	         0 input-bytes	   44009 B/op	      66 allocs/op
+BenchmarkShellStartup/bash/native/100/nonlogin-20      	      12	  22355940 ns/op	       100.0 entries	      7200 input-bytes	   44372 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/100/nonlogin-20      	       9	  23507686 ns/op	       100.0 entries	      7200 input-bytes	   44379 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/100/nonlogin-20      	       9	  23492912 ns/op	       100.0 entries	      7200 input-bytes	   44141 B/op	      68 allocs/op
+BenchmarkShellStartup/bash/native/100/login-20         	       4	  50531504 ns/op	       100.0 entries	      7200 input-bytes	   44092 B/op	      68 allocs/op
+BenchmarkShellStartup/bash/native/100/login-20         	       4	  69659763 ns/op	       100.0 entries	      7200 input-bytes	   44380 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/100/login-20         	       4	  54281835 ns/op	       100.0 entries	      7200 input-bytes	   44188 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/1000/nonlogin-20     	       8	  26453291 ns/op	      1000 entries	     72000 input-bytes	   44130 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/1000/nonlogin-20     	       8	  26344345 ns/op	      1000 entries	     72000 input-bytes	   44130 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/1000/nonlogin-20     	       8	  27999761 ns/op	      1000 entries	     72000 input-bytes	   44226 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/1000/login-20        	       4	  57530552 ns/op	      1000 entries	     72000 input-bytes	   44220 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/1000/login-20        	       4	  75452922 ns/op	      1000 entries	     72000 input-bytes	   44200 B/op	      70 allocs/op
+BenchmarkShellStartup/bash/native/1000/login-20        	       3	  75547960 ns/op	      1000 entries	     72000 input-bytes	   44234 B/op	      71 allocs/op
+BenchmarkShellStartup/bash/native/10000/nonlogin-20    	       5	  49479153 ns/op	     10000 entries	    720000 input-bytes	   44292 B/op	      71 allocs/op
+BenchmarkShellStartup/bash/native/10000/nonlogin-20    	       5	  47436935 ns/op	     10000 entries	    720000 input-bytes	   44120 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/10000/nonlogin-20    	       4	  52523094 ns/op	     10000 entries	    720000 input-bytes	   44224 B/op	      70 allocs/op
+BenchmarkShellStartup/bash/native/10000/login-20       	       3	  70843087 ns/op	     10000 entries	    720000 input-bytes	   44117 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/native/10000/login-20       	       3	  84205437 ns/op	     10000 entries	    720000 input-bytes	   44250 B/op	      71 allocs/op
+BenchmarkShellStartup/bash/native/10000/login-20       	       3	  78641238 ns/op	     10000 entries	    720000 input-bytes	   44250 B/op	      71 allocs/op
+BenchmarkShellStartup/bash/catalog/100/nonlogin-20     	       7	  40966582 ns/op	       100.0 entries	     26845 input-bytes	   44222 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/100/nonlogin-20     	       6	  41243503 ns/op	       100.0 entries	     26845 input-bytes	   44245 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/100/nonlogin-20     	       7	  29519709 ns/op	       100.0 entries	     26845 input-bytes	   44097 B/op	      68 allocs/op
+BenchmarkShellStartup/bash/catalog/100/login-20        	       4	  57415392 ns/op	       100.0 entries	     26845 input-bytes	   44148 B/op	      68 allocs/op
+BenchmarkShellStartup/bash/catalog/100/login-20        	       4	  61588791 ns/op	       100.0 entries	     26845 input-bytes	   44208 B/op	      68 allocs/op
+BenchmarkShellStartup/bash/catalog/100/login-20        	       4	  64625603 ns/op	       100.0 entries	     26845 input-bytes	   44200 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/nonlogin-20    	       2	 106782824 ns/op	      1000 entries	    268045 input-bytes	   44568 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/nonlogin-20    	       2	 116392951 ns/op	      1000 entries	    268045 input-bytes	   44120 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/nonlogin-20    	       2	 113925982 ns/op	      1000 entries	    268045 input-bytes	   44224 B/op	      70 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/login-20       	       2	 136340478 ns/op	      1000 entries	    268045 input-bytes	   44216 B/op	      70 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/login-20       	       2	 149403282 ns/op	      1000 entries	    268045 input-bytes	   44320 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/login-20       	       2	 149665267 ns/op	      1000 entries	    268045 input-bytes	   44216 B/op	      70 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/nonlogin-20   	       1	 664208831 ns/op	     10000 entries	   2680045 input-bytes	   44568 B/op	      74 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/nonlogin-20   	       1	 704963732 ns/op	     10000 entries	   2680045 input-bytes	   44344 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/nonlogin-20   	       1	 691804768 ns/op	     10000 entries	   2680045 input-bytes	   44152 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/login-20      	       1	 750028273 ns/op	     10000 entries	   2680045 input-bytes	   44336 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/login-20      	       1	 746534897 ns/op	     10000 entries	   2680045 input-bytes	   44336 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/login-20      	       1	 745873927 ns/op	     10000 entries	   2680045 input-bytes	   44256 B/op	      70 allocs/op
+BenchmarkShellStartup/zsh/empty/0/nonlogin-20          	       8	  29440341 ns/op	         0 entries	         0 input-bytes	   43754 B/op	      65 allocs/op
+BenchmarkShellStartup/zsh/empty/0/nonlogin-20          	      12	  19812996 ns/op	         0 entries	         0 input-bytes	   43977 B/op	      65 allocs/op
+BenchmarkShellStartup/zsh/empty/0/nonlogin-20          	      12	  19969576 ns/op	         0 entries	         0 input-bytes	   43845 B/op	      65 allocs/op
+BenchmarkShellStartup/zsh/empty/0/login-20             	      12	  19995469 ns/op	         0 entries	         0 input-bytes	   43916 B/op	      65 allocs/op
+BenchmarkShellStartup/zsh/empty/0/login-20             	      10	  21201746 ns/op	         0 entries	         0 input-bytes	   43820 B/op	      65 allocs/op
+BenchmarkShellStartup/zsh/empty/0/login-20             	      12	  19866054 ns/op	         0 entries	         0 input-bytes	   43777 B/op	      65 allocs/op
+BenchmarkShellStartup/zsh/native/100/nonlogin-20       	       4	  50157723 ns/op	       100.0 entries	      7200 input-bytes	   44272 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/native/100/nonlogin-20       	       4	  50214139 ns/op	       100.0 entries	      7200 input-bytes	   44116 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/native/100/nonlogin-20       	       5	  40945063 ns/op	       100.0 entries	      7200 input-bytes	   44096 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/native/100/login-20          	       6	  43659512 ns/op	       100.0 entries	      7200 input-bytes	   44013 B/op	      67 allocs/op
+BenchmarkShellStartup/zsh/native/100/login-20          	       6	  44575872 ns/op	       100.0 entries	      7200 input-bytes	   44170 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/native/100/login-20          	       5	  44170059 ns/op	       100.0 entries	      7200 input-bytes	   43857 B/op	      67 allocs/op
+BenchmarkShellStartup/zsh/native/1000/nonlogin-20      	       4	  60942456 ns/op	      1000 entries	     72000 input-bytes	   44128 B/op	      70 allocs/op
+BenchmarkShellStartup/zsh/native/1000/nonlogin-20      	       4	  54518512 ns/op	      1000 entries	     72000 input-bytes	   44172 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/native/1000/nonlogin-20      	       5	  52193477 ns/op	      1000 entries	     72000 input-bytes	   44035 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/native/1000/login-20         	       4	  50244506 ns/op	      1000 entries	     72000 input-bytes	   44152 B/op	      70 allocs/op
+BenchmarkShellStartup/zsh/native/1000/login-20         	       5	  46590601 ns/op	      1000 entries	     72000 input-bytes	   44376 B/op	      70 allocs/op
+BenchmarkShellStartup/zsh/native/1000/login-20         	       5	  50648687 ns/op	      1000 entries	     72000 input-bytes	   44459 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/native/10000/nonlogin-20     	       3	  69202056 ns/op	     10000 entries	    720000 input-bytes	   43978 B/op	      70 allocs/op
+BenchmarkShellStartup/zsh/native/10000/nonlogin-20     	       3	  68020364 ns/op	     10000 entries	    720000 input-bytes	   43978 B/op	      70 allocs/op
+BenchmarkShellStartup/zsh/native/10000/nonlogin-20     	       3	  70572377 ns/op	     10000 entries	    720000 input-bytes	   44106 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/native/10000/login-20        	       3	  76543406 ns/op	     10000 entries	    720000 input-bytes	   43992 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/native/10000/login-20        	       3	  73398440 ns/op	     10000 entries	    720000 input-bytes	   44178 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/native/10000/login-20        	       3	  83849432 ns/op	     10000 entries	    720000 input-bytes	   44184 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/nonlogin-20      	       6	  42691920 ns/op	       100.0 entries	     26845 input-bytes	   43901 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/nonlogin-20      	       6	  41653479 ns/op	       100.0 entries	     26845 input-bytes	   43893 B/op	      67 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/nonlogin-20      	       6	  43472962 ns/op	       100.0 entries	     26845 input-bytes	   43960 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/login-20         	       6	  46832385 ns/op	       100.0 entries	     26845 input-bytes	   43981 B/op	      67 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/login-20         	       6	  47131694 ns/op	       100.0 entries	     26845 input-bytes	   44146 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/login-20         	       6	  44287063 ns/op	       100.0 entries	     26845 input-bytes	   44013 B/op	      67 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/nonlogin-20     	       2	 146874391 ns/op	      1000 entries	    268045 input-bytes	   43944 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/nonlogin-20     	       2	 143117218 ns/op	      1000 entries	    268045 input-bytes	   44048 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/nonlogin-20     	       2	 171314677 ns/op	      1000 entries	    268045 input-bytes	   44048 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/login-20        	       2	 160302132 ns/op	      1000 entries	    268045 input-bytes	   44072 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/login-20        	       2	 164685118 ns/op	      1000 entries	    268045 input-bytes	   44072 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/login-20        	       2	 160318178 ns/op	      1000 entries	    268045 input-bytes	   44072 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/nonlogin-20    	       1	7957011823 ns/op	     10000 entries	   2680045 input-bytes	   43856 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/nonlogin-20    	       1	7931913018 ns/op	     10000 entries	   2680045 input-bytes	   44064 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/nonlogin-20    	       1	7950605621 ns/op	     10000 entries	   2680045 input-bytes	   44064 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/login-20       	       1	7911669320 ns/op	     10000 entries	   2680045 input-bytes	   43896 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/login-20       	       1	7920521949 ns/op	     10000 entries	   2680045 input-bytes	   44088 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/login-20       	       1	7888571751 ns/op	     10000 entries	   2680045 input-bytes	   43896 B/op	      68 allocs/op
+PASS
+ok  	alias-lens/cmd/alias-lens	168.233s

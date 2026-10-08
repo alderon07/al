@@ -119,7 +119,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [ ] Add optional completion hooks for success rate, duration, and last-used stats.
 - [ ] Add configurable history exclusions before collecting more execution context.
 - [x] Add an import preview that finds duplicate names and commands before changing the alias file.
-- [ ] Benchmark startup, large alias files, and search before considering a language rewrite.
+- [x] Benchmark startup, large alias files, catalogs, search and picker rendering; record repeated measurements and hotspots in `docs/testing/evidence/PERFORMANCE_BASELINE.md`.
 - [ ] Design end-to-end encryption before adding any hosted sync service.
 
 ## Keep package responsibilities clear

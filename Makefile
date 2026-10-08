@@ -6,7 +6,7 @@ BINDIR ?= $(PREFIX)/bin
 
 .DEFAULT_GOAL := help
 
-.PHONY: help all fmt fmt-check test vet build diff-check check install
+.PHONY: help all fmt fmt-check test vet build diff-check check install benchmark
 
 help:
 	@printf '%s\n' \
@@ -20,6 +20,7 @@ help:
 		'  make build       Build alias-lens at OUTPUT.' \
 		'  make diff-check  Check the Git diff for whitespace errors.' \
 		'  make check       Run fmt-check, test, vet, build, and diff-check.' \
+		'  make benchmark   Measure synthetic catalog, search, picker and shell workloads.' \
 		'  make install     Test, build, verify, and copy alias-lens to BINDIR.' \
 		'' \
 		'Default paths' \
@@ -55,6 +56,9 @@ diff-check:
 	git diff --check
 
 check: fmt-check test vet build diff-check
+
+benchmark:
+	GO="$(GO)" scripts/benchmark-performance.sh
 
 install: test build
 	mkdir -p "$(BINDIR)"
