@@ -55,6 +55,10 @@ jobs:
           sw_vers || true
       - name: Check
         run: make check
+      - name: Verify catalog workflow in disposable homes
+        env:
+          AL_REQUIRE_PTY_SHELLS: "1"
+        run: scripts/verify-catalog-workflow.sh
 
   shadow-ubuntu:
     runs-on: ubuntu-24.04

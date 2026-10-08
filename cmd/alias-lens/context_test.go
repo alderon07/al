@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestDefaultPickerCanReachPastFirstTwelveAliases(t *testing.T) {
@@ -96,7 +96,7 @@ func TestContextRankingKeepsTextRelevanceAndBoostsSuggestions(t *testing.T) {
 }
 
 func TestContextAssociationStaysPrivateAndCanBeRemoved(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	alias := Alias{Name: "deploy", Command: "printf 'private command'", Type: "alias"}
 	project := filepath.Join(t.TempDir(), "project")
@@ -183,7 +183,7 @@ func TestContextUsesNearestGitRootAndExactFolder(t *testing.T) {
 }
 
 func TestContextFileRejectsUnsafeOrUnknownData(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	path, err := contextPath()
 	if err != nil {
@@ -213,7 +213,7 @@ func TestContextFileRejectsUnsafeOrUnknownData(t *testing.T) {
 }
 
 func TestTUIContextShortcutTogglesSelectedAlias(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	project := t.TempDir()
 	alias := Alias{Name: "deploy", Command: "go run ./deploy", Type: "alias"}
@@ -234,7 +234,7 @@ func TestTUIContextShortcutTogglesSelectedAlias(t *testing.T) {
 }
 
 func TestTUIContextShortcutPrefersActiveDirectoryMark(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	project := t.TempDir()
 	folder := filepath.Join(project, "src")
 	if err := os.Mkdir(folder, 0o700); err != nil {
@@ -265,7 +265,7 @@ func TestTUIContextShortcutPrefersActiveDirectoryMark(t *testing.T) {
 }
 
 func TestTUIContextShortcutRejectsDuplicateNames(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	alias := Alias{Name: "same", Command: "echo one", Type: "alias"}
 	m := model{
@@ -294,7 +294,7 @@ func TestContextDataDoesNotEnterAliasJSON(t *testing.T) {
 }
 
 func TestContextCommandAndSearchUseCurrentProject(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias depot='echo depot'\nalias deploy='go run ./deploy'\n"), 0o600); err != nil {

@@ -105,8 +105,8 @@ func buildCatalogImportPlan(shell string) (workflowplan.OperationPlan, error) {
 	diagnostics := make([]workflowplan.Diagnostic, 0)
 	entries := make([]neutralcatalog.Entry, 0, report.Summary.Equivalent)
 	for _, result := range report.Results {
-		if result.Status == "equivalent" && result.entry != nil {
-			entries = append(entries, *result.entry)
+		if result.Status == "equivalent" && result.Entry != nil {
+			entries = append(entries, *result.Entry)
 			continue
 		}
 		diagnostics = append(diagnostics, workflowplan.Diagnostic{Code: "entry_skipped", Message: fmt.Sprintf("%s was left in the shell file because it could not be copied safely", shadowResultLabel(result))})

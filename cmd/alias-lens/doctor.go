@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alias-lens/internal/providers"
 	"context"
 	"fmt"
 	"os"
@@ -63,6 +64,17 @@ func doctorChecks() []DoctorCheck {
 	checks = append(checks, DoctorCheck{Name: adapter.DisplayName() + " loading", OK: startupOK, Message: startupMessage})
 	aliases, _ := os.ReadFile(aliasPath)
 	hasIntegration := strings.Contains(string(aliases), "shell-init "+adapter.Name())
+	if active, _ := catalogManagedEditing(); active {
+		ok, message := catalogDoctorRuntime(adapter.Name())
+		hasIntegration = ok
+		checks = append(checks, DoctorCheck{Name: "catalog runtime", OK: ok, Message: message})
+		for i := range checks {
+			if checks[i].Name == "binary on PATH" {
+				checks[i].OK = true
+				checks[i].Message = "catalog loader uses its pinned executable"
+			}
+		}
+	}
 	setupCommand := "run al setup " + adapter.Name()
 	actionsMessage := setupCommand
 	if hasIntegration {
@@ -109,7 +121,7 @@ func doctorChecks() []DoctorCheck {
 	return checks
 }
 
-func providerCredentialStatus(provider RepoProvider) (bool, string) {
+func providerCredentialStatus(provider providers.RepoProvider) (bool, string) {
 	switch provider.ID() {
 	case "github":
 		if _, err := exec.LookPath("gh"); err != nil {
@@ -135,13 +147,7 @@ func providerCredentialStatus(provider RepoProvider) (bool, string) {
 		if err != nil {
 			return false, "install glab, then run al repo gitlab"
 		}
-		host := "gitlab.com"
-		switch configured := provider.(type) {
-		case gitlabProvider:
-			host, _ = configured.hostname()
-		case *gitlabProvider:
-			host, _ = configured.hostname()
-		}
+		host := provider.Host()
 		ctx, cancel := interruptContext()
 		_, err = commandOutput(ctx, repositoryCommandTimeout, glab, "auth", "status", "--hostname", host)
 		cancel()
@@ -193,6 +199,17 @@ func runSetupCommand(arguments []string) error {
 }
 
 func runSetup(shellName string, repair bool) error {
+	var aliasPath string
+	err := withMutation(func(session *mutationSession) error { return runSetupInSession(session, shellName, repair, &aliasPath) })
+	if err != nil {
+		return err
+	}
+	if repair || !interactiveInput(os.Stdin) {
+		return nil
+	}
+	return offerDefaultAliases(aliasPath, os.Stdin, os.Stdout)
+}
+func runSetupInSession(session *mutationSession, shellName string, repair bool, selectedPath *string) error {
 	adapter, err := requestedShellAdapter(shellName)
 	if err != nil {
 		return err
@@ -206,7 +223,7 @@ func runSetup(shellName string, repair bool) error {
 		config.AliasFile = adapter.AliasFilename()
 	}
 	config.Shell = adapter.Name()
-	if err := saveConfig(config); err != nil {
+	if err := saveConfigInSession(session, config); err != nil {
 		return err
 	}
 	if shellName == "" {
@@ -224,7 +241,7 @@ func runSetup(shellName string, repair bool) error {
 	if err != nil {
 		return err
 	}
-	if err := ensureAliasFileExists(aliasPath); err != nil {
+	if err := ensureAliasFileExistsInSession(session, aliasPath); err != nil {
 		return err
 	}
 	contents, err := os.ReadFile(aliasPath)
@@ -235,16 +252,13 @@ func runSetup(shellName string, repair bool) error {
 	kept := withShellIntegration(lines, adapter)
 	updated := []byte(strings.Join(kept, "\n") + "\n")
 	if string(updated) == string(contents) {
-		if err := os.Chmod(aliasPath, 0o600); err != nil {
-			return err
-		}
 		if repair {
 			cliResult(fmt.Sprintf("Verified Alias Lens %s alias integration.", adapter.DisplayName()))
 		} else {
 			cliResult(fmt.Sprintf("Alias Lens %s integration is already installed.", adapter.DisplayName()))
 		}
 	} else {
-		if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
+		if err := writeAliasFileInSession(session, aliasPath, contents, updated, 0o600); err != nil {
 			return err
 		}
 		verb := "Installed"
@@ -255,21 +269,22 @@ func runSetup(shellName string, repair bool) error {
 	}
 	fmt.Println(shellSetupInstruction(adapter))
 	home := filepath.Dir(aliasPath)
-	if err := adapter.ConfigureStartup(home, runtime.GOOS, userExecutableDirectory(home)); err != nil {
+	if err := adapter.ConfigureStartupInSession(session, home, runtime.GOOS, userExecutableDirectory(home)); err != nil {
 		return err
 	}
 	if repair {
 		fmt.Println("Alias Lens kept your aliases and checked only its generated integration.")
 		return nil
 	}
-	if err := scheduleTour(); err != nil {
+	if err := scheduleTourInSession(session); err != nil {
 		return fmt.Errorf("save first-run tour state: %w", err)
 	}
 	if !interactiveInput(os.Stdin) {
 		fmt.Println("Optional developer aliases were not reviewed because input is not interactive. Run al setup in a terminal to review them.")
 		return nil
 	}
-	return offerDefaultAliases(aliasPath, os.Stdin, os.Stdout)
+	*selectedPath = aliasPath
+	return nil
 }
 
 func shellActionsMessage(adapter ShellAdapter) string {
@@ -324,6 +339,9 @@ func bashCtrlGSupport() (supported, known bool) {
 }
 
 func removeSetup(shellName string) error {
+	return withMutation(func(session *mutationSession) error { return removeSetupInSession(session, shellName) })
+}
+func removeSetupInSession(session *mutationSession, shellName string) error {
 	adapter, err := requestedShellAdapter(shellName)
 	if err != nil {
 		return err
@@ -339,7 +357,7 @@ func removeSetup(shellName string) error {
 			updated = append(updated, '\n')
 		}
 		if string(updated) != string(contents) {
-			if err := writeAliasFile(aliasPath, contents, updated, 0o600); err != nil {
+			if err := writeAliasFileInSession(session, aliasPath, contents, updated, 0o600); err != nil {
 				return err
 			}
 		}
@@ -350,7 +368,7 @@ func removeSetup(shellName string) error {
 	if err != nil {
 		return err
 	}
-	if err := adapter.RemoveStartup(home, runtime.GOOS); err != nil {
+	if err := adapter.RemoveStartupInSession(session, home, runtime.GOOS); err != nil {
 		return err
 	}
 	fmt.Printf("Removed Alias Lens %s shell integration. Start a new %s shell to finish. Your aliases, configuration, revisions, and repositories were kept.\n", adapter.DisplayName(), adapter.Name())
@@ -410,6 +428,9 @@ func withoutShellIntegration(lines []string) []string {
 }
 
 func ensureAliasFileExists(aliasPath string) error {
+	return withMutation(func(session *mutationSession) error { return ensureAliasFileExistsInSession(session, aliasPath) })
+}
+func ensureAliasFileExistsInSession(session *mutationSession, aliasPath string) error {
 	if _, err := os.Stat(aliasPath); err == nil {
 		return nil
 	} else if !os.IsNotExist(err) {
@@ -431,7 +452,7 @@ func ensureAliasFileExists(aliasPath string) error {
 			return statErr
 		}
 	}
-	if err := writeNewAliasFile(aliasPath, nil); err != nil {
+	if err := session.writeUserFile(aliasPath, nil, nil, 0o600, true, 0, false); err != nil {
 		return err
 	}
 	if remoteAvailable {
@@ -442,16 +463,6 @@ func ensureAliasFileExists(aliasPath string) error {
 	return nil
 }
 
-func checkProviderSSH(provider RepoProvider) bool {
-	ctx := context.Background()
-	switch concrete := provider.(type) {
-	case githubProvider:
-		return useSSH(ctx, "auto", concrete.host)
-	case bitbucketProvider:
-		return useSSH(ctx, "auto", "bitbucket.org")
-	case gitlabProvider:
-		host := strings.TrimPrefix(strings.TrimPrefix(strings.TrimRight(concrete.host, "/"), "https://"), "http://")
-		return useSSH(ctx, "auto", host)
-	}
-	return false
+func checkProviderSSH(provider providers.RepoProvider) bool {
+	return provider.SSHAvailable(context.Background())
 }

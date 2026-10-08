@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestTerminalDiffShowsCommandsAndNonCommandChanges(t *testing.T) {
@@ -130,7 +130,7 @@ func TestTerminalDiffNavigationAndReadOnlyRepositoryPreview(t *testing.T) {
 }
 
 func TestRevisionPreviewRejectsChangedLiveFile(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	path := filepath.Join(home, ".bash_aliases")
@@ -161,7 +161,7 @@ func TestRevisionPreviewRejectsChangedLiveFile(t *testing.T) {
 }
 
 func TestDirectTerminalDiffDoesNotCreateMissingAliasFile(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	t.Setenv("TERM", "xterm-256color")

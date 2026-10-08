@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestFooterSettingsPageSavesValidChanges(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	if err := saveConfig(defaultConfig()); err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +40,7 @@ func TestFooterSettingsPageSavesValidChanges(t *testing.T) {
 }
 
 func TestFooterSettingsPageKeepsInvalidInputOpen(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	if err := saveConfig(defaultConfig()); err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestAppearanceChoicesShowOptionsAndUseSpace(t *testing.T) {
 }
 
 func TestFooterSettingsActionRowsSaveAndCancel(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	if err := saveConfig(defaultConfig()); err != nil {
 		t.Fatal(err)
 	}

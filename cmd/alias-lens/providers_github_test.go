@@ -32,8 +32,7 @@ exit 2
 	t.Setenv("GH_TEST_LOG", logPath)
 	t.Setenv("GH_TEST_MARKER", markerPath)
 
-	provider := githubProvider{host: "github.com", protocol: "auto"}
-	if err := provider.Connect(context.Background()); err != nil {
+	if err := connectGitHub(context.Background(), "github.com"); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(logPath)
@@ -58,7 +57,7 @@ exit 2
 
 func TestGitHubConnectExplainsMissingCLI(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
-	err := (githubProvider{host: "github.com"}).Connect(context.Background())
+	err := connectGitHub(context.Background(), "github.com")
 	if err == nil || !strings.Contains(err.Error(), "GitHub CLI is required") || !strings.Contains(err.Error(), "al repo github") {
 		t.Fatalf("unexpected error: %v", err)
 	}

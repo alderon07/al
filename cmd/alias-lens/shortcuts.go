@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 type ShortcutProfile struct {
@@ -38,6 +38,7 @@ const (
 	shortcutEdit
 	shortcutContext
 	shortcutFavorite
+	shortcutCatalog
 	shortcutDelete
 	shortcutRefresh
 	shortcutSave
@@ -171,6 +172,7 @@ var shortcutDefinitions = []shortcutDefinition{
 		linux:   shortcutBindings(terminalShortcut("Ctrl+B", shortcutKey{typeCode: tea.KeyCtrlB})),
 		macos:   shortcutBindings(nativeShortcut("Cmd+B", shortcutKey{typeCode: tea.KeyRunes, runeCode: 'b', super: true}), terminalShortcut("Ctrl+B", shortcutKey{typeCode: tea.KeyCtrlB}))},
 	scopedRuneShortcut("aliases", shortcutFavorite, "f", 'f'),
+	scopedRuneShortcut("aliases", shortcutCatalog, "l", 'l'),
 	{action: shortcutDelete,
 		windows: shortcutBindings(terminalShortcut("Delete", shortcutKey{typeCode: tea.KeyDelete}), nativeShortcut("Ctrl+D", shortcutKey{typeCode: tea.KeyCtrlD})),
 		linux:   shortcutBindings(terminalShortcut("Delete", shortcutKey{typeCode: tea.KeyDelete}), nativeShortcut("Ctrl+D", shortcutKey{typeCode: tea.KeyCtrlD})),
@@ -236,6 +238,7 @@ var defaultLetterShortcuts = map[shortcutAction]rune{
 	shortcutRevisions: 'v', shortcutSync: 'y', shortcutHealth: 'i', shortcutAdd: 'a',
 	shortcutEdit: 'e', shortcutContext: 'c', shortcutDelete: 'd', shortcutRefresh: 'r',
 	shortcutCommit:              'p',
+	shortcutCatalog:             'l',
 	shortcutStatsPreviousPeriod: 'h', shortcutStatsNextPeriod: 'l',
 	shortcutStatsNextView: 'n', shortcutStatsPreviousView: 'p',
 	shortcutStatsPreviousRow: 'k', shortcutStatsNextRow: 'j',
@@ -445,6 +448,7 @@ func shortcutGuide(profile ShortcutProfile, selectMode bool) [][2]string {
 		[2]string{shortcutLabel(profile, shortcutContext), "Mark or unmark an alias for this project or folder"},
 		[2]string{shortcutLabel(profile, shortcutFavorite), "Mark or unmark the selected alias as a favorite"},
 		[2]string{shortcutLabel(profile, shortcutDelete), "Delete an alias after confirmation"},
+		[2]string{shortcutLabel(profile, shortcutCatalog), "Review catalog status, native ownership, and installation"},
 		[2]string{shortcutLabel(profile, shortcutRevisions), "Browse and restore saved versions"},
 		[2]string{shortcutLabel(profile, shortcutStats), "Open alias usage stats"},
 		[2]string{shortcutLabel(profile, shortcutSettings), "Customize the TUI footer"},

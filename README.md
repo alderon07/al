@@ -88,11 +88,37 @@ Alias Lens is available under the [Apache License 2.0](LICENSE).
 
 Read the [1.x compatibility policy](docs/COMPATIBILITY.md) before relying on command output or configuration fields in scripts.
 
+## Install a catalog
+
+A catalog stores portable commands and reviewed Bash or Zsh definitions together. Enroll a repository containing a catalog with:
+
+```bash
+al init /path/to/dotfiles --catalog-path catalog.json --shell bash
+```
+
+The guided flow shows native shell code, asks about existing names, and presents the complete installation plan before applying it. Cancellation saves no approvals or ownership decisions. In scripts, `--apply` uses existing matching approvals and ownership records; it cannot approve new shell code or take over an unrelated definition.
+
+After editing or pulling a catalog, review and install its next generation:
+
+```bash
+al catalog enable --shell bash
+al plan --json catalog enable --shell bash
+al catalog rollback --shell bash
+```
+
+Installation makes entries ready for new shells. A running shell keeps its previously loaded definitions. Catalog editing and synchronization leave changes pending until enablement succeeds. Pickers and completion use the recorded installed entries.
+
+Adopted native definitions stay in the shell's alias file as local fallbacks. A missing helper, corrupt generation, or changed native file declines the overlay and leaves those fallbacks available. Run `al catalog enable` to review native-file changes. Offline rollback restores the original enrollment baseline, including entries later renamed or deleted. Catalog-only entries do not gain native fallback copies.
+
+Portable entries use a recorded absolute executable path. If that program is removed, Alias Lens reports the failure; renew installation to select a different path. Approvals, local executable paths, generations, native fallbacks, and rollback copies stay private and are excluded from catalog sync.
+
+See [the catalog implementation contracts](docs/CATALOG_PLAN.md) for the supported startup routes and release evidence requirements.
+
 ## Find the shortcut before you forget it
 
 Open Alias Lens with `Ctrl+G` on Zsh or Bash 4+, or run `al` on any supported shell. Stock macOS Bash 3.2 keeps the normal Readline `Ctrl+G` cancellation behavior. Press `/` to search by alias, command, description, category, or tag. Fuzzy search still finds a likely match when your memory is one letter off.
 
-The idle screen brings useful aliases back into view. Select one and press `Enter` to run it in the current shell. Press `Tab` to return the alias to the prompt without running it, then edit it or add arguments. New and edited aliases work without restarting the shell.
+The idle screen brings useful aliases back into view. Select one and press `Enter` to run it in the current shell. Press `Tab` to return the alias to the prompt without running it, then edit it or add arguments. Native alias edits work without restarting the shell. Catalog edits remain pending until reviewed enablement.
 
 On terminals at least 120 columns wide, the browser shows compact alias rows beside details for the selected alias. The detail pane wraps its command and shows its description, tags, platform, local context mark, and any health warnings. Narrow terminals keep the single-column cards. Moving through the list only previews text; `Enter` is still required to use an alias.
 

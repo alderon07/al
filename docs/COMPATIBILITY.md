@@ -13,7 +13,15 @@ Starting with 1.0, the following user commands keep their meaning throughout the
 
 The stable flags are `pick --command`, `search --json`, `search --global`, `context add --repo`, `context add --directory`, `context remove --all`, `stats --plain`, `export --format`, `export --period`, `export --output`, `import --apply`, `check --strict`, `setup --repair`, `setup --remove`, `sync --push`, `sync --pull`, `theme --check`, `status --json`, `catalog shadow --shell`, `catalog shadow --json`, `catalog diff --json`, `catalog diff --show-code`, `catalog diff --web`, `catalog diff --from`, and `catalog diff --shell`. A minor release can add a command, flag, accepted value, or optional output field. It cannot change the meaning of an existing one.
 
-`shell-entry`, `record-use`, `pick --execute`, `completion-candidates`, and `watch --ensure` are integration commands. They can change when Alias Lens installs matching shell integration. The browser HTML, CSS, JavaScript, and local API are not part of the 1.0 contract.
+`shell-entry`, `catalog-loader`, `record-use`, `pick --execute`, `completion-candidates`, and `watch --ensure` are integration commands. They can change when Alias Lens installs matching shell integration. The browser HTML, CSS, JavaScript, and local API are not part of the 1.0 contract.
+
+## Catalog contracts
+
+Catalog and application configuration remain at format 2. Public status, operation-plan, and semantic-diff JSON remain at version 1. Active catalog installation uses `bash/v2` and `zsh/v2`; shadow-mode reports retain their existing renderer meanings and outputs.
+
+Native approval record format 2 binds entry ID, shell, name, kind, implementation hash, and renderer. Generation, installed, ownership, and rollback records have independently versioned private formats. Multi-target workflow journals use format 2, while existing private-file journals retain format 1 recovery. Unsupported formats are refused without rewriting them.
+
+The guided commands are `init SOURCE` and `catalog enable`, with optional `--shell`, `--startup-path`, and `--apply`; init also accepts `--catalog-path`. Explicit startup enrollment resolves routes that static discovery cannot prove. Inspection and recovery retain `catalog review`, `catalog approve NAME`, `catalog adopt NAME`, `catalog rollback`, and `catalog recover`. `al plan [--json]` previews enablement, rollback, and init without applying changes. `sync --catalog` selects catalog synchronization independently of the configured legacy shell. See the [storage](acceptance/CATALOG_STORAGE.md), [transaction](acceptance/CATALOG_TRANSACTION.md), and [shell runtime](acceptance/CATALOG_SHELL_RUNTIME.md) contracts for the exact private formats and accepted startup grammar.
 
 ## Stable metadata and exports
 

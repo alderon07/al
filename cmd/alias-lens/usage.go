@@ -35,7 +35,8 @@ Protect and recover aliases:
   doctor     Diagnose the binary, shell integration, Git, providers, and sync
   setup      Install, repair, or remove the Bash or Zsh integration
   data       List local data paths or clear usage data and private revisions
-  catalog    Inspect portable catalog safety without changing shell files
+  catalog    Review catalog safety, approvals, native ownership, and installation
+  init       Enroll a local or supported remote catalog and review it before apply
 
 Configure Git sync:
   repo       Choose or clone a Git repository and enable automatic sync
@@ -54,6 +55,12 @@ Other commands:
   shell-init Print Bash or Zsh integration; normally called by al setup
   --web      Start the optional local web interface on 127.0.0.1:8787
   --version  Print the installed version
+
+Catalog workflow:
+  al init SOURCE             Enroll a catalog repository and review native ownership
+  al catalog enable          Guide approval and ownership review before final apply
+  al sync --catalog --pull    Preview semantic changes without activating the catalog
+  al catalog rollback        Review restoration of the original native files
 
 Run "al help COMMAND" or "al COMMAND --help" for syntax, effects, and examples.
 `
@@ -79,12 +86,33 @@ Available previews:
   al plan config profile remove NAME
   al plan completion install bash
   al plan completion remove zsh
+  al plan init SOURCE [--shell bash|zsh] [--catalog-path PATH] [--startup-path PATH]
+  al plan catalog enable [--shell bash|zsh] [--startup-path PATH]
+  al plan catalog rollback [--shell bash|zsh]
+
+Remote init previews use the provider API; they do not clone or activate entries.
+`,
+	"init": `Usage: al init SOURCE [--shell bash|zsh] [--catalog-path PATH] [--startup-path PATH] [--apply]
+
+Enroll a local Git repository or supported remote catalog. The default catalog
+path is alias-lens/catalog.json. In a terminal, review exact native declarations
+and ownership ranges before the final apply. Cancellation saves no decisions.
+--startup-path explicitly selects a startup file when automatic routing cannot
+be proven. --apply uses existing approvals and ownership; it does not approve
+unreviewed native code. Alias-only repository configuration remains separate.
 `,
 	"catalog": `Usage:
   al catalog preview [--from bash|zsh] [--json]
   al catalog import --from bash|zsh
   al catalog shadow [--shell bash|zsh] [--json]
   al catalog diff [--json|--show-code|--web] [--from repository|installed] [--shell bash|zsh]
+  al catalog enable [--shell bash|zsh] [--startup-path PATH] [--apply]
+  al catalog plan [--shell bash|zsh] [--startup-path PATH] [--json]
+  al catalog review [--shell bash|zsh]
+  al catalog approve NAME [--shell bash|zsh]
+  al catalog adopt NAME [--shell bash|zsh]
+  al catalog rollback [--shell bash|zsh] [--apply]
+  al catalog recover
 
 Preview checks which entries can move into a portable catalog and changes no
 files. Import copies safe entries into an inactive catalog. It keeps your native
@@ -96,6 +124,17 @@ one entry needs attention. Status 2 means Alias Lens could not inspect the file.
 Catalog diff compares entries by their stable identity and reports which details
 changed without printing command or function text. --show-code displays exact
 private text only in an interactive terminal. It leaves both files unchanged.
+
+Enable guides approval and exact fallback ownership review in a terminal. All
+decisions remain staged until the final apply. --apply uses only existing
+approvals and ownership. --startup-path selects an explicit startup route.
+Plan prints the proposed installation without applying it. Review displays exact
+native text; approve and adopt focus that review on NAME. A separate final
+confirmation saves only the decisions explicitly accepted during review. Edits and sync pulls
+remain pending until enable installs a complete replacement generation.
+Rollback restores the original native and startup files after review; --apply
+applies an already valid rollback plan. Recover reconciles interrupted local
+workflows under the shared mutation lock.
 
 `,
 	"pick": `Usage: al pick [--command] [QUERY]
@@ -330,11 +369,23 @@ for the file. It does not delete the local file or its repository copy.
   al sync
   al sync --push
   al sync --pull
+  al sync --catalog
+  al sync --catalog --pull [--apply]
+  al sync --catalog --push [--apply]
+  al sync --catalog --resolve CONFLICT_ID
 
 "al sync" copies the active alias file into the configured repository and creates a
 commit containing only that alias file. It does not push. --push also sends the
 commit to the Git remote after a secret scan. --pull uses "git pull --ff-only"
 and imports remote-only aliases. Conflicting definitions stop the import.
+
+For an installed catalog, sync uses its enrolled repository. --catalog selects
+that repository explicitly while inactive. Plain catalog sync only inspects
+changes. Pull previews a semantic merge; --apply saves the catalog and base after
+review. Saved conflicts use a terminal field chooser with --resolve. Push
+previews the catalog-only commit and remote update; --apply publishes it after
+review and a secret scan. Catalog sync never activates a candidate generation;
+use al catalog enable to review and install it.
 `,
 	"diff": `Usage: al diff [--tui]
 

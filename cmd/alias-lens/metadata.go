@@ -1,184 +1,47 @@
 package main
 
 import (
+	"alias-lens/internal/entry"
+	"alias-lens/internal/shell"
 	"fmt"
 	"os"
 	"regexp"
 	"runtime"
-	"sort"
 	"strings"
 )
 
-type EntryMetadata struct {
-	Tags      []string
-	Platforms []string
-	Favorite  bool
-	Category  string
-}
+type EntryMetadata = entry.EntryMetadata
 
 var functionStart = regexp.MustCompile(`^\s*(?:function\s+)?([A-Za-z_][A-Za-z0-9_]*)(?:\s*\(\s*\))?\s*\{(.*)$`)
 var functionName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-func parseMetadataComment(line string) (EntryMetadata, bool) {
-	trimmed := strings.TrimSpace(line)
-	if !strings.HasPrefix(strings.ToLower(trimmed), "# al:") {
-		return EntryMetadata{}, false
-	}
-	metadata := EntryMetadata{}
-	for _, field := range strings.Fields(strings.TrimSpace(trimmed[len("# al:"):])) {
-		key, value, found := strings.Cut(field, "=")
-		if !found {
-			continue
-		}
-		values := splitMetadataValues(value)
-		switch strings.ToLower(key) {
-		case "tags", "collections":
-			metadata.Tags = values
-		case "platforms":
-			metadata.Platforms = values
-		case "favorite":
-			metadata.Favorite = strings.EqualFold(value, "true") || value == "1" || strings.EqualFold(value, "yes")
-		case "category":
-			metadata.Category = normalizeCategory(value)
-		}
-	}
-	return metadata, true
-}
+func parseMetadataComment(line string) (EntryMetadata, bool) { return entry.ParseMetadataComment(line) }
 
-func splitMetadataValues(value string) []string {
-	seen := map[string]bool{}
-	var values []string
-	for _, item := range strings.Split(value, ",") {
-		item = strings.ToLower(strings.TrimSpace(item))
-		if item != "" && !seen[item] {
-			seen[item] = true
-			values = append(values, item)
-		}
-	}
-	sort.Strings(values)
-	return values
-}
+func splitMetadataValues(value string) []string { return entry.SplitMetadataValues(value) }
 
-func applyMetadata(alias *Alias, metadata EntryMetadata) {
-	alias.Tags = append([]string(nil), metadata.Tags...)
-	alias.Platforms = append([]string(nil), metadata.Platforms...)
-	alias.Favorite = metadata.Favorite
-	if metadata.Category != "" {
-		alias.Category = metadata.Category
-	}
-}
+func applyMetadata(alias *Alias, metadata EntryMetadata) { entry.ApplyMetadata(alias, metadata) }
 
-func normalizeCategory(value string) string {
-	return strings.ToLower(strings.TrimSpace(value))
-}
+func normalizeCategory(value string) string { return entry.NormalizeCategory(value) }
 
 func parseFunctions(contents string) []Alias {
 	return parseLegacyFunctions(contents)
 }
 
-func parseLegacyFunctions(contents string) []Alias {
-	lines := strings.Split(contents, "\n")
-	var functions []Alias
-	var notes []string
-	metadata := EntryMetadata{}
-	for index := 0; index < len(lines); index++ {
-		trimmed := strings.TrimSpace(lines[index])
-		if parsed, ok := parseMetadataComment(lines[index]); ok {
-			metadata = parsed
-			continue
-		}
-		if strings.HasPrefix(trimmed, "#") {
-			note := strings.TrimSpace(strings.TrimPrefix(trimmed, "#"))
-			if note != "" && !isSectionHeading(note) {
-				notes = append(notes, note)
-			}
-			continue
-		}
-		match := functionStart.FindStringSubmatch(lines[index])
-		if match == nil {
-			if trimmed != "" {
-				notes = nil
-				metadata = EntryMetadata{}
-			}
-			continue
-		}
-		name := match[1]
-		body := strings.TrimSpace(match[2])
-		if closeIndex := strings.LastIndex(body, "}"); closeIndex >= 0 {
-			body = body[:closeIndex]
-		} else {
-			var bodyLines []string
-			if body != "" {
-				bodyLines = append(bodyLines, body)
-			}
-			for index++; index < len(lines); index++ {
-				if strings.TrimSpace(lines[index]) == "}" {
-					break
-				}
-				bodyLines = append(bodyLines, strings.TrimSpace(lines[index]))
-			}
-			body = strings.Join(bodyLines, " ")
-		}
-		body = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(body), ";"))
-		description := "Shell function"
-		if len(notes) > 0 {
-			description = notes[len(notes)-1]
-		}
-		function := Alias{Name: name, Command: body, Description: description, Category: category(body), Type: "function"}
-		applyMetadata(&function, metadata)
-		functions = append(functions, function)
-		notes = nil
-		metadata = EntryMetadata{}
-	}
-	return functions
-}
+func parseLegacyFunctions(contents string) []Alias { return shell.ParseLegacyFunctions(contents) }
 
 func currentPlatform() string {
 	return platformName(runtime.GOOS, os.Getenv)
 }
 
 func platformName(goos string, getenv func(string) string) string {
-	if goos == "linux" && (getenv("WSL_DISTRO_NAME") != "" || getenv("WSL_INTEROP") != "") {
-		return "wsl"
-	}
-	if goos == "darwin" {
-		return "macos"
-	}
-	return goos
+	return entry.PlatformName(goos, getenv)
 }
 
 func platformSupported(platforms []string) bool {
-	if len(platforms) == 0 {
-		return true
-	}
-	current := currentPlatform()
-	for _, platform := range platforms {
-		if platform == "all" || platform == current || (current == "wsl" && platform == "linux") {
-			return true
-		}
-	}
-	return false
+	return entry.PlatformSupported(platforms, currentPlatform())
 }
 
-func metadataLine(metadata EntryMetadata) string {
-	var fields []string
-	if len(metadata.Tags) > 0 {
-		fields = append(fields, "tags="+strings.Join(metadata.Tags, ","))
-	}
-	if len(metadata.Platforms) > 0 {
-		fields = append(fields, "platforms="+strings.Join(metadata.Platforms, ","))
-	}
-	if metadata.Favorite {
-		fields = append(fields, "favorite=true")
-	}
-	if metadata.Category != "" {
-		fields = append(fields, "category="+metadata.Category)
-	}
-	if len(fields) == 0 {
-		return ""
-	}
-	return "# al: " + strings.Join(fields, " ")
-}
+func metadataLine(metadata EntryMetadata) string { return entry.MetadataLine(metadata) }
 
 func runMetadataCommand(arguments []string) error {
 	if len(arguments) < 2 {
@@ -228,15 +91,14 @@ func runMetadataCommand(arguments []string) error {
 	return setEntryMetadata(path, arguments[0], metadata)
 }
 
-func metadataForAlias(alias Alias) EntryMetadata {
-	metadata := EntryMetadata{Tags: alias.Tags, Platforms: alias.Platforms, Favorite: alias.Favorite}
-	if alias.Category != category(alias.Command) {
-		metadata.Category = alias.Category
-	}
-	return metadata
-}
+func metadataForAlias(alias Alias) EntryMetadata { return entry.MetadataForAlias(alias) }
 
 func setEntryMetadata(path, name string, metadata EntryMetadata) error {
+	if active, err := catalogManagedEditing(); err != nil {
+		return err
+	} else if active {
+		return setCatalogMetadata(name, metadata)
+	}
 	contents, mode, lines, err := readAliasFile(path)
 	if err != nil {
 		return err

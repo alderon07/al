@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -14,7 +14,7 @@ func (m *model) openRevisionDrawer() {
 	m.diff = nil
 	m.revisionCursor = 0
 	m.revisionErr = ""
-	path, err := aliasesPath()
+	path, err := editableEntriesPath()
 	if err != nil {
 		m.revisionErr = err.Error()
 		return
@@ -72,7 +72,7 @@ func (m model) restoreSelectedRevision() (tea.Model, tea.Cmd) {
 		m.diff.confirmRestore = false
 		return m, nil
 	}
-	path, err := aliasesPath()
+	path, err := editableEntriesPath()
 	if err == nil {
 		var current, previous []byte
 		var mode os.FileMode
@@ -84,7 +84,11 @@ func (m model) restoreSelectedRevision() (tea.Model, tea.Cmd) {
 			err = fmt.Errorf("aliases or this revision changed since preview; reopen the diff before restoring")
 		}
 		if err == nil {
-			err = writeAliasFile(path, current, previous, mode)
+			if _, ok := catalogRevisionDirectory(path); ok {
+				err = restoreCatalogBytes(previous)
+			} else {
+				err = writeAliasFile(path, current, previous, mode)
+			}
 		}
 	}
 	if err != nil {

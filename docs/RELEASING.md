@@ -31,6 +31,7 @@ Read [the compatibility policy](COMPATIBILITY.md) before changing commands, flag
    Review available dependency updates. An update is not automatically a release blocker, but every vulnerability finding needs a written decision.
 
 4. Confirm that every GitHub Actions job passes for the release commit.
+   Catalog release evidence must include new-shell Bash and Zsh PTYs, guided native review and cancellation, fallback drift and offline rollback, exact installed completion membership, semantic sync with unrelated staged files, and restricted bootstrap. Run `scripts/verify-catalog-workflow.sh` in a disposable home and retain sanitized results in [catalog review evidence](testing/evidence/CATALOG_REVIEW.md). A missing supported shell must fail the required CI evidence job. Native macOS and WSL results remain release gates; Linux tests and cross-compilation do not complete them.
 5. Review `git status --short`, `git diff --check`, and the files that the release archives contain. Do not tag a dirty worktree.
 6. Inspect the staged file list and diff for tokens, private keys, shell alias files, environment files, and local config before the final commit and push.
 7. Tag a stable semantic version and push it:

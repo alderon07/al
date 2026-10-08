@@ -14,7 +14,7 @@ import (
 )
 
 func TestCatalogPreviewIsReadOnlyAndUsesFriendlyNextStep(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias gs='git status'\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -40,7 +40,7 @@ func TestCatalogPreviewIsReadOnlyAndUsesFriendlyNextStep(t *testing.T) {
 }
 
 func TestCatalogImportCreatesInactiveCatalogAndKeepsNativeFile(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	sourcePath := filepath.Join(home, ".bash_aliases")
 	source := []byte("# Show status\nalias gs='git status'\n")
@@ -77,7 +77,7 @@ func TestCatalogImportCreatesInactiveCatalogAndKeepsNativeFile(t *testing.T) {
 }
 
 func TestCatalogImportAddsOnlySelectedShellToExistingEntry(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias gs='git status --short'\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -123,7 +123,7 @@ func TestCatalogImportAddsOnlySelectedShellToExistingEntry(t *testing.T) {
 }
 
 func TestCatalogImportKeepsUnsafeRangeNativeAndImportsSafeEntries(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	source := "alias first='git status'\nthis is not an alias definition\nalias second='git log'\n"
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte(source), 0o600); err != nil {
@@ -147,7 +147,7 @@ func TestCatalogImportKeepsUnsafeRangeNativeAndImportsSafeEntries(t *testing.T) 
 }
 
 func TestCatalogImportWithOnlyUnsupportedContentWritesNothing(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	sourcePath := filepath.Join(home, ".bash_aliases")
 	source := []byte("this is not an alias definition\n")

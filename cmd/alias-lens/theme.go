@@ -295,7 +295,7 @@ func loadTheme() (Theme, error) {
 		return theme, err
 	}
 	path := filepath.Join(home, ".config", "alias-lens", "theme.json")
-	contents, err := os.ReadFile(path)
+	contents, err := readManagedPrivateFile(path, 1<<20)
 	if os.IsNotExist(err) {
 		return theme, nil
 	}
@@ -323,26 +323,17 @@ func loadTheme() (Theme, error) {
 }
 
 func saveTheme(theme Theme) error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-	directory := filepath.Join(home, ".config", "alias-lens")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return err
-	}
-	if err := os.Chmod(directory, 0o700); err != nil {
-		return err
-	}
+	return withMutation(func(session *mutationSession) error { return saveThemeInSession(session, theme) })
+}
+func saveThemeInSession(session *mutationSession, theme Theme) error {
 	selection := struct {
 		Preset string `json:"preset"`
-	}{Preset: theme.Preset}
-	contents, err := json.MarshalIndent(selection, "", "  ")
-	if err != nil {
-		return err
+	}{theme.Preset}
+	contents, e := json.MarshalIndent(selection, "", "  ")
+	if e != nil {
+		return e
 	}
-	contents = append(contents, '\n')
-	return writeFileAtomically(filepath.Join(directory, "theme.json"), contents, 0o600)
+	return session.writePrivate(filepath.Join(session.configRoot, "theme.json"), append(contents, '\n'))
 }
 
 func nextTheme(current string) Theme {

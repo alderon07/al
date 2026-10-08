@@ -11,7 +11,7 @@ import (
 )
 
 func TestCatalogDiffIsSemanticRedactedAndReadOnly(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	repository := filepath.Join(home, "repo")
 	t.Setenv("HOME", home)
 	if err := os.MkdirAll(filepath.Join(repository, "alias-lens"), 0o700); err != nil {
@@ -70,7 +70,7 @@ func TestCatalogDiffPlainUsesFriendlyFields(t *testing.T) {
 }
 
 func TestInstalledCatalogSnapshotMustMatchRecordedFingerprint(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	stateDirectory := filepath.Join(home, ".local", "state", "alias-lens")
 	snapshotDirectory := filepath.Join(stateDirectory, "catalog-snapshots")

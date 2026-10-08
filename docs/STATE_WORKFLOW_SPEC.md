@@ -1,5 +1,10 @@
 # State, planning, and portability specification
 
+## Implementation amendment approved 2026-10-03
+
+The user approved `docs/CATALOG_PLAN.md` for implementation. That contract supersedes conflicting pre-release details below: adoption retains and maintains exact native fallback ranges; init and enable compose individual native review; verified complete generation bytes are loaded through a read-only helper; proven single user source statements are preserved; installed state records every required startup route. Native-input drift declines the overlay. Public format contracts remain stable. `docs/acceptance/CATALOG_BOOTSTRAP.md` supplies bootstrap test criteria. Native platform checks remain release gates.
+
+
 Status: approved for staged implementation on 2026-09-19. The phase 4 WSL restart check and the platform checks named in this document remain release gates. See `docs/acceptance/STATE_WORKFLOW_STAGES.md` for the approval scope.
 
 ## Purpose
@@ -400,66 +405,19 @@ Future condition types require another catalog schema version. There is no gener
 
 ## Local state and private storage
 
-The storage layout in the shell-neutral architecture gains these private records:
+The active implementation separates private installation records from the existing shadow inspection contract. See [CATALOG_LIFECYCLE.md](acceptance/CATALOG_LIFECYCLE.md) for exact paths and [CATALOG_STORAGE.md](acceptance/CATALOG_STORAGE.md) for codec/test contracts.
 
-```text
-~/.local/state/alias-lens/
-├── catalog-state.json
-├── native-approvals.json
-├── catalog-snapshots/
-│   └── <catalog-sha256>.json
-└── temporary/
-```
+- `catalog-installed.json` records per-shell generation identity, expected native input, rollback ID, and every startup path/route.
+- `native-approvals.json` has private version 2. Each record contains a key with entry ID, shell, name, kind, implementation SHA-256, and renderer, plus RFC 3339 UTC approval time. Implementation hashing retains the unsigned 64-bit big-endian framing of kind, native field name, and exact implementation bytes. Approval time does not change the key.
+- `adoptions.json` contains exact native ownership ranges and fallback bytes. It retains working fallbacks; it does not represent automatic removal intent.
+- `rollback/` stores the original native/startup enrollment baseline, including original file existence, independently of later refreshes.
+- `catalog-snapshots/` stores canonical catalog bytes referenced by installed packages.
+- `workflows/` contains version 2 multi-target journals, private inverse payloads, and durable recovery progress. One persistent `mutation.lock` serializes all managed mutations.
+- `~/.config/alias-lens/catalog-sync.json` owns one exact catalog repository path, merge-base bytes and hash, pinned revision/blob, transport enrollment, and any uncertain push intent. Conflict bundles contain separate bounded base/local/remote files.
 
-`catalog-state.json` has its own schema version. The fields relevant to this specification have this shape:
+Active renderer IDs are `bash/v2` and `zsh/v2`. Immutable package identity includes complete deterministic input metadata, source catalog hash, installed membership, exact declarations, approval keys, absolute executable paths, and expected native-input hash. A separate complete-file digest verifies emitted bytes. Timestamps do not affect identity. Strict codecs reject duplicates, case variants, unknown fields, unsupported versions, malformed hashes/IDs/timestamps, unsafe paths, and size violations. Public status/plan/semantic-diff JSON remains version 1. Shadow renderer meanings and golden outputs remain stable.
 
-```json
-{
-  "schema_version": 1,
-  "installed_shells": {
-    "bash": {
-      "active_generation_sha256": "...",
-      "source_catalog_sha256": "...",
-      "resolved_state_sha256": "...",
-      "loader_sha256": "..."
-    }
-  },
-  "catalog_sync": {
-    "repository_path": "alias-lens/catalog.json",
-    "base_catalog_sha256": "...",
-    "local_catalog_sha256": "...",
-    "remote_catalog_sha256": "..."
-  }
-}
-```
-
-Shell keys sort bytewise. Hash fields contain 64 lowercase hexadecimal characters. `repository_path` follows the same clean relative-path rules as tracked repository paths. Fields that have no value are omitted. Transaction, adoption, and startup metadata required by the shell-neutral architecture can add named objects before this schema is approved. The final acceptance document must freeze their exact shape and canonical order rather than use an untyped extension map. This file does not store catalog entries or implementation text.
-
-`native-approvals.json` uses this shape:
-
-```json
-{
-  "schema_version": 1,
-  "approvals": [
-    {
-      "entry_id": "f98010ca0aa84af69fd4df32ec91726b",
-      "shell": "bash",
-      "kind": "function",
-      "implementation_sha256": "...",
-      "renderer": "bash/v1",
-      "approved_at": "2026-09-18T14:00:00Z"
-    }
-  ]
-}
-```
-
-Approval records sort by shell and then entry ID. `approved_at` uses RFC 3339 UTC and is audit metadata. It does not affect rendering or the approval key. `implementation_sha256` hashes the same unsigned 64-bit big-endian length-framed sequence format used by generation hashes. Its values are the entry kind, native field name, and exact implementation bytes, in that order. The file does not store implementation text. The approval key is the entry ID, shell, kind, implementation hash, and renderer. A catalog format change does not invalidate an unchanged native approval.
-
-`catalog-snapshots/<catalog-sha256>.json` stores exact canonical catalog bytes. Semantic synchronization requires the snapshot named by `base_catalog_sha256`. Installed semantic diff requires the snapshot named by each `source_catalog_sha256`. Alias Lens keeps every snapshot referenced by installed state, sync state, or an incomplete transaction. It removes an older unreferenced snapshot only through a planned private-state cleanup.
-
-The `temporary` directory contains only operation-owned preview and bootstrap artifacts. Each operation uses a new unpredictable child directory with mode `0700`. A successful or normally failed operation removes its child after it closes all descriptors. Recovery preserves an ambiguous child and reports it through `al data paths`.
-
-All directories use mode `0700`, and all files use mode `0600`. Each decoder rejects newer versions and corrupt records without rewriting them. These files remain local and never enter the configured repository. `docs/PRIVACY.md` must list them before release.
+All private directories use `0700`, and private files use `0600`. These records and local executable paths never enter catalog synchronization. Cleanup preserves every active generation, rollback payload, installed snapshot, merge base, and incomplete transaction reference. Staged repositories use operation-owned intent and identity checks; ambiguous artifacts are preserved and reported through `al data paths`. Required platform checks remain release gates.
 
 ## One-command bootstrap
 
@@ -480,17 +438,17 @@ Remote locators use the configured provider host and protocol. They cannot conta
 
 The default repository path is `alias-lens/catalog.json`. `--catalog-path` accepts one clean relative path. It rejects absolute paths, `..`, empty components, symbolic-link traversal, and credential-shaped names.
 
-In an interactive terminal, `al init` performs discovery, prints the final plan, and asks whether to apply it. Declining the prompt leaves managed state unchanged. In a noninteractive process, the command prints the plan and exits without applying unless `--apply` is present. The flag does not skip plan construction, hash checks, or native review.
+In an interactive terminal, `al init` performs discovery and exact native and ownership review, prints the final plan, and asks whether to apply it. Declining the prompt leaves managed state unchanged. In a noninteractive process, the command prints the plan and exits without applying unless `--apply` is present. The flag does not skip plan construction or freshness checks and cannot grant new approval or ownership.
 
 Bootstrap follows this sequence:
 
 1. Resolve or validate the selected shell without changing configuration.
-2. Print the exact provider host, repository, and catalog path before a remote read.
+2. Resolve the configured provider host, repository, and catalog path. Bind the selected transport and immutable source to the reviewed plan.
 3. For a remote source, use `RepoProvider` to read the named file and its immutable revision through the provider's configured HTTPS API. Stream at most 8 MiB, reject cross-host redirects, and do not run Git during preview.
 4. For a local source, open the named working-tree file through the descriptor and link checks used for enrolled files. Record its bytes, identity, and repository `HEAD` without changing the index or worktree.
-5. Validate the catalog schema, size, secrets, conditions, native structure, and selected-shell render in a private staging directory.
-6. Build one operation plan for the managed repository, configuration, approvals, generated file, startup loader, and active pointer.
-7. Show every native implementation that needs approval through the explicit native-review view.
+5. Validate the catalog schema, size, secrets, conditions, native structure, and selected-shell render without executing entries.
+6. Review exact native implementations and existing-name ownership in memory.
+7. Build and confirm one operation plan for the managed repository, configuration, approvals, fallbacks, generation package, startup blocks, active pointer, and installed state.
 8. Acquire the mutation lock, perform recovery, rebuild the plan, and recheck the remote revision and blob hash or the local identity and content hash.
 9. For a remote source, create a fresh managed-repository staging directory. Invoke clone with an Alias Lens-owned empty `core.hooksPath`, no checkout, no submodules, a one-commit depth, and partial blob filtering. Use the configured provider protocol without embedding credentials. Do not run checkout, status, add, or a filter command.
 10. Read the enrolled catalog blob with Git plumbing that does not apply worktree filters. Populate the index and sparse-worktree bits through plumbing that does not write worktree files. Write only the enrolled catalog path through the shared safe writer, then verify its bytes against the previewed blob. Leave every other tracked path absent from the sparse managed worktree.
@@ -508,7 +466,7 @@ Clone failure, partial-clone refusal, or sparse-index setup failure stops bootst
 Bootstrap stops without changing managed state when:
 
 - The repository or catalog path is missing, ambiguous, or invalid.
-- The live configuration already names a different repository and the user did not start a separate reconfiguration flow.
+- A different catalog enrollment exists, or the current local catalog differs from the source. A legacy shell's repository configuration is independent and remains available.
 - The remote object changes between discovery and locked application.
 - The catalog contains a likely secret.
 - Rendering or parse-only validation fails.
@@ -531,7 +489,7 @@ al completion remove bash|zsh
 
 Completion generation reads one internal command specification shared with help text. Moving help metadata to that specification must preserve the existing 1.x command names, flags, help meaning, exit statuses, and plain output except for the addition of new commands.
 
-Completion code does not contact a network, execute an alias, parse native function bodies, or print implementation text. Dynamic candidates use the private integration command `alias-lens completion-candidates --shell SHELL --command COMMAND --prefix PREFIX`. The command reads the active catalog or legacy alias file through the matching parser. It returns at most 1,000 candidates and 1 MiB of escaped output. A parse, limit, or permission error returns no private fallback text. This integration command can change when completion installation writes a matching completion program, like the existing integration commands in `docs/COMPATIBILITY.md`.
+Completion code does not contact a network, execute an alias, parse native function bodies, or print implementation text. Dynamic candidates use the private integration command `alias-lens completion-candidates --shell SHELL --command COMMAND --prefix PREFIX`. The command reads exact installed catalog membership and surviving native entries, or the legacy alias file through the matching parser. Pending candidates never become installed completion entries. It returns at most 1,000 candidates and 1 MiB of escaped output. A parse, limit, or permission error returns no private fallback text. This integration command can change when completion installation writes a matching completion program, like the existing integration commands in `docs/COMPATIBILITY.md`.
 
 Install and removal use the shared operation plan and writer. They write an Alias Lens-owned completion file. The one Alias Lens-owned shell integration block loads both the active generated definitions and the completion file. Completion installation must not add a second startup-file block. Install and removal preserve unrelated completion settings and refuse an edited integration block. `al setup` does not start installing completions until a separately approved compatibility criterion allows that behavior.
 
@@ -648,7 +606,7 @@ All existing safety rules continue to apply. This work also requires these rules
 - Status, plan, diff, merge, bootstrap discovery, completion, and TUI preview never execute an alias or function.
 - Secret scanning covers every catalog entry and implementation before a repository commit or push, regardless of local conditions.
 - Public plan and JSON reports use hashes and byte counts instead of implementation text.
-- Native approval keys contain the entry ID, shell, entry kind, implementation content hash, and renderer version. A change to any value invalidates approval.
+- Native approval keys contain the entry ID, shell, name, entry kind, implementation content hash, and renderer version. A change to any value invalidates approval.
 - Remote native changes never inherit approval from an entry name or a previous content hash.
 - Profile names are not secrets. Alias Lens must still keep the complete local profile list out of repository data and normal logs.
 - Temporary bootstrap and validation artifacts use private permissions and do not survive a successful preview.
@@ -668,7 +626,7 @@ This work follows `docs/COMPATIBILITY.md`.
 - New commands can be added in a minor release.
 - Plain output can add new sections only where the existing command contract permits it. Existing machine-readable fields are not removed or renamed.
 - Catalog and app configuration version 2 are the first supported pre-1.0 formats. Other versions fail without writes.
-- Existing installations stay in legacy mode until explicit catalog import, adoption, and enablement.
+- Existing installations stay in legacy mode until explicit guided catalog enablement or init. Import alone remains inactive.
 - Enabling one shell does not change another shell's legacy or catalog source.
 - Rollback works offline without reading the current catalog.
 

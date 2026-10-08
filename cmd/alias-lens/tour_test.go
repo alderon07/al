@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestSetupTourAppearsOnceAndCanOpenHelp(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	if err := scheduleTour(); err != nil {
 		t.Fatal(err)
 	}

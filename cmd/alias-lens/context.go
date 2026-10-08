@@ -11,8 +11,6 @@ import (
 	"regexp"
 	"sort"
 	"strings"
-
-	"alias-lens/internal/transaction"
 )
 
 const (
@@ -218,19 +216,13 @@ func contextToggleTarget(ranking contextRanking, alias Alias) (string, string, e
 }
 
 func updateContextFile(change func(*contextFile) (bool, error)) error {
+	return withMutation(func(session *mutationSession) error { return updateContextFileInSession(session, change) })
+}
+func updateContextFileInSession(session *mutationSession, change func(*contextFile) (bool, error)) error {
 	path, err := contextPath()
 	if err != nil {
 		return err
 	}
-	directory := filepath.Dir(path)
-	if err := ensurePrivateDirectory(directory); err != nil {
-		return err
-	}
-	lock, err := transaction.AcquireLock(directory, filepath.Join(directory, "contexts.lock"))
-	if err != nil {
-		return fmt.Errorf("change context associations: %w", err)
-	}
-	defer lock.Close()
 	saved, err := loadContextFile(path)
 	if err != nil {
 		return err
@@ -253,7 +245,7 @@ func updateContextFile(change func(*contextFile) (bool, error)) error {
 	if len(contents) > contextFileLimit {
 		return fmt.Errorf("context associations exceed %d bytes", contextFileLimit)
 	}
-	return writeFileAtomically(path, append(contents, '\n'), 0o600)
+	return session.writePrivate(path, append(contents, '\n'))
 }
 
 func addContextBinding(alias Alias, shell, kind, path string) error {

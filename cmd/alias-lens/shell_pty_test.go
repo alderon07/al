@@ -183,7 +183,7 @@ func findZsh() string {
 
 func runShellPTYExecutionChecks(t *testing.T, shellName, executable string, arguments []string, integration string, promptBinding bool) {
 	t.Helper()
-	home := t.TempDir()
+	home := privateTestHome(t)
 	binDirectory := filepath.Join(home, "bin")
 	if err := os.MkdirAll(binDirectory, 0o700); err != nil {
 		t.Fatal(err)

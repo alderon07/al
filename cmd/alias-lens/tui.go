@@ -10,7 +10,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
@@ -39,6 +39,8 @@ var (
 )
 
 type model struct {
+	catalogView       *catalogTUIView
+	catalogStandalone bool
 	aliases           []Alias
 	context           contextRanking
 	query             string
@@ -324,6 +326,22 @@ func blinkCursor() tea.Cmd {
 
 func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	switch message := message.(type) {
+	case catalogTUILoadedMsg:
+		m.catalogView = message.View
+		return m, nil
+	case catalogTUIAppliedMsg:
+		if message.Err != nil {
+			m.catalogView.Loading = false
+			m.catalogView.Err = message.Err.Error()
+			return m, nil
+		}
+		m.catalogView = nil
+		if m.catalogStandalone {
+			return m, tea.Quit
+		}
+		m.reloadAliasesAndTheme()
+		m.status = "Catalog plan applied"
+		return m, nil
 	case cursorBlinkMsg:
 		if !m.executableUpdated && m.executableWatch.changed() {
 			m.executableUpdated = true
@@ -352,6 +370,13 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		if m.catalogView != nil {
+			return m.updateCatalogTUI(message)
+		}
+		if !m.selectMode && m.aliasMode == aliasModeCommand && !m.adding && !m.settingsOpen && !m.helpVisible && !m.shortcutsOpen && !m.statsOpen && !m.themePicker && !m.revisionOpen && !m.trackedOnly && m.diff == nil && matchesShortcut(message, m.shortcutProfile, shortcutCatalog) {
+			m.catalogView = &catalogTUIView{Shell: activeShellAdapter().Name(), Loading: true}
+			return m, loadCatalogTUI(activeShellAdapter().Name())
+		}
 		if m.shortcutsOpen {
 			return m.updateShortcutEditor(message)
 		}
@@ -538,6 +563,10 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyTab, tea.KeyEnter:
 			if len(matches) > 0 {
 				selected := matches[m.cursor]
+				if !catalogEntryRunnable(selected) {
+					m.status = "Catalog entry is " + selected.CatalogState + "; enter al catalog enable --shell " + activeShellAdapter().Name()
+					return m, nil
+				}
 				m.editSelection = message.Type == tea.KeyTab
 				if !m.editSelection && m.executeMode && isDangerousCommand(selected.Command) {
 					m.runConfirm = &selected
@@ -871,6 +900,9 @@ func (m model) View() string {
 	if height < 20 {
 		title = strings.SplitN(title, "\n", 2)[0]
 	}
+	if m.catalogView != nil {
+		return m.catalogTUIView(frame, header)
+	}
 	if m.tourVisible {
 		return m.tourView(frame, header)
 	}
@@ -951,7 +983,7 @@ func (m model) View() string {
 		}
 	}
 	if m.aliasMode == aliasModeCommand && !m.selectMode {
-		footer = dimStyle.Render("command mode  ·  / search  ·  " + primaryShortcutLabel(m.shortcutProfile, shortcutFavorite) + " favorite  ·  " + useKey + " use  ·  " + helpKey + " help  ·  " + quitKey + " quit")
+		footer = dimStyle.Render("command mode  ·  l catalog  ·  / search  ·  " + primaryShortcutLabel(m.shortcutProfile, shortcutFavorite) + " favorite  ·  " + useKey + " use  ·  " + helpKey + " help  ·  " + quitKey + " quit")
 	} else if m.aliasMode == aliasModeSearch && !m.selectMode {
 		footer = dimStyle.Render("search mode  ·  type to filter  ·  esc commands  ·  " + useKey + " use")
 	}

@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestWideAliasDetailCardKeepsPanelBounded(t *testing.T) {
@@ -55,7 +55,7 @@ func TestWideAliasDetailNameGapUsesPanelBackground(t *testing.T) {
 }
 
 func TestWideAliasBrowserShowsSelectedDetailsAndKeepsListVisible(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	current := model{
 		aliases: []Alias{
 			{Name: "first", Command: "printf first", Category: "tools"},
@@ -118,7 +118,7 @@ func TestWideAliasBrowserKeepsOverviewAndShowsSelectedUsage(t *testing.T) {
 }
 
 func TestSelectedAliasUsageHandlesMissingUndatedAndUnreadableHistory(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	t.Setenv(historyFileEnvironment, "")
@@ -232,7 +232,7 @@ func TestWideAliasRowsAlignCategoryBadges(t *testing.T) {
 }
 
 func TestAliasBrowserReturnsToCardsWhenNarrowed(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	current := model{
 		aliases: []Alias{
 			{Name: "first", Command: "printf first"},
@@ -264,7 +264,7 @@ func TestAliasBrowserReturnsToCardsWhenNarrowed(t *testing.T) {
 }
 
 func TestShortWideAliasBrowserKeepsCommandVisible(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	current := model{aliases: []Alias{{Name: "sample", Command: "printf sample"}}, width: 120, height: 18}
 	view := ansi.Strip(current.View())
 	if !strings.Contains(view, "Selected alias") || !strings.Contains(view, "printf sample") {
@@ -276,7 +276,7 @@ func TestShortWideAliasBrowserKeepsCommandVisible(t *testing.T) {
 }
 
 func TestWideAliasBrowserEscapesCommandControlText(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	current := model{aliases: []Alias{{Name: "safe", Command: "printf '\x1b[2J'"}}, width: 132, height: 36}
 	view := current.View()
 	if strings.Contains(view, "\x1b[2J'") || !strings.Contains(view, `\x1b[2J`) {
@@ -285,7 +285,7 @@ func TestWideAliasBrowserEscapesCommandControlText(t *testing.T) {
 }
 
 func TestWideAliasBrowserAlignsUnicodeContent(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	alias := Alias{
 		Name:        "部署e\u0301🚀",
 		Command:     "printf '界界界界界界界界界界界界界界界界界界界界界界界界'",

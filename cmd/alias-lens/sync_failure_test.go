@@ -8,6 +8,7 @@ import (
 )
 
 func TestRepositorySyncPreservesUnrelatedStagedFiles(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	directory := t.TempDir()
 	repository := filepath.Join(directory, "dotfiles")
 	if err := os.Mkdir(repository, 0o755); err != nil {
@@ -66,7 +67,7 @@ func TestRepositorySyncPreservesUnrelatedStagedFiles(t *testing.T) {
 }
 
 func TestPlainSyncRefusesRecordedConflictWithoutChangingFilesOrGit(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	repository := filepath.Join(home, "dotfiles")
@@ -122,7 +123,7 @@ func TestPlainSyncRefusesRecordedConflictWithoutChangingFilesOrGit(t *testing.T)
 }
 
 func TestExplicitPushCanResolveRecordedConflict(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	remoteRepository := filepath.Join(home, "remote.git")
@@ -168,6 +169,7 @@ func TestExplicitPushCanResolveRecordedConflict(t *testing.T) {
 }
 
 func TestPushFailureLeavesCompleteRepositoryCopy(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	directory := t.TempDir()
 	repository := filepath.Join(directory, "dotfiles")
 	if err := os.Mkdir(repository, 0o755); err != nil {
@@ -195,7 +197,7 @@ func TestPushFailureLeavesCompleteRepositoryCopy(t *testing.T) {
 }
 
 func TestPullFailureLeavesLiveAliasesUnchanged(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	repository := filepath.Join(home, "dotfiles")

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestEmptyAliasFileShowsOnboardingAndEnterStartsAdd(t *testing.T) {

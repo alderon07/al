@@ -132,7 +132,7 @@ func TestRepositoryDiffWarnsAboutLinesOutsideAliasSummary(t *testing.T) {
 
 func setupRepositoryDiffTest(t *testing.T, local, remote []byte) {
 	t.Helper()
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	repository := filepath.Join(home, "dotfiles")

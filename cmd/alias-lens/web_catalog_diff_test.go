@@ -14,7 +14,7 @@ import (
 )
 
 func TestCatalogDiffWebKeepsCodeBehindAuthenticatedDetailRequest(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	before := neutralcatalog.Catalog{SchemaVersion: 2, Entries: []neutralcatalog.Entry{{ID: "0123456789abcdef0123456789abcdef", Name: "deploy", Kind: "command", Native: map[string]neutralcatalog.NativeImplementation{"bash": {AliasValue: stringPointer("private-command-before")}}}}}
 	after := before
@@ -132,7 +132,7 @@ func TestCatalogDiffWebRejectsHostOriginAndUnrelatedPages(t *testing.T) {
 }
 
 func TestCatalogDiffWebRequestsDoNotChangeUserFiles(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	paths := []string{
 		filepath.Join(home, ".config", "alias-lens", "catalog.json"),

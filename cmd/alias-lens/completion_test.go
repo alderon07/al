@@ -98,7 +98,7 @@ func TestShortcutCompletionOffersAutomaticSelection(t *testing.T) {
 }
 
 func TestCompletionInstallAndRemoveUsePrivatePlannedFile(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	var output bytes.Buffer
 	if err := runCompletionCommand([]string{"install", "bash"}, &output); err != nil {
@@ -134,7 +134,7 @@ func TestCompletionInstallAndRemoveUsePrivatePlannedFile(t *testing.T) {
 }
 
 func TestCompletionRefusesToOverwriteOrRemoveEditedFile(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	directory := filepath.Join(home, ".config", "alias-lens")
 	if err := os.MkdirAll(directory, 0o700); err != nil {
@@ -158,9 +158,9 @@ func TestCompletionRefusesToOverwriteOrRemoveEditedFile(t *testing.T) {
 }
 
 func TestCompletionRefusesEditedShellIntegration(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
-	adapter := bashShellAdapter{}
+	adapter := mustShellAdapter("bash")
 	path, err := aliasPathFor(adapter)
 	if err != nil {
 		t.Fatal(err)
@@ -179,9 +179,9 @@ func TestCompletionRefusesEditedShellIntegration(t *testing.T) {
 }
 
 func TestCompletionRecognizesHealthyShellIntegration(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
-	adapter := bashShellAdapter{}
+	adapter := mustShellAdapter("bash")
 	path, err := aliasPathFor(adapter)
 	if err != nil {
 		t.Fatal(err)
@@ -204,7 +204,7 @@ func TestCompletionRecognizesHealthyShellIntegration(t *testing.T) {
 }
 
 func TestCompletionRejectsProfilesInVersionOneSettings(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	directory := filepath.Join(home, ".config", "alias-lens")
 	if err := os.MkdirAll(directory, 0o700); err != nil {
@@ -240,7 +240,7 @@ func TestShellIntegrationLoadsOnlyInstalledCompletionFile(t *testing.T) {
 }
 
 func TestCompletionCandidatesReadLegacyEntriesWithoutRunningThem(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	sentinel := filepath.Join(home, "must-not-exist")
@@ -263,7 +263,7 @@ func TestCompletionCandidatesReadLegacyEntriesWithoutRunningThem(t *testing.T) {
 }
 
 func TestCompletionCandidatesFailClosedForMalformedPrivateData(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias broken\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -278,7 +278,7 @@ func TestCompletionCandidatesFailClosedForMalformedPrivateData(t *testing.T) {
 }
 
 func TestCompletionCandidatesDoNotCreateAMissingAliasFile(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	aliasPath := filepath.Join(home, ".bash_aliases")
 	var output bytes.Buffer
@@ -291,7 +291,7 @@ func TestCompletionCandidatesDoNotCreateAMissingAliasFile(t *testing.T) {
 }
 
 func TestCompletionCandidatesUseResolvedCatalogNames(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	configDirectory := filepath.Join(home, ".config", "alias-lens")
 	if err := os.MkdirAll(configDirectory, 0o700); err != nil {
@@ -339,7 +339,7 @@ func TestCompletionCandidatesUseResolvedCatalogNames(t *testing.T) {
 }
 
 func TestCompletionCandidatesAreBounded(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	var source strings.Builder
 	for index := 0; index < completionMaxResults+25; index++ {

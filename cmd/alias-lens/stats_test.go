@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )
@@ -329,7 +329,7 @@ func TestStatsViewsKeepNarrowFooterOnOneLine(t *testing.T) {
 }
 
 func TestEmbeddedStatsRefreshPreservesViewAndPeriod(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias ll='ls -al'\n"), 0o600); err != nil {
@@ -383,7 +383,7 @@ func TestStatsDashboardUsesTerminalCanvasForEveryTheme(t *testing.T) {
 }
 
 func TestStatsIgnorePrivateUsageDatabase(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias gs='git status'\n"), 0o600); err != nil {
@@ -412,7 +412,7 @@ func TestStatsIgnorePrivateUsageDatabase(t *testing.T) {
 }
 
 func TestMainTUIOpensStatsAndReturnsToAliases(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias ll='ls -al'\n"), 0o600); err != nil {

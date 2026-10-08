@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alias-lens/internal/providers"
 	"context"
 	"fmt"
 	"os"
@@ -8,14 +9,14 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 )
 
 type repoPickerModel struct {
-	repos    []RemoteRepo
+	repos    []providers.RemoteRepo
 	config   AppConfig
-	provider RepoProvider
+	provider providers.RepoProvider
 	warnings []string
 	query    string
 	cursor   int
@@ -38,8 +39,8 @@ func runRepoPicker(only string) error {
 	if err != nil {
 		return err
 	}
-	var provider RepoProvider
-	var repos []RemoteRepo
+	var provider providers.RepoProvider
+	var repos []providers.RemoteRepo
 	var warnings []string
 	if only != "" {
 		provider, config, err = connectRepoProvider(ctx, config, only)
@@ -192,12 +193,12 @@ func (m repoPickerModel) View() string {
 	return frame.renderWithFooter(page, footer)
 }
 
-func filterRemoteRepos(repos []RemoteRepo, query string) []RemoteRepo {
+func filterRemoteRepos(repos []providers.RemoteRepo, query string) []providers.RemoteRepo {
 	needle := strings.ToLower(strings.TrimSpace(query))
 	if needle == "" {
 		return repos
 	}
-	var filtered []RemoteRepo
+	var filtered []providers.RemoteRepo
 	for _, repo := range repos {
 		if strings.Contains(strings.ToLower(repo.FullName), needle) || strings.Contains(strings.ToLower(repo.Description), needle) || strings.Contains(repo.Provider, needle) {
 			filtered = append(filtered, repo)
@@ -206,7 +207,7 @@ func filterRemoteRepos(repos []RemoteRepo, query string) []RemoteRepo {
 	return filtered
 }
 
-func cloneAndConfigureCmd(ctx context.Context, config AppConfig, connected RepoProvider, repo RemoteRepo) tea.Cmd {
+func cloneAndConfigureCmd(ctx context.Context, config AppConfig, connected providers.RepoProvider, repo providers.RemoteRepo) tea.Cmd {
 	return func() tea.Msg {
 		home, err := os.UserHomeDir()
 		if err != nil {

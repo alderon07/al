@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/creack/pty/v2"
 )
 
 func TestTerminalDiffPTYAtNarrowAndWideWidths(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	repository := filepath.Join(home, "dotfiles")
@@ -100,7 +100,7 @@ func TestTerminalDiffPTYHelper(t *testing.T) {
 }
 
 func TestRevisionPreviewPTYBeforeRestore(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	path := filepath.Join(home, ".bash_aliases")

@@ -93,14 +93,31 @@ type InverseEdit struct {
 	Bytes          []byte
 }
 
+type TargetScope string
+
+const (
+	TargetScopePrivate    TargetScope = "private"
+	TargetScopeUser       TargetScope = "user"
+	TargetScopeRepository TargetScope = "repository"
+)
+
 type Target struct {
-	Path             string
-	ExpectedIdentity Identity
-	ExpectedSHA256   string
-	PlannedBytes     []byte
-	Inverse          *InverseEdit
-	Metadata         []MetadataField
-	Validation       []ValidationCommand
+	Path              string
+	Scope             TargetScope
+	Mode              uint32
+	PreserveSymlink   bool
+	RecoveryOrder     int
+	PromotionSource   string
+	Directory         bool
+	PromotionIdentity Identity
+	PromotionSHA256   string
+	ReferentIdentity  Identity
+	ExpectedIdentity  Identity
+	ExpectedSHA256    string
+	PlannedBytes      []byte
+	Inverse           *InverseEdit
+	Metadata          []MetadataField
+	Validation        []ValidationCommand
 }
 
 // ValidationCommand is data for the future transactional writer. This package
@@ -276,6 +293,8 @@ func copyActions(values []Action) []Action {
 	for index := range result {
 		target := &result[index].Target
 		target.ExpectedIdentity = copyIdentity(target.ExpectedIdentity)
+		target.PromotionIdentity = copyIdentity(target.PromotionIdentity)
+		target.ReferentIdentity = copyIdentity(target.ReferentIdentity)
 		target.PlannedBytes = append([]byte(nil), target.PlannedBytes...)
 		target.Metadata = append([]MetadataField(nil), target.Metadata...)
 		target.Validation = append([]ValidationCommand(nil), target.Validation...)
@@ -311,6 +330,8 @@ func normalizeInternal(result *OperationPlan) {
 	}
 	for index := range result.Actions {
 		metadataLess(result.Actions[index].Target.ExpectedIdentity.Metadata)
+		metadataLess(result.Actions[index].Target.PromotionIdentity.Metadata)
+		metadataLess(result.Actions[index].Target.ReferentIdentity.Metadata)
 		metadataLess(result.Actions[index].Target.Metadata)
 	}
 }

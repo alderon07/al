@@ -7,13 +7,13 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestBuildImportPlanReportsDuplicatesConflictsAndSyntax(t *testing.T) {
 	current := []byte("alias gs='git status'\nalias ll='ls -la'\n")
 	source := []byte("alias gs='git switch'\nalias status='git status'\nalias one='echo ok'\nalias two='echo ok'\nalias broken='unterminated\n")
-	plan := buildImportPlan(source, current, bashShellAdapter{})
+	plan := buildImportPlan(source, current, mustShellAdapter("bash"))
 
 	joined := ""
 	for _, issue := range plan.Issues {
@@ -47,7 +47,7 @@ func TestTabSelectsWithoutExecuting(t *testing.T) {
 }
 
 func TestImportApplyWritesOnceAndKeepsMetadata(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	aliasPath := filepath.Join(home, ".bash_aliases")

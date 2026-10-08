@@ -10,12 +10,12 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/creack/pty/v2"
 )
 
 func TestFavoriteToggleInPTY(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	path := filepath.Join(home, ".bash_aliases")
 	if err := os.WriteFile(path, []byte("alias sample='echo sample'\n"), 0o600); err != nil {
 		t.Fatal(err)

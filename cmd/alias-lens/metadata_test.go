@@ -39,8 +39,8 @@ func TestPlatformNameUsesCatalogIdentifiers(t *testing.T) {
 }
 
 func TestCanonicalMacOSPlatformKeepsBashLoginStartup(t *testing.T) {
-	home := t.TempDir()
-	paths, err := (bashShellAdapter{}).StartupPaths(home, "macos")
+	home := privateTestHome(t)
+	paths, err := (mustShellAdapter("bash")).StartupPaths(home, "macos")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"alias-lens/cmd/alias-lens/internal/exportfile"
+	"alias-lens/internal/exportfile"
 )
 
 type aliasExport struct {

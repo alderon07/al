@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestMakerCreditIsCenteredAtTheRequestedWidth(t *testing.T) {
@@ -47,7 +47,7 @@ func TestFooterMergesControlsAndNavigationWithoutRepeatingHelp(t *testing.T) {
 }
 
 func TestAliasAndStatsViewsPinMakerCreditToTheSameRow(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	applyFooterConfig(defaultFooterConfig())
 	t.Cleanup(func() {
@@ -71,7 +71,7 @@ func TestAliasAndStatsViewsPinMakerCreditToTheSameRow(t *testing.T) {
 }
 
 func TestFooterRemainsInsideViewportAcrossResizes(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	applyFooterConfig(defaultFooterConfig())
 	t.Cleanup(func() {
@@ -133,7 +133,7 @@ func TestEmptyMakerMessageReclaimsFooterRow(t *testing.T) {
 }
 
 func TestShortcutsSitImmediatelyAboveDottedRule(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	applyFooterConfig(FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "right", Tone: "quiet", Rule: "dots"})
 	t.Cleanup(func() {
@@ -247,7 +247,7 @@ func TestMainPagesShareContentColumnAndFullWidthFooter(t *testing.T) {
 }
 
 func assertMainPagesShareContentColumnAndFullWidthFooter(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	applyFooterConfig(FooterConfig{Message: "Made by Naqi", Icon: "none", Alignment: "center", Tone: "quiet", Rule: "thin"})
 	t.Cleanup(func() {
@@ -377,7 +377,7 @@ func TestPlainAliasListOmitsMakerCredit(t *testing.T) {
 }
 
 func TestMakerCreditFitsTheMinimumInteractiveTerminal(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	t.Cleanup(func() { applyTheme(defaultTheme()) })
 
@@ -510,7 +510,7 @@ func TestFooterRuleStaysInsidePageHeight(t *testing.T) {
 }
 
 func TestFooterConfigCommandsWriteAndResetSettings(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	if err := runConfigCommand([]string{"footer-message", "Built {icon} by Sam"}); err != nil {
 		t.Fatal(err)
 	}

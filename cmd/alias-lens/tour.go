@@ -3,9 +3,10 @@ package main
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -15,22 +16,27 @@ const (
 )
 
 func tourStatePath() (string, error) {
-	return syncDataPath("tour-state")
+	home, e := os.UserHomeDir()
+	if e != nil {
+		return "", e
+	}
+	return filepath.Join(home, ".local", "state", "alias-lens", "tour-state"), nil
 }
 
-func scheduleTour() error {
-	path, err := tourStatePath()
-	if err != nil {
-		return err
+func scheduleTour() error { return withMutation(scheduleTourInSession) }
+func scheduleTourInSession(session *mutationSession) error {
+	path, e := tourStatePath()
+	if e != nil {
+		return e
 	}
-	state, readErr := os.ReadFile(path)
-	if readErr == nil && strings.TrimSpace(string(state)) == tourSeen {
+	state, e := readManagedPrivateFile(path, 1024)
+	if e == nil && strings.TrimSpace(string(state)) == tourSeen {
 		return nil
 	}
-	if readErr != nil && !errors.Is(readErr, os.ErrNotExist) {
-		return readErr
+	if e != nil && !errors.Is(e, os.ErrNotExist) {
+		return e
 	}
-	return os.WriteFile(path, []byte(tourPending+"\n"), 0o600)
+	return session.writePrivate(path, []byte(tourPending+"\n"))
 }
 
 func tourShouldShow() bool {
@@ -38,16 +44,18 @@ func tourShouldShow() bool {
 	if err != nil {
 		return false
 	}
-	state, err := os.ReadFile(path)
+	state, err := readManagedPrivateFile(path, 1024)
 	return err == nil && strings.TrimSpace(string(state)) == tourPending
 }
 
 func markTourSeen() error {
-	path, err := tourStatePath()
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(tourSeen+"\n"), 0o600)
+	return withMutation(func(session *mutationSession) error {
+		path, e := tourStatePath()
+		if e != nil {
+			return e
+		}
+		return session.writePrivate(path, []byte(tourSeen+"\n"))
+	})
 }
 
 func (m model) updateTour(message tea.KeyMsg) (tea.Model, tea.Cmd) {

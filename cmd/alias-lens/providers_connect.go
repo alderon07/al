@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alias-lens/internal/providers"
 	"context"
 	"fmt"
 	"os"
@@ -11,11 +12,6 @@ import (
 )
 
 const bitbucketTokenURL = "https://id.atlassian.com/manage-profile/security/api-tokens"
-
-type connectableRepoProvider interface {
-	RepoProvider
-	Connect(context.Context) error
-}
 
 var readProviderSecret = func(prompt string) (string, error) {
 	if !term.IsTerminal(os.Stdin.Fd()) {
@@ -30,24 +26,30 @@ var readProviderSecret = func(prompt string) (string, error) {
 	return strings.TrimSpace(string(secret)), nil
 }
 
-func connectRepoProvider(ctx context.Context, config AppConfig, id string) (RepoProvider, AppConfig, error) {
+func connectRepoProvider(ctx context.Context, config AppConfig, id string) (providers.RepoProvider, AppConfig, error) {
 	settings := config.Providers[id]
-	var provider connectableRepoProvider
+	token := ""
 	switch id {
 	case "github":
 		settings.Host = defaultString(settings.Host, "github.com")
-		provider = &githubProvider{host: settings.Host, protocol: defaultString(settings.Protocol, "auto")}
-	case "bitbucket":
-		settings.Host = "bitbucket.org"
-		provider = &bitbucketProvider{workspaces: settings.Workspaces, protocol: defaultString(settings.Protocol, "auto")}
+		if err := connectGitHub(ctx, settings.Host); err != nil {
+			return nil, config, err
+		}
 	case "gitlab":
 		settings.Host = defaultString(settings.Host, "gitlab.com")
-		provider = &gitlabProvider{host: settings.Host, protocol: defaultString(settings.Protocol, "auto")}
+		hostProvider := providers.New(map[string]providers.Settings{"gitlab": {Enabled: true, Host: settings.Host}}, providers.Runtime{}).ByID("gitlab")
+		if err := connectGitLab(ctx, hostProvider.Host()); err != nil {
+			return nil, config, err
+		}
+	case "bitbucket":
+		settings.Host = "bitbucket.org"
+		var err error
+		token, err = connectBitbucket(ctx)
+		if err != nil {
+			return nil, config, err
+		}
 	default:
 		return nil, config, fmt.Errorf("unsupported provider %q", id)
-	}
-	if err := provider.Connect(ctx); err != nil {
-		return nil, config, err
 	}
 	settings.Enabled = true
 	settings.Protocol = defaultString(settings.Protocol, "auto")
@@ -58,35 +60,40 @@ func connectRepoProvider(ctx context.Context, config AppConfig, id string) (Repo
 	if err := saveConfig(config); err != nil {
 		return nil, config, err
 	}
-	return provider, config, nil
+	runtime := providers.Runtime{Transport: catalogProviderTransport}
+	if token != "" {
+		runtime.Getenv = func(key string) string {
+			if key == "BITBUCKET_API_TOKEN" {
+				return token
+			}
+			return os.Getenv(key)
+		}
+	}
+	return providers.New(providerSettings(config), runtime).ByID(id), config, nil
 }
-
-func (p *bitbucketProvider) Connect(context.Context) error {
+func connectBitbucket(ctx context.Context) (string, error) {
 	if token := strings.TrimSpace(os.Getenv("BITBUCKET_API_TOKEN")); token != "" {
-		p.token = token
-		return nil
+		return token, nil
 	}
 	fmt.Fprintln(os.Stderr, "Alias Lens: Bitbucket Cloud uses scoped API tokens.")
 	fmt.Fprintln(os.Stderr, "Create one with workspace read and repository read/write access:")
 	fmt.Fprintln(os.Stderr, bitbucketTokenURL)
 	token, err := readProviderSecret("Bitbucket API token: ")
 	if err != nil {
-		return fmt.Errorf("read Bitbucket API token: %w", err)
+		return "", fmt.Errorf("read Bitbucket API token: %w", err)
 	}
 	if token == "" {
-		return fmt.Errorf("Bitbucket API token cannot be empty")
+		return "", fmt.Errorf("Bitbucket API token cannot be empty")
 	}
-	p.token = token
-	return nil
+	return token, nil
 }
 
-func (p *gitlabProvider) Connect(ctx context.Context) error {
+func connectGitLab(ctx context.Context, host string) error {
 	if strings.TrimSpace(os.Getenv("GITLAB_TOKEN")) != "" {
 		return nil
 	}
-	host, err := p.hostname()
-	if err != nil {
-		return err
+	if host == "" {
+		return fmt.Errorf("host must be a valid HTTPS GitLab URL")
 	}
 	glab, err := exec.LookPath("glab")
 	if err != nil {
@@ -106,6 +113,29 @@ func (p *gitlabProvider) Connect(ctx context.Context) error {
 	}
 	if err := exec.CommandContext(ctx, glab, "auth", "status", "--hostname", host).Run(); err != nil {
 		return fmt.Errorf("GitLab CLI did not report an authenticated account after sign-in")
+	}
+	return nil
+}
+
+func connectGitHub(ctx context.Context, host string) error {
+	gh, err := exec.LookPath("gh")
+	if err != nil {
+		return fmt.Errorf("GitHub CLI is required; install gh, then rerun al repo github")
+	}
+	if err := exec.CommandContext(ctx, gh, "auth", "status", "--hostname", host).Run(); err == nil {
+		return nil
+	}
+
+	fmt.Fprintln(os.Stderr, "Alias Lens: GitHub sign-in is required. Opening GitHub CLI login...")
+	login := exec.CommandContext(ctx, gh, "auth", "login", "--hostname", host, "--web", "--git-protocol", "https")
+	login.Stdin = os.Stdin
+	login.Stdout = os.Stdout
+	login.Stderr = os.Stderr
+	if err := login.Run(); err != nil {
+		return fmt.Errorf("GitHub sign-in failed: %w", err)
+	}
+	if err := exec.CommandContext(ctx, gh, "auth", "status", "--hostname", host).Run(); err != nil {
+		return fmt.Errorf("GitHub CLI did not report an authenticated account after sign-in")
 	}
 	return nil
 }

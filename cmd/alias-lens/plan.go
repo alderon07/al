@@ -46,6 +46,9 @@ func runPlanCommand(arguments []string) (int, error) {
 }
 
 func buildRequestedPlan(arguments []string) (workflowplan.OperationPlan, error) {
+	if value, handled, err := buildCatalogRequestedPlan(arguments); handled || err != nil {
+		return value, err
+	}
 	switch {
 	case len(arguments) == 4 && arguments[0] == "config" && arguments[1] == "profile" && (arguments[2] == "add" || arguments[2] == "remove"):
 		return buildProfilePlan(arguments[2], arguments[3])

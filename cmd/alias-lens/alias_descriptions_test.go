@@ -8,7 +8,8 @@ import (
 )
 
 func TestAddAliasDescriptionsPreservesExistingCommentsAndMetadata(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	original := "# Show status my way\nalias gs='git status -sb'\n\n# al: tags=git\nalias gc='git commit'\nalias ll='ls -alF'\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
@@ -37,7 +38,8 @@ func TestAddAliasDescriptionsPreservesExistingCommentsAndMetadata(t *testing.T) 
 }
 
 func TestAddAliasDescriptionsImprovesOldGeneratedComments(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	original := "# Runs git add\nalias ga='git add'\n\n# My status format\nalias gs='git status -sb'\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
@@ -63,7 +65,8 @@ func TestAddAliasDescriptionsImprovesOldGeneratedComments(t *testing.T) {
 }
 
 func TestAddAliasDescriptionsDoesNothingWhenAllExist(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	original := []byte("# Show status\nalias gs='git status -sb'\n")
 	if err := os.WriteFile(path, original, 0o600); err != nil {
 		t.Fatal(err)

@@ -112,6 +112,8 @@ func inspectWorkflowStatus() workflowstate.Report {
 		inputs.Recovery = combineRecovery(
 			inspectRecovery(filepath.Join(home, ".local", "state", "alias-lens"), filepath.Join(home, ".local", "state", "alias-lens", "transactions")),
 			inspectRecovery(filepath.Join(home, ".config", "alias-lens"), filepath.Join(home, ".config", "alias-lens", "transactions")),
+			inspectWorkflowRecovery(filepath.Join(home, ".local", "state", "alias-lens")),
+			inspectStageRecovery(home),
 		)
 		if storedErr != nil {
 			inputs.Recovery.Blocked = true
@@ -157,7 +159,9 @@ func inspectWorkflowStatus() workflowstate.Report {
 			inputs.Shells = append(inputs.Shells, observation)
 		}
 	}
-	if inputs.Sync.Configured && configErr == nil {
+	observeLifecycleStatus(&inputs)
+	_, catalogEnrollmentErr := os.Lstat(catalogSyncPath())
+	if inputs.Sync.Configured && configErr == nil && errors.Is(catalogEnrollmentErr, os.ErrNotExist) {
 		inputs.Sync.BaseSHA256 = stored.CatalogSync.BaseCatalogSHA256
 		inputs.Sync.LocalSHA256 = catalogHash
 		path := stored.CatalogSync.RepositoryPath
@@ -181,6 +185,7 @@ func inspectWorkflowStatus() workflowstate.Report {
 			inputs.Sync.RemoteSHA256 = remoteHash
 		}
 	}
+	observeCatalogSyncStatus(&inputs)
 	return workflowstate.Resolve(inputs)
 }
 
@@ -307,6 +312,77 @@ func inspectRecovery(root, directory string) workflowstate.RecoveryObservation {
 				continue
 			}
 			result.Required = true
+		}
+	}
+	return result
+}
+
+func inspectWorkflowRecovery(root string) workflowstate.RecoveryObservation {
+	dir := filepath.Join(root, "workflows")
+	if _, e := os.Lstat(dir); errors.Is(e, os.ErrNotExist) {
+		return workflowstate.RecoveryObservation{}
+	}
+	identity, e := transaction.InspectWorkflowDirectoryMetadata(dir)
+	if e != nil || identity.Mode != 0o700 {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	entries, e := os.ReadDir(dir)
+	if e != nil || len(entries) > 20000 {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	result := workflowstate.RecoveryObservation{}
+	for _, entry := range entries {
+		if filepath.Ext(entry.Name()) != ".workflow" {
+			continue
+		}
+		result.Required = true
+		if entry.IsDir() {
+			result.Blocked = true
+			continue
+		}
+		if _, _, e := transaction.ReadWorkflowJournal(root, filepath.Join(dir, entry.Name())); e != nil {
+			result.Blocked = true
+		}
+	}
+	return result
+}
+func inspectStageRecovery(home string) workflowstate.RecoveryObservation {
+	dir := filepath.Join(home, ".local", "state", "alias-lens", "catalog-stages")
+	if _, e := os.Lstat(dir); errors.Is(e, os.ErrNotExist) {
+		return workflowstate.RecoveryObservation{}
+	}
+	identity, e := transaction.InspectWorkflowDirectoryMetadata(dir)
+	if e != nil || identity.Mode != 0o700 {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	entries, e := os.ReadDir(dir)
+	if e != nil || len(entries) > 1000 {
+		return workflowstate.RecoveryObservation{Blocked: true}
+	}
+	result := workflowstate.RecoveryObservation{}
+	for _, entry := range entries {
+		result.Required = true
+		data, e := readManagedPrivateFile(filepath.Join(dir, entry.Name()), 1<<20)
+		if e != nil || entry.IsDir() {
+			result.Blocked = true
+			continue
+		}
+		intent, e := decodeCatalogStageIntent(data, entry.Name(), home)
+		if e != nil || inspectManagedStageParents(intent) != nil {
+			result.Blocked = true
+			continue
+		}
+		current := observePlanIdentity(intent.Root)
+		if current.FileType == "missing" {
+			continue
+		}
+		if current.FileType != "directory" || current.Device != intent.Device || current.Inode != intent.Inode || current.Owner != uint64(os.Geteuid()) || current.Mode != 0o700 {
+			result.Blocked = true
+			continue
+		}
+		marker, e := readManagedPrivateFile(filepath.Join(intent.Root, ".operation"), 256)
+		if e != nil || string(marker) != intent.ID+"\n" {
+			result.Blocked = true
 		}
 	}
 	return result

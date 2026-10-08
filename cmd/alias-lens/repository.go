@@ -26,15 +26,35 @@ func configureRepository(path string) error {
 	}
 	config.Repository = absolute
 	config.AutoSync.Enabled = true
-	if err := saveConfig(config); err != nil {
+	if err := withMutation(func(session *mutationSession) error {
+		fresh, err := loadConfig()
+		if err != nil {
+			return err
+		}
+		fresh.Repository = absolute
+		fresh.AutoSync.Enabled = true
+		return saveConfigInSession(session, fresh)
+	}); err != nil {
 		return err
 	}
 	return ensureWatchProcess()
 }
 
 func syncRepository(push bool) (string, error) {
+	var result string
+	err := withMutation(func(session *mutationSession) error {
+		var err error
+		result, err = syncRepositoryInSession(session, push)
+		return err
+	})
+	return result, err
+}
+func syncRepositoryInSession(session *mutationSession, push bool) (string, error) {
 	config, err := loadConfig()
 	if err != nil {
+		return "", err
+	}
+	if err := rejectCatalogFallbackSync(config); err != nil {
 		return "", err
 	}
 	if config.Repository == "" {
@@ -53,7 +73,7 @@ func syncRepository(push bool) (string, error) {
 			return "", fmt.Errorf("sync conflict is unresolved; repository was not changed; run al diff, then use al sync --pull to import remote-only aliases or al sync --push to keep the local alias file")
 		}
 	}
-	return syncRepositoryFiles(config, sourcePath, push)
+	return syncRepositoryFilesInSession(session, config, sourcePath, push)
 }
 
 type AliasConflict struct {
@@ -262,8 +282,20 @@ func writeRepositoryDiffGuidance(output io.Writer, localOnly, remoteOnly, change
 }
 
 func pullRepository() (string, error) {
+	var result string
+	err := withMutation(func(session *mutationSession) error {
+		var err error
+		result, err = pullRepositoryInSession(session)
+		return err
+	})
+	return result, err
+}
+func pullRepositoryInSession(session *mutationSession) (string, error) {
 	config, source, target, err := repositoryPaths()
 	if err != nil {
+		return "", err
+	}
+	if err := rejectCatalogFallbackSync(config); err != nil {
 		return "", err
 	}
 	if output, err := gitOutput("-C", config.Repository, "pull", "--ff-only"); err != nil {
@@ -316,7 +348,7 @@ func pullRepository() (string, error) {
 		additions = append(additions, aliasAddition{Name: name, Command: command, Description: "Imported from the configured repository"})
 	}
 	if len(additions) > 0 {
-		if err := addAliasesToFile(source, additions); err != nil {
+		if err := addAliasesToFileInSession(session, source, additions); err != nil {
 			return "", err
 		}
 	}
@@ -340,6 +372,15 @@ func pullRepository() (string, error) {
 }
 
 func syncRepositoryFiles(config AppConfig, sourcePath string, push bool) (string, error) {
+	var result string
+	err := withMutation(func(session *mutationSession) error {
+		var err error
+		result, err = syncRepositoryFilesInSession(session, config, sourcePath, push)
+		return err
+	})
+	return result, err
+}
+func syncRepositoryFilesInSession(session *mutationSession, config AppConfig, sourcePath string, push bool) (string, error) {
 	relative, err := cleanRepositoryRelativePath(config.AliasFile, "alias_file")
 	if err != nil {
 		return "", err

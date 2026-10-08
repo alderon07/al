@@ -6,11 +6,12 @@ import (
 	"strings"
 	"unicode"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 var shortcutActionNames = map[shortcutAction]string{
-	shortcutHelp: "help", shortcutStats: "stats", shortcutSettings: "settings",
+	shortcutCatalog: "catalog",
+	shortcutHelp:    "help", shortcutStats: "stats", shortcutSettings: "settings",
 	shortcutThemes: "themes", shortcutRevisions: "revisions", shortcutSync: "sync",
 	shortcutHealth: "health", shortcutAdd: "add", shortcutEdit: "edit",
 	shortcutContext: "context", shortcutFavorite: "favorite", shortcutDelete: "delete", shortcutRefresh: "refresh",

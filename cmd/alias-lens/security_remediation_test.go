@@ -2,9 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
-	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,6 +9,7 @@ import (
 )
 
 func TestTerminalSafeViewsEscapeRepositoryControlledText(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	malicious := "name\x1b]52;c;payload\a\u202e"
 	alias := Alias{
 		Name:        malicious,
@@ -52,7 +50,8 @@ func plainAliasOutput(alias Alias) string {
 }
 
 func TestRepositoryFileLimitsAndBatchAliasUpdate(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	oversized := filepath.Join(directory, "oversized")
 	file, err := os.OpenFile(oversized, os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
@@ -97,52 +96,9 @@ func TestRepositoryFileLimitsAndBatchAliasUpdate(t *testing.T) {
 	}
 }
 
-func TestProviderResponseAndPaginationLimits(t *testing.T) {
-	var target any
-	if err := decodeProviderResponse(bytes.NewReader(bytes.Repeat([]byte("x"), providerResponseLimit+1)), &target); err == nil || !strings.Contains(err.Error(), "exceeds") {
-		t.Fatalf("oversized provider response was accepted: %v", err)
-	}
-
-	if _, _, err := commandOutputBounded(context.Background(), 1024, "sh", "-c", "while :; do printf x; done"); err == nil || !strings.Contains(err.Error(), "exceeds") {
-		t.Fatalf("oversized CLI output was accepted: %v", err)
-	}
-
-	previousGetJSON := providerGetJSON
-	calls := 0
-	providerGetJSON = func(_ context.Context, endpoint, _, _ string, target any) error {
-		calls++
-		payload := fmt.Sprintf(`{"next":%q,"values":[]}`, endpoint)
-		return json.Unmarshal([]byte(payload), target)
-	}
-	t.Cleanup(func() { providerGetJSON = previousGetJSON })
-	provider := bitbucketProvider{workspaces: []string{"workspace"}, token: "test"}
-	if _, err := provider.List(context.Background()); err == nil || !strings.Contains(err.Error(), "repeated") {
-		t.Fatalf("pagination cycle was accepted: %v", err)
-	}
-	if calls != 1 {
-		t.Fatalf("pagination cycle made %d requests, want 1", calls)
-	}
-
-	workspaces := make([]string, providerPageLimit+1)
-	for index := range workspaces {
-		workspaces[index] = fmt.Sprintf("workspace-%d", index)
-	}
-	calls = 0
-	providerGetJSON = func(_ context.Context, _, _, _ string, target any) error {
-		calls++
-		return json.Unmarshal([]byte(`{"values":[]}`), target)
-	}
-	provider = bitbucketProvider{workspaces: workspaces, token: "test"}
-	if _, err := provider.List(context.Background()); err == nil || !strings.Contains(err.Error(), "exceeds") {
-		t.Fatalf("aggregate pagination limit was not enforced: %v", err)
-	}
-	if calls != providerPageLimit {
-		t.Fatalf("aggregate pagination limit made %d requests, want %d", calls, providerPageLimit)
-	}
-}
-
 func TestManagedRepositoryPathsAndStartupBackupsArePrivate(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	root := filepath.Join(directory, "repos")
 	target := filepath.Join(root, "github", "owner", "repo")
 	if err := os.MkdirAll(root, 0o755); err != nil {
@@ -176,6 +132,12 @@ func TestManagedRepositoryPathsAndStartupBackupsArePrivate(t *testing.T) {
 	if err := os.WriteFile(backup, []byte("old backup\n"), 0o666); err != nil {
 		t.Fatal(err)
 	}
+	if err := writeStartupFile(startup, []byte("original\n"), []byte("updated\n")); err == nil {
+		t.Fatal("unsafe existing backup metadata accepted")
+	}
+	if err := os.Chmod(backup, 0o600); err != nil {
+		t.Fatal(err)
+	}
 	if err := writeStartupFile(startup, []byte("original\n"), []byte("updated\n")); err != nil {
 		t.Fatal(err)
 	}
@@ -186,6 +148,7 @@ func TestManagedRepositoryPathsAndStartupBackupsArePrivate(t *testing.T) {
 }
 
 func TestRepositoryPushValidatesEveryOutgoingPathAndBlob(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	t.Run("rejects unrelated path", func(t *testing.T) {
 		repository, _ := setupPushRepository(t)
 		if err := os.WriteFile(filepath.Join(repository, "notes.txt"), []byte("unrelated\n"), 0o600); err != nil {
@@ -354,7 +317,7 @@ func TestRepositoryPushValidatesEveryOutgoingPathAndBlob(t *testing.T) {
 
 func setupPushRepository(t *testing.T) (string, string) {
 	t.Helper()
-	directory := t.TempDir()
+	directory := privateTestHome(t)
 	bare := filepath.Join(directory, "remote.git")
 	repository := filepath.Join(directory, "repository")
 	runGit(t, directory, "init", "--bare", bare)
@@ -376,6 +339,7 @@ func setupPushRepository(t *testing.T) (string, string) {
 }
 
 func TestReleaseWorkflowPinsPrivilegedDependencies(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	contents, err := os.ReadFile(filepath.Join("..", "..", ".github", "workflows", "release.yml"))
 	if err != nil {
 		t.Fatal(err)

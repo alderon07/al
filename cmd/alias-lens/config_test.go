@@ -10,7 +10,7 @@ import (
 )
 
 func TestLoadConfigRejectsCorruptionWithoutChangingFile(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	path := filepath.Join(home, ".config", "alias-lens", "config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -38,7 +38,7 @@ func TestLoadConfigRejectsMissingAndOldVersionsWithoutChangingFile(t *testing.T)
 		[]byte("{\n  \"shell\": \"zsh\",\n  \"alias_file\": \".zsh_aliases\"\n}\n"),
 		[]byte("{\n  \"version\": 1,\n  \"alias_file\": \".bash_aliases\",\n  \"shell\": \"bash\"\n}\n"),
 	} {
-		home := t.TempDir()
+		home := privateTestHome(t)
 		t.Setenv("HOME", home)
 		path := filepath.Join(home, ".config", "alias-lens", "config.json")
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -86,7 +86,7 @@ func TestValidateAppConfigChecksProfiles(t *testing.T) {
 }
 
 func TestLoadConfigDoesNotWriteDetectedShortcutDefault(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	path := filepath.Join(home, ".config", "alias-lens", "config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -111,7 +111,7 @@ func TestLoadConfigDoesNotWriteDetectedShortcutDefault(t *testing.T) {
 }
 
 func TestLoadConfigRejectsNewerSchemaWithoutChangingFile(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	path := filepath.Join(home, ".config", "alias-lens", "config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -136,7 +136,7 @@ func TestLoadConfigRejectsNewerSchemaWithoutChangingFile(t *testing.T) {
 }
 
 func TestSaveConfigWritesCurrentVersionPrivately(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	config := defaultConfig()
 	config.Version = 0

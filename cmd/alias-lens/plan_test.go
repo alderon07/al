@@ -12,7 +12,7 @@ import (
 )
 
 func TestProfilePlanDoesNotWriteAndNamesAffectedEntries(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	directory := filepath.Join(home, ".config", "alias-lens")
 	if err := os.MkdirAll(directory, 0o700); err != nil {
@@ -53,7 +53,7 @@ func TestProfilePlanDoesNotWriteAndNamesAffectedEntries(t *testing.T) {
 }
 
 func TestProfileCommandAppliesThroughTransaction(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	if err := saveConfig(defaultConfig()); err != nil {
 		t.Fatal(err)
@@ -68,22 +68,27 @@ func TestProfileCommandAppliesThroughTransaction(t *testing.T) {
 	if len(observed.Config.Profiles) != 1 || observed.Config.Profiles[0] != "work" {
 		t.Fatalf("profiles = %#v", observed.Config.Profiles)
 	}
-	configDirectory := filepath.Join(home, ".config", "alias-lens")
-	entries, err := os.ReadDir(filepath.Join(configDirectory, "transactions"))
-	if err != nil {
-		t.Fatal(err)
+	directory := filepath.Join(home, ".local", "state", "alias-lens", "workflows")
+	entries, e := os.ReadDir(directory)
+	if e != nil {
+		t.Fatal(e)
 	}
-	if len(entries) != 0 {
-		t.Fatalf("committed journal was not cleaned up: %#v", entries)
+	backups := 0
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".workflow") {
+			t.Fatalf("committed journal remains: %s", entry.Name())
+		}
+		if strings.HasSuffix(entry.Name(), ".backup") {
+			backups++
+		}
 	}
-	backups, err := os.ReadDir(filepath.Join(configDirectory, "backups"))
-	if err != nil || len(backups) != 1 {
-		t.Fatalf("private backup count = %d, err %v", len(backups), err)
+	if backups != 1 {
+		t.Fatalf("private backup count=%d", backups)
 	}
 }
 
 func TestApplyPrivatePlanRejectsChangedPreview(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	if err := saveConfig(defaultConfig()); err != nil {
 		t.Fatal(err)
@@ -114,7 +119,7 @@ func TestApplyPrivatePlanRejectsChangedPreview(t *testing.T) {
 }
 
 func TestApplyPrivatePlanRejectsSameBytesAtNewIdentity(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	if err := saveConfig(defaultConfig()); err != nil {
 		t.Fatal(err)

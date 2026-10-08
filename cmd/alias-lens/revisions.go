@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alias-lens/internal/transaction"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,18 +18,37 @@ type Revision struct {
 }
 
 func saveRevision(aliasPath string, contents []byte) error {
-	directory, err := revisionDirectory(aliasPath)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return err
+	return withMutation(func(session *mutationSession) error { return saveRevisionInSession(session, aliasPath, contents) })
+}
+func saveRevisionInSession(session *mutationSession, aliasPath string, contents []byte) error {
+	directory, e := revisionDirectory(aliasPath)
+	if e != nil {
+		return e
 	}
 	id := time.Now().UTC().Format("20060102T150405.000000000Z")
-	return os.WriteFile(filepath.Join(directory, id+filepath.Base(aliasPath)), contents, 0o600)
+	path := filepath.Join(directory, id+filepath.Base(aliasPath))
+	home, e := os.UserHomeDir()
+	if e != nil {
+		return e
+	}
+	if directory == filepath.Join(home, ".local", "share", "alias-lens", "revisions") || directory == filepath.Join(session.stateRoot, "catalog-revisions") {
+		return session.writePrivate(path, contents)
+	}
+	if e = transaction.EnsureWorkflowDirectory(directory, true); e != nil {
+		return e
+	}
+	operation, e := newOperationID()
+	if e != nil {
+		return e
+	}
+	spec := transaction.WorkflowSpec{OperationID: operation, StateRoot: session.stateRoot, PrivateRoots: []string{directory}, Targets: []transaction.WorkflowTarget{{Path: path, Role: transaction.WorkflowPrivate, Planned: contents, Mode: 0o600, RecoveryOrder: 3}}}
+	return session.applySpec(spec)
 }
 
 func revisionDirectory(aliasPath string) (string, error) {
+	if directory, ok := catalogRevisionDirectory(aliasPath); ok {
+		return directory, nil
+	}
 	configuredPath, err := aliasesPath()
 	if err == nil {
 		configuredPath, _ = filepath.Abs(configuredPath)
@@ -48,6 +68,16 @@ func listRevisions(aliasPath string) ([]Revision, error) {
 	directory, err := revisionDirectory(aliasPath)
 	if err != nil {
 		return nil, err
+	}
+	if _, e := os.Lstat(directory); os.IsNotExist(e) {
+		return nil, nil
+	}
+	directoryIdentity, e := transaction.InspectWorkflowDirectory(directory)
+	if e != nil {
+		return nil, e
+	}
+	if directoryIdentity.Mode != 0o700 {
+		return nil, transaction.ErrUnsafePath
 	}
 	entries, err := os.ReadDir(directory)
 	if os.IsNotExist(err) {
@@ -73,7 +103,7 @@ func listRevisions(aliasPath string) ([]Revision, error) {
 }
 
 func runRevisionHistory() error {
-	path, err := aliasesPath()
+	path, err := editableEntriesPath()
 	if err != nil {
 		return err
 	}
@@ -92,7 +122,7 @@ func runRevisionHistory() error {
 }
 
 func restoreRevision(id string) error {
-	path, err := aliasesPath()
+	path, err := editableEntriesPath()
 	if err != nil {
 		return err
 	}
@@ -125,13 +155,18 @@ func restoreRevision(id string) error {
 }
 
 func restoreRevisionFile(aliasPath string, revision Revision) error {
-	restored, err := os.ReadFile(revision.Path)
+	restored, err := readManagedPrivateFile(revision.Path, aliasFileLimit)
 	if err != nil {
 		return err
 	}
-	current, mode, _, err := readAliasFile(aliasPath)
-	if err != nil {
-		return err
+	if _, ok := catalogRevisionDirectory(aliasPath); ok {
+		return restoreCatalogBytes(restored)
 	}
-	return writeAliasFile(aliasPath, current, restored, mode)
+	return withMutation(func(session *mutationSession) error {
+		current, mode, _, err := readAliasFile(aliasPath)
+		if err != nil {
+			return err
+		}
+		return writeAliasFileInSession(session, aliasPath, current, restored, mode)
+	})
 }

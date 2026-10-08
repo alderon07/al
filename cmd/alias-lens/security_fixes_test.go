@@ -11,7 +11,8 @@ import (
 )
 
 func TestAutomaticSyncDoesNotActivateRemoteAliasBytes(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	bare := filepath.Join(home, "remote.git")
@@ -73,7 +74,8 @@ func TestAutomaticSyncDoesNotActivateRemoteAliasBytes(t *testing.T) {
 }
 
 func TestMissingAliasFileDoesNotRestoreRemoteBytes(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	repository := filepath.Join(home, "dotfiles")
@@ -99,7 +101,8 @@ func TestMissingAliasFileDoesNotRestoreRemoteBytes(t *testing.T) {
 }
 
 func TestManualPullStillImportsRemoteAliasesWithoutTopLevelCode(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	bare := filepath.Join(home, "remote.git")
@@ -148,7 +151,8 @@ func TestManualPullStillImportsRemoteAliasesWithoutTopLevelCode(t *testing.T) {
 }
 
 func TestTrackedFileValidationRejectsAliasLensConfigIdentity(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	config := defaultConfig()
 	if err := saveConfig(config); err != nil {
@@ -172,7 +176,8 @@ func TestTrackedFileValidationRejectsAliasLensConfigIdentity(t *testing.T) {
 }
 
 func TestLoadConfigRejectsInjectedTrackedScope(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	path, err := configPath()
 	if err != nil {
@@ -196,7 +201,8 @@ func TestLoadConfigRejectsInjectedTrackedScope(t *testing.T) {
 }
 
 func TestRepositoryWriteRejectsParentSymlink(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	repository := filepath.Join(directory, "dotfiles")
 	outside := filepath.Join(directory, "outside")
 	if err := os.Mkdir(repository, 0o755); err != nil {
@@ -223,7 +229,8 @@ func TestRepositoryWriteRejectsParentSymlink(t *testing.T) {
 }
 
 func TestRepositoryWriteRejectsSymlinkInsertedAfterValidation(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	repository := filepath.Join(directory, "dotfiles")
 	outside := filepath.Join(directory, "outside")
 	if err := os.Mkdir(repository, 0o755); err != nil {
@@ -248,7 +255,8 @@ func TestRepositoryWriteRejectsSymlinkInsertedAfterValidation(t *testing.T) {
 }
 
 func TestAutomaticSyncDoesNotApplyRemoteTrackedFile(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	localPath := filepath.Join(home, ".bashrc")
 	repository := filepath.Join(home, "dotfiles")
@@ -282,7 +290,8 @@ func TestAutomaticSyncDoesNotApplyRemoteTrackedFile(t *testing.T) {
 }
 
 func TestOutgoingAliasHistoryIsScannedBeforePush(t *testing.T) {
-	repository := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	repository := privateTestHome(t)
 	runGit(t, repository, "init")
 	runGit(t, repository, "config", "user.email", "alias-lens@example.test")
 	runGit(t, repository, "config", "user.name", "Alias Lens Test")
@@ -310,6 +319,7 @@ func TestOutgoingAliasHistoryIsScannedBeforePush(t *testing.T) {
 }
 
 func TestCredentialFileNamesAndFormatsAreRejected(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	for _, name := range []string{".netrc", ".npmrc", "production.env", "AUTH_TOKEN.txt", ".pypirc", ".pgpass", ".envrc"} {
 		if !sensitiveConfigPath(name) {
 			t.Errorf("credential filename %s was accepted", name)
@@ -325,7 +335,7 @@ func TestCredentialFileNamesAndFormatsAreRejected(t *testing.T) {
 			t.Errorf("credential format was not detected: %q", contents)
 		}
 	}
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	credential := filepath.Join(home, ".netrc")
 	link := filepath.Join(home, "ordinary-settings")
@@ -341,7 +351,8 @@ func TestCredentialFileNamesAndFormatsAreRejected(t *testing.T) {
 }
 
 func TestWebAPIRequiresAuthenticatedLoopbackRequest(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), []byte("alias safe='git status'\n"), 0o600); err != nil {

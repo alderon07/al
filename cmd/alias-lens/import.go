@@ -52,6 +52,16 @@ func runImportCommand(arguments []string) error {
 	if err != nil {
 		return err
 	}
+	managed, err := catalogManagedEditing()
+	if err != nil {
+		return err
+	}
+	if managed {
+		current, err = catalogImportCurrent()
+		if err != nil {
+			return err
+		}
+	}
 	plan := buildImportPlan(source, current, activeShellAdapter())
 	native, err := checkImportSyntax(source, activeShellAdapter())
 	if err != nil {
@@ -72,6 +82,13 @@ func runImportCommand(arguments []string) error {
 	}
 	if len(plan.Add) == 0 {
 		fmt.Println("No aliases need to be imported.")
+		return nil
+	}
+	if managed {
+		if err := importCatalogAliases(plan.Add); err != nil {
+			return err
+		}
+		cliResult(fmt.Sprintf("Imported %d catalog entries. Review with al catalog enable.", len(plan.Add)))
 		return nil
 	}
 	info, err := os.Stat(aliasPath)

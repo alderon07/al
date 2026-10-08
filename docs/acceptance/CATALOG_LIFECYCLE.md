@@ -1,114 +1,67 @@
-# Complete catalog mode for Bash and Zsh
+# Catalog lifecycle acceptance
 
-Status: proposed for review on 2026-09-27. This document defines the remaining opt-in catalog workflow and its acceptance criteria. Implementation of activation and rollback starts after review of the transaction contract and its test mapping. The phase 4 WSL restart run and native platform checks remain release gates.
+Approved for implementation on 2026-10-03. [CATALOG_PLAN.md](../CATALOG_PLAN.md) defines the complete delivery order. [CATALOG_BOOTSTRAP.md](CATALOG_BOOTSTRAP.md), [CATALOG_STORAGE.md](CATALOG_STORAGE.md), [CATALOG_TRANSACTION.md](CATALOG_TRANSACTION.md), [CATALOG_SHELL_RUNTIME.md](CATALOG_SHELL_RUNTIME.md), and [CATALOG_SYNC.md](CATALOG_SYNC.md) freeze the detailed contracts and test mappings. Native macOS and WSL evidence remains a release gate.
 
-This document implements the decisions in [Shell-neutral alias architecture](../SHELL_NEUTRAL_ARCHITECTURE.md) and [State, planning, and portability specification](../STATE_WORKFLOW_SPEC.md). Those documents control any case this one does not cover. The existing `al catalog preview`, `import`, `shadow`, and `diff` commands keep their meanings.
+## Guided operation
 
-## Goal and current state
+`al init SOURCE [--shell bash|zsh] [--catalog-path PATH] [--apply]` and `al catalog enable [--shell bash|zsh] [--apply]` compose discovery, structural validation, exact native review, ownership review, final plan confirmation, and application. Individual review, approve, adopt, rollback, and plan commands remain available. Decisions stay in memory until final confirmation. Cancellation saves none. Noninteractive application can use existing matching decisions and cannot approve new code or take over an unrelated collision.
 
-The complete opt-in workflow lets a user import aliases, review native implementations, enable catalog mode for Bash or Zsh, edit catalog entries, sync the catalog, and roll back offline. The Bubble Tea interface remains the default way to browse and edit entries. Existing installations stay in legacy mode until the user enables a shell explicitly.
+Approval binds entry ID, shell, name, kind, native implementation hash, and renderer. Changes to any bound value require new review. Ownership binds the exact native input identity, complete file hash, and source range. An unrelated native edit requires renewed ownership review.
 
-The current code has catalog format 2, import, shadow inspection, semantic comparison, condition resolution, rendering, native approval keys, state reporting, a three-way merge function, and a journal for private files under one directory. It has no catalog loader, active generation, adoption command, native review command, catalog editor, catalog sync path, or catalog rollback. `applyPrivatePlan` cannot cover a startup file and a native alias file in one transaction. Activation must use a new shared workflow transaction before either file changes.
+## Retained native fallbacks
 
-One-command bootstrap and shell completion installation use the same planned writer when they need it. They do not determine whether catalog mode is usable, so they follow the core workflow. Fish, automatic migration, and making catalog mode the default for new installations follow the separate rollout gates in the architecture.
+Adoption keeps the original native declaration and records permission to manage that exact fallback. Later reviewed enablement refreshes it; deliberate rename, deletion, and profile exclusion update or remove only its enrolled range. New catalog-only entries gain no fallback automatically. The original pre-catalog native and startup bytes remain in an immutable offline rollback record independently of later refreshes.
 
-Catalog format 2 permits portable external commands and Bash or Zsh native implementations. A typed `change_directory` entry is a separate catalog format change. It needs its own path semantics, renderer contract, and acceptance criteria before any shell adapter supports it.
+A missing helper, pointer, or generation leaves the sourced native definitions available. Native drift declines the overlay and directs the user to `al catalog enable`. A failed replacement for an installed entry blocks the entire re-enable operation and preserves the previous generation and fallbacks. Initial installation may omit well-formed new entries needing approval or an unavailable executable; malformed data and unsafe declarations block application.
 
-## Ownership and paths
+## Local records and rendering
 
-| Path | Owner and purpose |
+| Path | Contract |
 | --- | --- |
-| `~/.config/alias-lens/catalog.json` | User's declared catalog. The source for catalog edits and catalog sync. |
-| `~/.config/alias-lens/generated/<shell>/<hash>.<ext>` | Immutable Alias Lens output for one shell. |
-| `~/.config/alias-lens/generated/<shell>/active` | Private regular file containing one generation hash. The startup loader reads it. |
-| `~/.bash_aliases` or `~/.zsh_aliases` | User's native file. Unadopted entries and the current `al` shell integration remain here. |
-| Bash or Zsh startup file | User's file containing one exact Alias Lens loader block. |
-| `~/.local/state/alias-lens/catalog-state.json` | Local installed-shell and catalog-sync hashes. No command bodies. |
-| `~/.local/state/alias-lens/native-approvals.json` | Local content-bound approvals. No command bodies. |
-| `~/.local/state/alias-lens/adoptions.json` | Local, inactive removal intents. No command bodies. |
-| `~/.local/state/alias-lens/catalog-snapshots/` | Canonical catalog bytes needed for installed comparison and merge bases. |
-| `~/.local/state/alias-lens/rollback/` | Private inverse edits and exact original bytes needed for offline rollback. |
-| `~/.local/state/alias-lens/transactions/` | Recovery journals for multi-path workflow changes. |
+| `~/.config/alias-lens/catalog.json` | Declared catalog, format 2; only portable catalog data is synchronized. |
+| `~/.config/alias-lens/generated/<shell>/<id>.{sh,json}` | Immutable complete shell file and canonical manifest. |
+| `~/.config/alias-lens/generated/<shell>/active` | Exactly 64 lowercase hexadecimal bytes and one line feed. |
+| `~/.local/state/alias-lens/catalog-installed.json` | Private format 1 installed records, generation and rollback identity, all startup routes. |
+| `~/.local/state/alias-lens/native-approvals.json` | Private approval format 2, exact content/name-bound keys. |
+| `~/.local/state/alias-lens/adoptions.json` | Private format 1 exact ownership ranges and fallback bytes. |
+| `~/.local/state/alias-lens/catalog-snapshots/` | Canonical source snapshots referenced by installed packages. |
+| `~/.local/state/alias-lens/rollback/` | Original enrollment baseline and private inverse payloads. |
+| `~/.local/state/alias-lens/workflows/` | Durable multi-target workflow format 2 journals and recovery progress. |
+| `~/.local/state/alias-lens/mutation.lock` | One persistent OS-backed mutation lock. |
+| `~/.config/alias-lens/catalog-sync.json` | Exact repository path, saved semantic base, pinned revision, and push intent. |
+| `~/.config/alias-lens/catalog-conflicts/` | Private base/local/remote conflict bundles. |
 
-Alias Lens synchronizes only `catalog.json` for catalog mode. It does not synchronize generations, approvals, profiles, adoption intents, rollback records, or local state. A legacy shell keeps its native alias file as a separate sync unit.
+The active renderer IDs are `bash/v2` and `zsh/v2`. Shadow renderer v1 meanings and golden outputs remain stable. Public status, plan, and semantic-diff JSON remain version 1. Private codecs reject duplicate and unknown keys, unsupported versions, invalid hashes/IDs/timestamps, unsafe paths, and oversized documents.
 
-### Installed state record
+A generation identity covers the source catalog hash, machine resolution inputs, exact installed entry IDs and declarations, approvals, executable paths, and expected native-input hash. Complete file bytes have their own digest. Timestamps are excluded from identity. Immutable files under an existing identity cannot be replaced with different bytes.
 
-`catalog-state.json` keeps schema version 1. Each `installed_shells` value has the existing `active_generation_sha256`, `source_catalog_sha256`, `resolved_state_sha256`, and `loader_sha256` fields. It gains `rollback_record_id`, `native_after_sha256`, and `startup_after_sha256`. The first points to a private rollback record. The hashes identify the exact native and startup files after activation. An empty `rollback_record_id` is omitted. The state decoder rejects unknown fields, duplicate shell keys, unsupported versions, invalid hashes, and unsafe record IDs before any mutation.
+Portable commands resolve an external absolute executable in Go using captured `PATH`; empty and relative components are rejected. Application rechecks the selected path. Native declarations require structural validation as one intended declaration without extra top-level code, redirection, or definition-time expansion. Protected names and ambiguous alias dependencies block application. Isolated shell syntax validation supplements this structural check.
 
-`adoptions.json` has schema version 1 and an `intents` array sorted by shell, source path, and byte offset. Each intent contains `entry_id`, `shell`, `source_path`, `source_sha256`, `start_byte`, `end_byte`, `range_sha256`, and `implementation_sha256`. Offsets refer to the exact source bytes inspected by `al catalog shadow`. The file contains no source lines. A source hash or catalog implementation change invalidates the intent. Invalid intents do not block unrelated catalog entries.
+## Startup routes and handoff
 
-A rollback record contains the shell, operation ID, native path and expected post-enable hash, startup path and exact managed-block hashes, the previous pointer value or absence, the previous installed-state record or absence, and paths and hashes of private inverse payloads. The payloads contain exact removed native byte ranges and the prior owned startup block. A rollback record never depends on the current catalog, a repository, or a network response. Its format, field order, and checksum vectors are frozen in a golden test before activation code lands.
+`ShellAdapter` discovers and plans startup paths. Bash preserves login-file precedence and records both login and nonlogin routes. Zsh accepts inherited or narrowly parsed static `ZDOTDIR`; dynamic paths require explicit enrollment. Replace an exact known Alias Lens source block in place, or preserve one proven user source/Ubuntu guard and insert the generation-only block immediately afterward. Duplicate, dynamic, conditional, or unreachable routes require placement guidance.
 
-## Shell startup and activation
+The pinned read-only helper verifies and buffers the complete immutable package, private paths, pointer, declaration constraints, and live native-input hash before emitting any definition bytes. Failure emits none. The helper reads no editable catalog/configuration, runs no validator process, performs no recovery or writes, and starts no network work or watcher. The shell evaluates only a complete successful result. A replacement function must be defined successfully before a masking alias is removed. Readonly conflicts are preflighted and shell options are preserved.
 
-The versioned catalog loader first sources the selected shell's existing native alias file. It then reads the Alias Lens-owned `active` pointer, accepts exactly 64 lowercase hexadecimal characters and a final line feed, and sources only the matching regular generated file beneath that shell's generated directory. The pointer and generated file must not be symbolic links. Bash reads Bash files; Zsh reads Zsh files. No catalog data becomes a source path. The existing `al` function remains available from the native file.
+Installed means ready for new shells. A running shell keeps its previously loaded definitions. Pickers, `shell-entry`, and completions use exact installed membership. A pending changed implementation cannot run under an installed label.
 
-The loader keeps unadopted native definitions available when the pointer is absent or invalid. Adopted definitions are different: after their native ranges are removed, a missing pointer or generated file can make those names unavailable in a new shell. Native removal remains blocked until the design specifies and tests a durable startup fallback for those removed definitions, including missing or unreadable pointer and generation files. A readable but corrupt generation needs an explicit validation and recovery policy; a shell loader must not claim to detect arbitrary corruption without one. An offline rollback record alone is not a startup fallback.
+## Shared application and recovery
 
-The loader sources the generated file after the native file, but source order alone does not settle a name collision. Bash and Zsh expand aliases while reading commands; an old native alias can mask a generated function or change how its declaration parses. Without an approved adoption intent, a catalog entry that collides with a native name stays out of the generated file. For an adopted name, the adapter must prove a shell-specific handoff that leaves the native definition usable until the generated replacement is defined and then gives the replacement precedence. If it cannot prove that handoff, enablement blocks that name and leaves the native definition intact. New-shell PTY tests verify the name before pointer replacement, between pointer replacement and native removal, and after native removal.
+All managed writers use one explicit mutation session. No lock is held while displaying confirmation. A manifest names private roots and exact enrolled user/repository targets; it never authorizes broad writes beneath the home directory. Replacements use temporary files beside their targets, so separate mounted filesystems remain supported. Unsupported metadata and changed identities cause refusal.
 
-Adoption can also change definitions that are not adopted. Bash expands aliases while reading a function declaration. If a surviving native function used an alias that enablement removes, that function may have a different body when a new shell reads it before the generated file. An exact byte range and a working replacement for the adopted name do not prove that its removal is safe. The adapter needs a conservative source-order and dependency policy; ambiguous dependencies block automatic removal and require a manual migration. It must not execute user definitions to discover dependencies.
+Activation prepares validated artifacts and baseline rollback material, then records confirmed decisions, refreshes owned fallbacks, installs startup blocks, replaces the pointer, and records installed state. Recovery restores native content before changing the pointer, startup next, and installed state last. Recovery journals each step and resulting identity so a second crash can resume without mistaking an inverse rename for an external edit. Unrecognized bytes or identities preserve artifacts and stop automatic recovery.
 
-Activation must inspect the existing startup load path. A user's startup file may already source the native alias file before or after the managed block. Adding a loader that sources it again can repeat top-level effects, and sourcing it later can override the generated definitions. An unmanaged or ambiguous source path blocks activation with a manual placement instruction. Alias Lens does not delete the user's source lines. Catalog names that would replace `al`, `alias-lens`, or Alias Lens integration helpers also block activation; approval of a native body does not authorize replacement of the control commands.
+Offline rollback is another displayed transaction. It restores the original enrollment baseline before deactivation. It can restore a deliberately renamed or deleted alias; confirmation explains this. It works without catalog, network, or generation availability. Unrelated user drift blocks automatic overwrite.
 
-The product reports that an installed generation is ready for new shells. A running shell keeps the definitions it already loaded until the user reloads or starts a new shell.
+## Catalog edits and synchronization
 
-`al catalog enable --shell bash|zsh` is repeatable. It resolves the current catalog for one shell and platform, excludes entries outside local profiles, and keeps unapproved native implementations out of the generation. Before removing an adopted native definition, the plan proves that the same entry is present in the validated generation and that the startup fallback is durable. An unapproved or unavailable entry stays in the native file. Portable commands resolve to external executables without shell lookup. The current renderer emits `command 'program'`; this does not yet establish a stable executable identity. Before activation, the adapter must resolve the external executable for the selected machine, render its validated absolute path, and include that resolution in the generation identity. The adapter verifies that each native declaration has no extra top-level command or declaration redirection, then checks the complete generated file with the target shell's isolated parse-only mode. Syntax checking alone cannot prove that a declaration is inert when sourced. A renderer or validation failure leaves the prior pointer in place. Re-enabling with unchanged inputs makes no file edit. A later enablement carries forward the original offline rollback record and adds inverse payloads for any newly adopted entries.
+Catalog-mode edits preserve stable IDs and unrelated fields, write private revisions, and leave installed generations unchanged until enablement. CLI and Bubble Tea share installed/pending/unavailable/native results, exact review decisions, plans, and conflict results. The terminal remains the default interface.
 
-If the named shell has no Alias Lens setup, the plan includes its own startup integration and names every file it will change. `al catalog enable` never modifies the other shell's paths. An edited Alias Lens loader block blocks replacement and shows `al setup --repair` only after a separate review of that block.
+Catalog synchronization owns one enrolled path and a saved merge base. A catalog shell's local fallback is not a second sync unit. Legacy shells retain native sync. Explicit pull combines semantic fields through a plan, saves private conflict bundles on ambiguity, and never grants approval or activates entries. Automatic sync may inspect remote changes and safely push unchanged-base local changes, but cannot replace the live catalog. Push scans all entries and outgoing enrolled-path history, commits only that path, and preserves unrelated index/worktree state. A durable pinned push intent handles uncertain results through remote inspection; local recovery cannot reverse a remote push.
 
-## One workflow transaction
+## Delivery evidence
 
-All Alias Lens managed writes use one operating-system-backed lock at `~/.local/state/alias-lens/mutation.lock`. This includes legacy alias edits, settings, setup, completion installation, catalog edits, approvals, adoptions, activation, rollback, and both sync modes. The automatic sync worker uses the same lock. The existing time-based `sync.lock` can remain a worker-liveness signal, but it cannot authorize a write or replace the mutation lock. The current config-directory lock moves to this shared boundary before activation ships.
-
-The current private-file journal remains available for settings and completion files. A new workflow coordinator extends its recovery rules across the Alias Lens config directory, state directory, and explicitly selected user-owned shell files. The journal stores exact target identities, hashes, modes, link policy, planned hashes, inverse payload references, and write order. It rejects any path outside those named roots. Alias Lens creates the journal and fsyncs it before the first target write. Each completed write and directory fsync gets a checksummed record.
-
-Activation follows this order under the lock:
-
-1. Recover or stop on an earlier incomplete workflow transaction. Rebuild the plan and compare every input and path identity with its preview.
-2. Create the private catalog snapshot and rollback payloads. Back up each mutable file before changing it.
-3. Write and validate the immutable generated file. Leave the current pointer untouched.
-4. Replace only the exact owned startup block. It continues to source the native alias file.
-5. Atomically write the active pointer. At this point new shells can load the generation.
-6. Remove only approved adoption ranges whose generated replacements are active. Recheck the native file immediately before writing.
-7. Atomically write the installed-state record and mark the journal committed after every target directory is durable.
-
-Without a committed record, recovery restores the old state in dependency order: native definitions first, active pointer second, startup block third, and installed-state record last. It compares every current target with the recorded old or planned hash before acting. If a target has an unrecognized hash, missing backup, changed link, or ambiguous metadata, recovery leaves the active pointer and native file in the safest observed state, saves private conflict material, and reports `recovery_required`. It does not guess from timestamps. A committed record is finalized without replaying writes.
-
-| Last durable boundary | State a new shell can see | Recovery action |
-| --- | --- | --- |
-| Before pointer replacement | Native definitions remain available. | Restore the prior owned loader block if it changed; keep the old pointer. |
-| After pointer replacement, before native removal | Native definitions and the new generation are both available. | Restore the old pointer, then the prior loader block. |
-| After native removal, before installed-state write | The new generation supplies adopted names. | Restore the removed native bytes, then the old pointer and loader block. |
-| After installed-state write, before commit record | The new generation supplies adopted names. | Restore native bytes, pointer, loader block, and state record in that order. |
-| After commit record | The new generation is installed. | Finish cleanup without replaying any target write. |
-
-At any boundary, an unexpected target hash stops automatic recovery. If native bytes were removed and the new pointer still names a validated generation, recovery keeps that pointer until the original native bytes can be restored. The journal and private backups remain available for manual repair.
-
-Normal rollback runs as another planned transaction. It restores adopted native ranges before it deactivates the generated pointer. It then restores the previous owned startup block and installed-state record. A changed user file blocks rollback before its first write and produces a private conflict copy and a manual recovery plan. The catalog can be absent or corrupt during rollback.
-
-## Adoption and native review
-
-`al catalog adopt NAME --shell bash|zsh` shows the catalog entry, native source path, line range, and the hash of the exact source span. It records only the inactive intent after the user confirms that exact entry. It does not edit the native file. It rejects a duplicate name, an ambiguous parser range, an implementation mismatch, a changed source hash, and an entry without a renderable replacement. Enablement rechecks that the replacement is present in the validated generation before it removes the native range.
-
-`al catalog review --shell bash|zsh` shows pending native implementations one at a time. `al catalog approve NAME --shell bash|zsh` opens that review for one entry. The review includes the entry name, kind, shell, ID, implementation hash, and escaped complete implementation text in an interactive terminal. Approval requires a separate confirmation for that exact key. Neither command accepts a broad yes flag or approval from noninteractive input. The approval record uses the existing entry ID, shell, kind, implementation hash, and renderer key. A changed body, kind, ID, or renderer requires a new review. Sync and bootstrap never create approval records.
-
-## Catalog editing and execution
-
-When a shell is in catalog mode, the TUI edits `catalog.json` through a catalog writer that preserves unrelated entries and validates the complete document before an atomic write. Add, edit, delete, metadata, favorites, and profiles use the same typed catalog result. Each change creates a private revision and leaves the installed generation unchanged until `al catalog enable --shell SHELL` applies it.
-
-The TUI shows installed, pending, unavailable, and native-only entries distinctly. The normal picker and `al shell-entry` use the installed snapshot for catalog-managed names and the native file for unadopted names. Pending entries cannot run through the picker. A changed catalog command cannot silently run its previous installed body under the new label. The TUI uses the same state, plan, diff, approval, and conflict results as the CLI, keeps selection on resize, and requires a specific final confirmation for file changes. The optional browser view remains optional and read-only unless it already has an explicitly approved write route.
-
-## Catalog synchronization
-
-The catalog is one sync unit with its own repository path, local hash, remote hash, and exact saved base snapshot. Push scans every portable argument and native implementation, including entries excluded on this machine. It stages and commits only the enrolled catalog path. A local alias file continues as a separate unit for any legacy shell.
-
-Automatic sync can fetch and compare a remote catalog, but it does not replace the live catalog or activate a generation. It may push a local catalog only when the stored remote base still matches and the secret scan passes. An explicit `al sync --pull` performs the approved three-way merge by stable entry ID when the selected shell uses catalog mode. A selected legacy shell keeps the native pull behavior. If base bytes are missing, the catalogs are invalid, fields collide, or names collide, Alias Lens saves private base, local, and remote copies and leaves the live catalog unchanged. A clean merge writes a private revision and the new catalog, then reports that `al catalog enable --shell SHELL` is needed. Remote native content remains unapproved.
-
-## Delivery and acceptance criteria
-
-Each stage cites the SW criteria in `STATE_WORKFLOW_SPEC.md`. Automated tests use temporary homes and repositories. The implementation adds no code comments, and all terminal behavior gets PTY coverage. The full `make fmt check` gate runs after each behavior stage. Manual Ubuntu, WSL, and macOS checks remain release evidence.
+Medium implementation is followed by separate high review, medium corrections, and repeated high review. Run `make fmt check` after each behavior stage. [CATALOG_REVIEW.md](../testing/evidence/CATALOG_REVIEW.md) records findings and sanitized verification. `scripts/verify-catalog-workflow.sh` uses disposable homes and actual Bash/Zsh PTYs. Required native release evidence is tracked separately and cannot be inferred from cross-compilation.
 
 ### CL-001: one lock and recovery boundary
 
@@ -137,7 +90,7 @@ Each stage cites the SW criteria in `STATE_WORKFLOW_SPEC.md`. Automated tests us
 | --- | --- |
 | Initial state | Safe and ambiguous definitions, duplicate names, stale source bytes, edited native implementations, and native code with a top-level side-effect sentinel. |
 | Operation | Preview, import, review, approve, adopt, enable, change the approved body, and roll back. |
-| Expected state | Preview and review execute nothing. Adoption intent changes no native file. Enablement removes only a byte-exact approved range with an active generated replacement. Changed native content stays inactive. Rollback restores the removed range without reading the catalog. |
+| Expected state | Preview and review execute nothing. Ownership enrollment changes no native file. Initial enablement retains enrolled native fallbacks. Reviewed re-enable refreshes only exact owned ranges; deliberate rename, deletion, or exclusion is displayed before editing those ranges. Native drift requires renewed ownership review. Rollback restores the enrollment baseline without reading the catalog. |
 | Automated evidence | Parser range tests, approval-key vectors, no-execution sentinels, file-manifest tests, and PTY review tests. |
 | Approval | Reviewer and date required. Maps to SW-003, SW-004, SW-010, SW-013, and SW-014. |
 

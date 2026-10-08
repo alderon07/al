@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/creack/pty/v2"
 )
@@ -55,7 +55,7 @@ func TestCustomTUIShortcutHelper(t *testing.T) {
 }
 
 func TestShortcutEditorInPTY(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	command := exec.Command(os.Args[0], "-test.run=^TestShortcutEditorPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_SHORTCUT_EDITOR_HELPER=1", "HOME="+home, "TERM=xterm-256color", "NO_COLOR=1")
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
@@ -226,8 +226,8 @@ func TestConfiguredLauncherInShellPTY(t *testing.T) {
 		exe     string
 		args    []string
 	}{
-		{bashShellAdapter{}, "bash", []string{"--noprofile", "--norc", "-i"}},
-		{zshShellAdapter{}, "zsh", []string{"-f"}},
+		{mustShellAdapter("bash"), "bash", []string{"--noprofile", "--norc", "-i"}},
+		{mustShellAdapter("zsh"), "zsh", []string{"-f"}},
 	} {
 		t.Run(test.adapter.Name(), func(t *testing.T) {
 			executable, err := exec.LookPath(test.exe)
@@ -237,7 +237,7 @@ func TestConfiguredLauncherInShellPTY(t *testing.T) {
 			if test.exe == "bash" && bashMajorVersion(t, executable) < 4 {
 				t.Skip("Bash 3.2 does not install a prompt binding")
 			}
-			home := t.TempDir()
+			home := privateTestHome(t)
 			bin := filepath.Join(home, "bin")
 			if err := os.Mkdir(bin, 0o700); err != nil {
 				t.Fatal(err)

@@ -4,11 +4,11 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestShortcutEditorSavesAndResetsBindings(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "bash")
 	m := model{helpVisible: true, width: 90, height: 28, shortcutProfile: shortcutLinux, shortcutLauncher: "Ctrl+G"}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
@@ -41,7 +41,7 @@ func TestShortcutEditorSavesAndResetsBindings(t *testing.T) {
 }
 
 func TestShortcutEditorRejectsConflictsWithoutChangingConfig(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "bash")
 	m := model{shortcutsOpen: true, shortcutCursor: 1, width: 90, height: 28, shortcutProfile: shortcutLinux, shortcutLauncher: "Ctrl+G"}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -63,7 +63,7 @@ func TestShortcutEditorRejectsConflictsWithoutChangingConfig(t *testing.T) {
 }
 
 func TestShortcutEditorAppliesTUIBindingImmediately(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "bash")
 	m := model{shortcutsOpen: true, shortcutCursor: 1, width: 90, height: 28, shortcutProfile: shortcutLinux, shortcutLauncher: "Ctrl+G"}
 	for _, key := range []tea.KeyMsg{
@@ -87,7 +87,7 @@ func TestShortcutEditorAppliesTUIBindingImmediately(t *testing.T) {
 }
 
 func TestShortcutEditorCanCaptureEscape(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "bash")
 	m := model{shortcutsOpen: true, shortcutFilter: "diff.close", width: 90, height: 28, shortcutProfile: shortcutLinux, shortcutLauncher: "Ctrl+G"}
 	for _, key := range []tea.KeyMsg{{Type: tea.KeyEnter}, {Type: tea.KeyEsc}, {Type: tea.KeyEnter}} {
@@ -107,7 +107,7 @@ func TestShortcutEditorCanCaptureEscape(t *testing.T) {
 }
 
 func TestShortcutEditorAppliesAliasActionImmediately(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "bash")
 	m := model{shortcutsOpen: true, shortcutFilter: "add", width: 90, height: 28, aliasMode: aliasModeCommand, shortcutProfile: shortcutLinux, shortcutLauncher: "Ctrl+G"}
 	for _, key := range []tea.KeyMsg{

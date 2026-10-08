@@ -8,7 +8,7 @@ import (
 )
 
 func TestPullReportsRemainingDifferencesWithoutNewAliases(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	bare := filepath.Join(home, "remote.git")
@@ -50,7 +50,7 @@ func TestPullReportsRemainingDifferencesWithoutNewAliases(t *testing.T) {
 }
 
 func TestConflictErrorsIdentifyPrivateCopies(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "bash")
 	local := []byte("alias keep='printf local'\n")
 	remote := []byte("alias frog='printf remote'\n")
@@ -105,9 +105,12 @@ func TestConflictErrorsIdentifyPrivateCopies(t *testing.T) {
 
 func TestAutoSyncStatusReportsInvalidState(t *testing.T) {
 	t.Run("primary", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		t.Setenv("HOME", privateTestHome(t))
 		path, err := syncDataPath("sync-state.json")
 		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(path, []byte("{"), 0o600); err != nil {
@@ -120,7 +123,7 @@ func TestAutoSyncStatusReportsInvalidState(t *testing.T) {
 	})
 
 	t.Run("tracked", func(t *testing.T) {
-		home := t.TempDir()
+		home := privateTestHome(t)
 		t.Setenv("HOME", home)
 		tracked := TrackedFileConfig{Source: filepath.Join(home, "settings.toml"), RepositoryPath: "settings.toml"}
 		config := defaultConfig()

@@ -12,7 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rivo/uniseg"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 type diffRow struct {
@@ -176,7 +176,7 @@ func (m *model) openSelectedRevisionDiff() error {
 		return nil
 	}
 	revision := m.revisions[min(max(0, m.revisionCursor), len(m.revisions)-1)]
-	path, err := aliasesPath()
+	path, err := editableEntriesPath()
 	if err != nil {
 		return err
 	}

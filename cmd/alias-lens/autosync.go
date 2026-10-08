@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alias-lens/internal/transaction"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -97,102 +98,158 @@ func runAutoSyncCommand(arguments []string) error {
 		}
 		return nil
 	}
-	if arguments[0] == "enable" && config.Repository == "" {
-		return fmt.Errorf("configure a repository first with al repo")
-	}
-	config.AutoSync.Enabled = arguments[0] == "enable"
-	if err := saveConfig(config); err != nil {
-		return err
-	}
-	if config.AutoSync.Enabled {
-		if err := ensureWatchProcess(); err != nil {
-			return err
+
+	return withMutation(func(session *mutationSession) error {
+		fresh, e := loadConfig()
+		if e != nil {
+			return e
 		}
-		cliResult("Automatic sync enabled.")
-	} else {
-		cliResult("Automatic sync disabled. The current worker will stop on its next check.")
-	}
-	return nil
+		if arguments[0] == "enable" {
+			if _, _, e = autosyncUnits(fresh); e != nil {
+				return e
+			}
+		}
+		fresh.AutoSync.Enabled = arguments[0] == "enable"
+		if e = saveConfigInSession(session, fresh); e != nil {
+			return e
+		}
+		if fresh.AutoSync.Enabled {
+			if e = watchProcessLaunch(session); e != nil {
+				return e
+			}
+			cliResult("Automatic sync enabled.")
+		} else {
+			cliResult("Automatic sync disabled. The current worker will stop on its next check.")
+		}
+		return nil
+	})
 }
 
+var watchProcessLaunch = ensureWatchProcessInSession
+
+func autosyncUnits(config AppConfig) (bool, bool, error) {
+	_, _, e := readCatalogSyncRecord()
+	catalogUnit := e == nil
+	if e != nil && !errors.Is(e, os.ErrNotExist) {
+		return false, false, e
+	}
+	installed, e := catalogSyncShellInstalled(config.Shell)
+	if e != nil {
+		return false, false, e
+	}
+	nativeUnit := config.Repository != "" && !installed
+	if !catalogUnit && !nativeUnit && len(config.TrackedFiles) == 0 {
+		return false, false, fmt.Errorf("configure a repository with al repo or enroll a catalog with al init")
+	}
+	if len(config.TrackedFiles) > 0 && config.Repository == "" {
+		return false, false, fmt.Errorf("tracked files need a repository; run al repo or al untrack FILE")
+	}
+	for _, tracked := range config.TrackedFiles {
+		if e := validateTrackedFileConfig(tracked); e != nil {
+			return false, false, fmt.Errorf("automatic sync refused a tracked file; run al untrack %s: %w", tracked.Source, e)
+		}
+	}
+	return catalogUnit, nativeUnit, nil
+}
 func runWatch(daemon bool) error {
 	ctx, cancel := interruptContext()
 	defer cancel()
-	lock, err := acquireSyncLock()
-	if errors.Is(err, os.ErrExist) {
-		if !daemon {
-			fmt.Println("Alias Lens automatic sync is already running.")
+
+	if daemon {
+		var worker *transaction.Lock
+		for {
+			duplicate := false
+			e := withMutation(func(session *mutationSession) error {
+				var e error
+				worker, e = transaction.AcquireLock(session.stateRoot, filepath.Join(session.stateRoot, "watch-worker.lock"))
+				duplicate = errors.Is(e, transaction.ErrLocked)
+				return e
+			})
+			if duplicate {
+				return nil
+			}
+			if e == nil {
+				break
+			}
+			if !errors.Is(e, transaction.ErrLocked) {
+				return e
+			}
+			timer := time.NewTimer(100 * time.Millisecond)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return nil
+			case <-timer.C:
+			}
 		}
-		return nil
+		defer worker.Close()
 	}
-	if err != nil {
-		return err
-	}
-	stopHeartbeat := make(chan struct{})
-	heartbeatDone := make(chan struct{})
-	heartbeatErrors := make(chan error, 1)
-	go func() {
-		defer close(heartbeatDone)
-		maintainSyncLock(lock, stopHeartbeat, heartbeatErrors, 30*time.Second)
-	}()
-	defer func() {
-		close(stopHeartbeat)
-		<-heartbeatDone
-		releaseSyncLock(lock)
-		lock.Close()
-	}()
+
 	for {
-		select {
-		case err := <-heartbeatErrors:
-			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
-		default:
-		}
 		if ctx.Err() != nil {
-			_ = writeSyncStatus("stopped", "automatic sync stopped cleanly", "", "")
 			return nil
 		}
-		config, err := loadConfig()
-		if err != nil {
-			writeSyncStatus("error", err.Error(), "", "")
-			return err
-		}
-		if !config.AutoSync.Enabled || config.Repository == "" {
-			writeSyncStatus("stopped", "automatic sync is disabled", "", "")
-			return nil
-		}
-		cycleErr := reconcileAliases(config)
-		if cycleErr == nil {
-			for _, tracked := range config.TrackedFiles {
-				if trackedErr := reconcileTrackedFile(config, tracked); trackedErr != nil {
-					cycleErr = trackedErr
-					break
+		interval := 15
+		disabled := false
+		cycleErr := withMutation(func(session *mutationSession) error {
+			config, e := loadConfig()
+			if e != nil {
+				return e
+			}
+			interval = config.AutoSync.IntervalSeconds
+			if interval < 5 {
+				interval = 15
+			}
+			if !config.AutoSync.Enabled {
+				disabled = true
+				return writeSyncStatusInSession(session, "stopped", "automatic sync is disabled", "", "")
+			}
+			catalogUnit, nativeUnit, e := autosyncUnits(config)
+			if e != nil {
+				return e
+			}
+
+			var unitErrors []error
+			if catalogUnit {
+				if e = reconcileCatalogSyncInSession(session); e != nil {
+					unitErrors = append(unitErrors, fmt.Errorf("catalog sync: %w", e))
 				}
 			}
-		}
-		if cycleErr != nil {
-			state, _ := loadSyncState()
-			if state.Status != "conflict" {
-				writeSyncStatus("offline", cycleErr.Error(), state.LocalHash, state.RemoteHash)
+			if nativeUnit {
+				if e = reconcileAliasesInSession(session, config); e != nil {
+					unitErrors = append(unitErrors, fmt.Errorf("native alias sync: %w", e))
+				}
 			}
-		}
-		select {
-		case err := <-heartbeatErrors:
-			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
-		default:
+			for _, tracked := range config.TrackedFiles {
+				if e = reconcileTrackedFileInSession(session, config, tracked); e != nil {
+					unitErrors = append(unitErrors, e)
+				}
+			}
+			if len(unitErrors) > 0 {
+				return errors.Join(unitErrors...)
+			}
+			if !nativeUnit {
+				return writeSyncStatusInSession(session, "synced", "configured sync units checked", "", "")
+			}
+			return nil
+
+		})
+		if disabled {
+			return cycleErr
 		}
 		if !daemon {
 			return cycleErr
 		}
-		timer := time.NewTimer(time.Duration(config.AutoSync.IntervalSeconds) * time.Second)
-		select {
-		case err := <-heartbeatErrors:
-			timer.Stop()
-			return fmt.Errorf("sync lock was lost: %w; run al watch to retry", err)
-		case <-ctx.Done():
-			if !timer.Stop() {
-				<-timer.C
+		if cycleErr != nil && !errors.Is(cycleErr, transaction.ErrLocked) {
+			state, _ := loadSyncState()
+			if state.Status != "conflict" {
+				_ = writeSyncStatus("offline", cycleErr.Error(), state.LocalHash, state.RemoteHash)
 			}
-			_ = writeSyncStatus("stopped", "automatic sync stopped cleanly", "", "")
+		}
+		timer := time.NewTimer(time.Duration(interval) * time.Second)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
 			return nil
 		case <-timer.C:
 		}
@@ -200,6 +257,12 @@ func runWatch(daemon bool) error {
 }
 
 func reconcileTrackedFile(config AppConfig, tracked TrackedFileConfig) error {
+	return withMutation(func(session *mutationSession) error { return reconcileTrackedFileInSession(session, config, tracked) })
+}
+func reconcileTrackedFileInSession(session *mutationSession, config AppConfig, tracked TrackedFileConfig) error {
+	if err := rejectCatalogFallbackTracking(tracked.Source); err != nil {
+		return err
+	}
 	if err := validateTrackedFileConfig(tracked); err != nil {
 		return err
 	}
@@ -222,29 +285,34 @@ func reconcileTrackedFile(config AppConfig, tracked TrackedFileConfig) error {
 	}
 	state, _ := loadSyncStateAt(statePath)
 	if localMissing && remoteMissing {
-		return writeSyncStateAt(statePath, SyncState{Status: "waiting", Message: "source and repository file do not exist", UpdatedAt: time.Now()})
+		return writeSyncStateAtInSession(session, statePath, SyncState{Status: "waiting", Message: "source and repository file do not exist", UpdatedAt: time.Now()})
 	}
 	if localMissing {
-		return saveTrackedConflict(tracked, nil, remote, statePath)
+		return saveTrackedConflictInSession(session, tracked, nil, remote, statePath)
 	}
 	if remoteMissing {
-		return pushTrackedFile(config, tracked, local, statePath)
+		return pushTrackedFileInSession(session, config, tracked, local, statePath)
 	}
 	localHash, remoteHash := contentHash(local), contentHash(remote)
 	switch decideSyncAction(state, localHash, remoteHash) {
 	case actionNoop:
-		return writeSyncStateAt(statePath, SyncState{LocalHash: localHash, RemoteHash: remoteHash, Status: "synced", Message: "files match", UpdatedAt: time.Now()})
+		return writeSyncStateAtInSession(session, statePath, SyncState{LocalHash: localHash, RemoteHash: remoteHash, Status: "synced", Message: "files match", UpdatedAt: time.Now()})
 	case actionPush:
-		return pushTrackedFile(config, tracked, local, statePath)
+		return pushTrackedFileInSession(session, config, tracked, local, statePath)
 	case actionPull:
-		return saveTrackedConflict(tracked, local, remote, statePath)
+		return saveTrackedConflictInSession(session, tracked, local, remote, statePath)
 	case actionConflict:
-		return saveTrackedConflict(tracked, local, remote, statePath)
+		return saveTrackedConflictInSession(session, tracked, local, remote, statePath)
 	}
 	return nil
 }
 
 func pushTrackedFile(config AppConfig, tracked TrackedFileConfig, contents []byte, statePath string) error {
+	return withMutation(func(session *mutationSession) error {
+		return pushTrackedFileInSession(session, config, tracked, contents, statePath)
+	})
+}
+func pushTrackedFileInSession(session *mutationSession, config AppConfig, tracked TrackedFileConfig, contents []byte, statePath string) error {
 	if err := validateTrackedFileConfig(tracked); err != nil {
 		return err
 	}
@@ -265,10 +333,13 @@ func pushTrackedFile(config AppConfig, tracked TrackedFileConfig, contents []byt
 		return fmt.Errorf("push tracked file: %w; run al watch to retry", err)
 	}
 	hash := contentHash(contents)
-	return writeSyncStateAt(statePath, SyncState{LocalHash: hash, RemoteHash: hash, Status: "pushed", Message: "committed and pushed local update", UpdatedAt: time.Now()})
+	return writeSyncStateAtInSession(session, statePath, SyncState{LocalHash: hash, RemoteHash: hash, Status: "pushed", Message: "committed and pushed local update", UpdatedAt: time.Now()})
 }
 
 func replaceTrackedFile(path string, contents []byte) error {
+	return withMutation(func(session *mutationSession) error { return replaceTrackedFileInSession(session, path, contents) })
+}
+func replaceTrackedFileInSession(session *mutationSession, path string, contents []byte) error {
 	current, err := readFileLimited(path, trackedFileLimit)
 	if err != nil {
 		return err
@@ -277,17 +348,14 @@ func replaceTrackedFile(path string, contents []byte) error {
 	if err != nil {
 		return err
 	}
-	if err := writePrivateBackup(path+".alias-lens.bak", current); err != nil {
+	if err := writePrivateBackupInSession(session, path+".alias-lens.bak", current); err != nil {
 		return err
 	}
-	return writeFileAtomically(path, contents, info.Mode().Perm())
+	return session.writeUserFile(path, current, contents, info.Mode().Perm(), true, 0, true)
 }
 
 func writePrivateFile(path string, contents []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	return writeFileAtomically(path, contents, 0o600)
+	return withMutation(func(session *mutationSession) error { return session.writePrivate(path, contents) })
 }
 
 func trackedStatePath(tracked TrackedFileConfig) (string, error) {
@@ -295,64 +363,71 @@ func trackedStatePath(tracked TrackedFileConfig) (string, error) {
 }
 
 func saveTrackedConflict(tracked TrackedFileConfig, local, remote []byte, statePath string) error {
+	return withMutation(func(session *mutationSession) error {
+		return saveTrackedConflictInSession(session, tracked, local, remote, statePath)
+	})
+}
+func saveTrackedConflictInSession(session *mutationSession, tracked TrackedFileConfig, local, remote []byte, statePath string) error {
 	id := contentHash([]byte(tracked.Source + "\x00" + tracked.RepositoryPath))[:16]
 	directory, err := syncDataPath(filepath.Join("conflicts", id))
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return err
-	}
 	localCopy := filepath.Join(directory, "local")
 	remoteCopy := filepath.Join(directory, "remote")
-	if err := writeFileAtomically(localCopy, local, 0o600); err != nil {
+	if err := session.writePrivate(localCopy, local); err != nil {
 		return err
 	}
-	if err := writeFileAtomically(remoteCopy, remote, 0o600); err != nil {
+	if err := session.writePrivate(remoteCopy, remote); err != nil {
 		return err
 	}
 	message := fmt.Sprintf("files were not overwritten; compare private copies at %s and %s", localCopy, remoteCopy)
 	state := SyncState{LocalHash: contentHash(local), RemoteHash: contentHash(remote), Status: "conflict", Message: message, UpdatedAt: time.Now()}
-	if err := writeSyncStateAt(statePath, state); err != nil {
+	if err := writeSyncStateAtInSession(session, statePath, state); err != nil {
 		return err
 	}
 	return fmt.Errorf("tracked file conflict: %s; %s", tracked.Source, message)
 }
 
-func ensureWatchProcess() error {
-	lockPath, err := syncDataPath("sync.lock")
-	if err != nil {
-		return err
-	}
-	if info, err := os.Stat(lockPath); err == nil && time.Since(info.ModTime()) < 2*time.Minute {
+func ensureWatchProcess() error { return withMutation(ensureWatchProcessInSession) }
+func ensureWatchProcessInSession(session *mutationSession) error {
+	worker, e := transaction.AcquireLock(session.stateRoot, filepath.Join(session.stateRoot, "watch-worker.lock"))
+	if errors.Is(e, transaction.ErrLocked) {
 		return nil
 	}
-	executable, err := os.Executable()
-	if err != nil {
-		return err
+	if e != nil {
+		return e
 	}
-	logPath, err := syncDataPath("watch.log")
-	if err != nil {
-		return err
+	if e = worker.Close(); e != nil {
+		return e
 	}
-	logFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return err
+	executable, e := os.Executable()
+	if e != nil {
+		return e
 	}
 	command := exec.Command(executable, "watch", "--daemon")
-	command.Stdin = nil
-	command.Stdout = logFile
-	command.Stderr = logFile
-	if err := command.Start(); err != nil {
-		logFile.Close()
-		return err
+	if e = command.Start(); e != nil {
+		return e
 	}
-	logFile.Close()
 	return command.Process.Release()
 }
 
 func reconcileAliases(config AppConfig) error {
-	aliasPath, err := aliasesPath()
+	return withMutation(func(session *mutationSession) error { return reconcileAliasesInSession(session, config) })
+}
+func reconcileAliasesInSession(session *mutationSession, config AppConfig) error {
+	installed, err := catalogSyncShellInstalled(config.Shell)
+	if err != nil {
+		return err
+	}
+	if installed {
+		return nil
+	}
+	adapter, err := shellAdapter(config.Shell)
+	if err != nil {
+		return err
+	}
+	aliasPath, err := aliasPathFor(adapter)
 	if err != nil {
 		return err
 	}
@@ -379,155 +454,95 @@ func reconcileAliases(config AppConfig) error {
 	}
 	if localMissing {
 		if remoteMissing {
-			if err := writeNewAliasFile(aliasPath, nil); err != nil {
+			if err := writeNewAliasFileInSession(session, aliasPath, nil); err != nil {
 				return err
 			}
 			local = nil
 		} else {
-			return saveSyncConflict(nil, remote, "remote aliases require approval; review them and run al sync --pull")
+			return saveSyncConflictInSession(session, nil, remote, "remote aliases require approval; review them and run al sync --pull")
 		}
 	}
 	state, _ := loadSyncState()
 	localHash, remoteHash := contentHash(local), contentHash(remote)
 	if remoteMissing {
-		return pushAliasSnapshot(config, aliasPath, local)
+		return pushAliasSnapshotInSession(session, config, aliasPath, local)
 	}
 	switch decideSyncAction(state, localHash, remoteHash) {
 	case actionNoop:
-		return writeSyncStatus("synced", "files match", localHash, remoteHash)
+		return writeSyncStatusInSession(session, "synced", "files match", localHash, remoteHash)
 	case actionPush:
-		return pushAliasSnapshot(config, aliasPath, local)
+		return pushAliasSnapshotInSession(session, config, aliasPath, local)
 	case actionPull:
-		return saveSyncConflict(local, remote, "remote aliases require approval; review them and run al sync --pull")
+		return saveSyncConflictInSession(session, local, remote, "remote aliases require approval; review them and run al sync --pull")
 	case actionConflict:
-		return saveSyncConflict(local, remote, "both local and remote aliases changed")
+		return saveSyncConflictInSession(session, local, remote, "both local and remote aliases changed")
 	}
 	return nil
 }
 
 func pushAliasSnapshot(config AppConfig, aliasPath string, contents []byte) error {
+	return withMutation(func(session *mutationSession) error {
+		return pushAliasSnapshotInSession(session, config, aliasPath, contents)
+	})
+}
+func pushAliasSnapshotInSession(session *mutationSession, config AppConfig, aliasPath string, contents []byte) error {
 	if err := secretFindingsError(findSecretFindings(contents)); err != nil {
 		return err
 	}
-	if _, err := syncRepositoryFiles(config, aliasPath, true); err != nil {
+	if _, err := syncRepositoryFilesInSession(session, config, aliasPath, true); err != nil {
 		return err
 	}
 	hash := contentHash(contents)
-	return writeSyncStatus("pushed", "committed and pushed local alias update", hash, hash)
+	return writeSyncStatusInSession(session, "pushed", "committed and pushed local alias update", hash, hash)
 }
 
 func saveSyncConflict(local, remote []byte, message string) error {
+	return withMutation(func(session *mutationSession) error {
+		return saveSyncConflictInSession(session, local, remote, message)
+	})
+}
+func saveSyncConflictInSession(session *mutationSession, local, remote []byte, message string) error {
 	directory, err := syncDataPath("conflicts")
 	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
 	suffix := strings.TrimPrefix(activeShellAdapter().AliasFilename(), ".")
 	localCopy := filepath.Join(directory, "local."+suffix)
 	remoteCopy := filepath.Join(directory, "remote."+suffix)
-	if err := writeFileAtomically(localCopy, local, 0o600); err != nil {
+	if err := session.writePrivate(localCopy, local); err != nil {
 		return err
 	}
-	if err := writeFileAtomically(remoteCopy, remote, 0o600); err != nil {
+	if err := session.writePrivate(remoteCopy, remote); err != nil {
 		return err
 	}
 	message += fmt.Sprintf("; live aliases were not overwritten; private copies: %s and %s; run al diff", localCopy, remoteCopy)
-	if err := writeSyncStatus("conflict", message, contentHash(local), contentHash(remote)); err != nil {
+	if err := writeSyncStatusInSession(session, "conflict", message, contentHash(local), contentHash(remote)); err != nil {
 		return fmt.Errorf("save conflict copies, but record sync status: %w", err)
 	}
 	return errors.New(message)
 }
 
 func replaceAliasFile(path string, contents []byte) error {
+	return withMutation(func(session *mutationSession) error { return replaceAliasFileInSession(session, path, contents) })
+}
+func replaceAliasFileInSession(session *mutationSession, path string, contents []byte) error {
 	current, mode, _, err := readAliasFile(path)
 	if err != nil {
 		return err
 	}
-	return writeAliasFile(path, current, contents, mode)
+	return writeAliasFileInSession(session, path, current, contents, mode)
 }
 
 func writeNewAliasFile(path string, contents []byte) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
-	return writeFileAtomically(path, contents, 0o600)
+	return withMutation(func(session *mutationSession) error { return writeNewAliasFileInSession(session, path, contents) })
+}
+func writeNewAliasFileInSession(session *mutationSession, path string, contents []byte) error {
+	return writeAliasFileInSession(session, path, nil, contents, 0600)
 }
 
 func contentHash(contents []byte) string {
 	digest := sha256.Sum256(contents)
 	return hex.EncodeToString(digest[:])
-}
-
-func acquireSyncLock() (*os.File, error) {
-	path, err := syncDataPath("sync.lock")
-	if err != nil {
-		return nil, err
-	}
-	lock, openErr := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if !errors.Is(openErr, os.ErrExist) {
-		return lock, openErr
-	}
-	if info, statErr := os.Stat(path); statErr == nil && time.Since(info.ModTime()) > 2*time.Minute {
-		if removeErr := os.Remove(path); removeErr == nil {
-			return os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		}
-	}
-	return nil, openErr
-}
-
-func maintainSyncLock(lock *os.File, stop <-chan struct{}, errs chan<- error, interval time.Duration) {
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-stop:
-			return
-		case <-ticker.C:
-			if err := refreshSyncLock(lock); err != nil {
-				errs <- err
-				return
-			}
-		}
-	}
-}
-
-func refreshSyncLock(lock *os.File) error {
-	owned, err := lock.Stat()
-	if err != nil {
-		return err
-	}
-	current, err := os.Stat(lock.Name())
-	if err != nil {
-		return err
-	}
-	if !os.SameFile(owned, current) {
-		return fmt.Errorf("lock was replaced")
-	}
-	now := time.Now()
-	if err := os.Chtimes(lock.Name(), now, now); err != nil {
-		return err
-	}
-	current, err = os.Stat(lock.Name())
-	if err != nil {
-		return err
-	}
-	if !os.SameFile(owned, current) {
-		return fmt.Errorf("lock was replaced")
-	}
-	return nil
-}
-
-func releaseSyncLock(lock *os.File) {
-	owned, err := lock.Stat()
-	if err != nil {
-		return
-	}
-	current, err := os.Stat(lock.Name())
-	if err == nil && os.SameFile(owned, current) {
-		_ = os.Remove(lock.Name())
-	}
 }
 
 func syncDataPath(name string) (string, error) {
@@ -536,9 +551,6 @@ func syncDataPath(name string) (string, error) {
 		return "", err
 	}
 	directory := filepath.Join(home, ".local", "state", "alias-lens")
-	if err := os.MkdirAll(directory, 0o700); err != nil {
-		return "", err
-	}
 	return filepath.Join(directory, name), nil
 }
 
@@ -551,7 +563,7 @@ func loadSyncState() (SyncState, error) {
 }
 
 func loadSyncStateAt(path string) (SyncState, error) {
-	contents, err := os.ReadFile(path)
+	contents, err := readManagedPrivateFile(path, 1<<20)
 	if os.IsNotExist(err) {
 		return SyncState{}, nil
 	}
@@ -563,20 +575,28 @@ func loadSyncStateAt(path string) (SyncState, error) {
 }
 
 func writeSyncStatus(status, message, localHash, remoteHash string) error {
+	return withMutation(func(session *mutationSession) error {
+		return writeSyncStatusInSession(session, status, message, localHash, remoteHash)
+	})
+}
+func writeSyncStatusInSession(session *mutationSession, status, message, localHash, remoteHash string) error {
 	path, err := syncDataPath("sync-state.json")
 	if err != nil {
 		return err
 	}
 	state := SyncState{LocalHash: localHash, RemoteHash: remoteHash, Status: status, Message: message, UpdatedAt: time.Now()}
-	return writeSyncStateAt(path, state)
+	return writeSyncStateAtInSession(session, path, state)
 }
 
 func writeSyncStateAt(path string, state SyncState) error {
+	return withMutation(func(session *mutationSession) error { return writeSyncStateAtInSession(session, path, state) })
+}
+func writeSyncStateAtInSession(session *mutationSession, path string, state SyncState) error {
 	contents, err := json.MarshalIndent(state, "", "  ")
 	if err != nil {
 		return err
 	}
-	return writeFileAtomically(path, append(contents, '\n'), 0o600)
+	return session.writePrivate(path, append(contents, '\n'))
 }
 
 func syncStatusLabel() string {

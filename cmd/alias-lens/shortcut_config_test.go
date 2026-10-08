@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestCustomShortcutReplacesProfileBinding(t *testing.T) {
@@ -49,7 +49,7 @@ func TestShortcutOverridesRejectConflictsAndInvalidKeys(t *testing.T) {
 func TestShellIntegrationUsesConfiguredLauncher(t *testing.T) {
 	config := defaultConfig()
 	config.Shortcuts = map[string]string{"launcher": "Ctrl+K"}
-	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+	for _, adapter := range []ShellAdapter{mustShellAdapter("bash"), mustShellAdapter("zsh")} {
 		integration, err := shellIntegrationForConfig(adapter, config)
 		if err != nil {
 			t.Fatal(err)
@@ -65,7 +65,7 @@ func TestShellIntegrationUsesConfiguredLauncher(t *testing.T) {
 }
 
 func TestShortcutCLISetAndReset(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "bash")
 	if err := runShortcutsCommand([]string{"set", "add", "Alt+N"}); err != nil {
 		t.Fatal(err)

@@ -9,6 +9,7 @@ import (
 )
 
 func TestMissingDefaultsSkipExistingNamesAndCommands(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	contents := []byte("alias gs='git status'\nalias stage='git add'\n")
 	missing := missingDefaultAliases(contents)
 	for _, candidate := range missing {
@@ -22,7 +23,8 @@ func TestMissingDefaultsSkipExistingNamesAndCommands(t *testing.T) {
 }
 
 func TestDefaultAliasOfferExplainsAndDefaultsToNo(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	original := []byte("alias mine='echo mine'\n")
 	if err := os.WriteFile(path, original, 0o600); err != nil {
 		t.Fatal(err)
@@ -46,7 +48,8 @@ func TestDefaultAliasOfferExplainsAndDefaultsToNo(t *testing.T) {
 }
 
 func TestAcceptingDefaultsAddsOnlyMissingAliases(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	if err := os.WriteFile(path, []byte("alias gs='custom status'\nalias stage='git add'\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}

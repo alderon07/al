@@ -19,12 +19,15 @@ var catalogWorkflowStdout io.Writer = os.Stdout
 var catalogWorkflowTerminal = func() bool { return fileIsTerminal(os.Stdout) }
 
 func catalogCommandUsageError() error {
-	return fmt.Errorf("usage: al catalog preview|import|shadow|diff [OPTIONS]")
+	return fmt.Errorf("usage: al catalog preview|import|shadow|diff|plan|review|approve|adopt|enable|rollback [OPTIONS]")
 }
 
 func runCatalogWorkflowCommand(arguments []string) (bool, int, error) {
 	if len(arguments) == 0 {
 		return false, 0, nil
+	}
+	if handled, code, err := runCatalogLifecycleCommand(arguments); handled {
+		return handled, code, err
 	}
 	switch arguments[0] {
 	case "diff":
@@ -96,6 +99,14 @@ func runCatalogDiff(arguments []string) (int, error) {
 	var other neutralcatalog.Catalog
 	switch source {
 	case "repository":
+		enrolled, handled, readErr := readEnrolledRepositoryCatalog()
+		if readErr != nil {
+			return 1, readErr
+		}
+		if handled {
+			other = enrolled
+			break
+		}
 		if config.Repository == "" {
 			return 1, fmt.Errorf("no repository is connected; enter al repo to choose one")
 		}
@@ -248,6 +259,9 @@ func readCatalogFile(path string) (neutralcatalog.Catalog, error) {
 }
 
 func readInstalledCatalogSnapshot(shell string) (neutralcatalog.Catalog, error) {
+	if value, handled, err := readLifecycleInstalledSnapshot(shell); handled || err != nil {
+		return value, err
+	}
 	if shell != "bash" && shell != "zsh" {
 		return neutralcatalog.Catalog{}, fmt.Errorf("choose Bash or Zsh with --shell")
 	}

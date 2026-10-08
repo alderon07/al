@@ -57,7 +57,7 @@ func runSyncConflictPTY(t *testing.T, subcommand string, expectedExit int, expec
 
 func setupPlainSyncConflictPTY(t *testing.T) string {
 	t.Helper()
-	home := t.TempDir()
+	home := privateTestHome(t)
 	repository := filepath.Join(home, "dotfiles")
 	if err := os.Mkdir(repository, 0o700); err != nil {
 		t.Fatal(err)

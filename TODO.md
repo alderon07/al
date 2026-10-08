@@ -149,14 +149,16 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
     - [ ] Shut down WSL, reopen it, and rerun the verifier.
 - [ ] Approve and deliver the state, planning, and portability work in `docs/STATE_WORKFLOW_SPEC.md` after the phase 4 WSL gate.
   - [x] Add the observational status and shared operation-plan foundation.
-  - [ ] Review `docs/acceptance/CATALOG_LIFECYCLE.md`, then implement and verify the complete opt-in Bash and Zsh catalog workflow.
-  - [ ] Route catalog enablement and rollback through the approved transaction plan.
-  - [ ] Add semantic catalog diff, three-way reconciliation, and native-approval gates.
+  - [x] Review and approve the catalog implementation contract in `docs/CATALOG_PLAN.md` and `docs/acceptance/CATALOG_BOOTSTRAP.md`.
+  - [x] Implement the opt-in Bash and Zsh catalog workflow under CL-001 through CL-006 with automated acceptance evidence in `docs/testing/evidence/CATALOG_REVIEW.md`.
+  - [x] Route catalog enablement and rollback through the approved transaction plan.
+  - [x] Add semantic catalog diff, three-way reconciliation, and native-approval gates.
+  - [ ] Record strict system Zsh, native macOS, and WSL catalog release evidence; cross-builds and disposable Zsh PTYs do not close these gates.
   - [x] Add versioned machine profiles and catalog conditions.
-  - [ ] Use plain-language copy shared by CLI and TUI results.
+  - [x] Use plain-language copy shared by CLI and TUI catalog results.
   - [ ] Add selectable Windows, Linux, and macOS shortcut profiles with terminal-safe fallbacks.
     - [x] Add automatic OS and WSL defaults, saved overrides, shared semantic bindings, friendly help, and automated tests.
     - [ ] Check preferred keys and fallbacks in Windows Terminal, a Linux terminal, and macOS Terminal before release.
-  - [ ] Add one-command catalog bootstrap.
+  - [x] Add one-command catalog bootstrap with local enrollment and restricted immutable provider reads.
   - [x] Add generated Bash and Zsh completions from one command specification.
   - [ ] Defer alias packs until the required stable release cycle has passed.

@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestPageShortcutsWorkFromEveryPage(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	if err := os.WriteFile(filepath.Join(home, ".bash_aliases"), nil, 0o600); err != nil {
@@ -66,7 +66,7 @@ func TestPageShortcutsWorkFromEveryPage(t *testing.T) {
 }
 
 func TestHeldPageShortcutDoesNotToggleBetweenPages(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	current := navigationTestModel(pageAliases)
 	current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF2})
 	if current.currentPage() != pageStats {
@@ -88,7 +88,7 @@ func TestHeldPageShortcutDoesNotToggleBetweenPages(t *testing.T) {
 }
 
 func TestDifferentPageShortcutInterruptsRepeatGuard(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	current := pressPageShortcut(t, navigationTestModel(pageAliases), tea.KeyMsg{Type: tea.KeyF2})
 	current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF1})
 	if current.currentPage() != pageHelp {
@@ -102,7 +102,7 @@ func TestDifferentPageShortcutInterruptsRepeatGuard(t *testing.T) {
 }
 
 func TestLegacyPageShortcutCanToggleAfterQuietPeriod(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	current := pressPageShortcut(t, navigationTestModel(pageAliases), tea.KeyMsg{Type: tea.KeyF2})
 	current.lastShortcutAt = time.Now().Add(-2 * pageShortcutRepeatWindow)
 	current = pressPageShortcut(t, current, tea.KeyMsg{Type: tea.KeyF2})

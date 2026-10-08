@@ -47,3 +47,18 @@ Run the compiled binary at 48x18, 80x24, and 160x40 in Terminal.app. Repeat the 
 - [ ] Run `brew install --build-from-source ./Formula/alias-lens.rb`.
 - [ ] Run `brew test ./Formula/alias-lens.rb` and `brew audit --strict ./Formula/alias-lens.rb`.
 - [ ] Run `brew uninstall alias-lens`, install from the tap, and confirm that `brew upgrade` recognizes the release.
+
+## Check catalog installation and bootstrap
+
+Use disposable homes and repositories for every case. Required Bash and Zsh PTY shells must be present; a missing shell is a failed evidence gate.
+
+- [ ] Run `scripts/verify-catalog-workflow.sh` and record its sanitized result.
+- [ ] Review native code and existing-name ownership in `al init`; cancel at each prompt and confirm that no decisions or files were saved.
+- [ ] Enable adopted entries, start new login and nonlogin shells, and verify retained fallbacks when the helper, pointer, or generation is unavailable.
+- [ ] Change the native file and confirm that startup declines the overlay with renewed-review guidance.
+- [ ] Verify masking aliases, readonly functions, argument forwarding, exit status, signals, and preserved shell options.
+- [ ] Edit, rename, delete, and exclude catalog entries; verify pending labels and exact installed completion membership before and after enablement.
+- [ ] Roll back offline and confirm that the original enrollment baseline returns, including later renamed or deleted entries.
+- [ ] Pull independent catalog changes without activation; verify semantic conflicts and preservation of unrelated staged and worktree files.
+- [ ] Exercise restricted remote bootstrap with synthetic credentials and malicious hooks, filters, submodules, unsupported filtering, limits, and cancellation.
+- [ ] Crash during forward application and recovery, then recover twice and verify dependency order and private artifacts.

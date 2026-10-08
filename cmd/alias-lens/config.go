@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	workflowplan "alias-lens/internal/plan"
+	"alias-lens/internal/transaction"
 )
 
 const currentConfigVersion = 2
@@ -20,6 +21,7 @@ const currentConfigVersion = 2
 var profileNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,31}$`)
 
 type AppConfig struct {
+	observed        []byte
 	Version         int                       `json:"version"`
 	Repository      string                    `json:"repository"`
 	AliasFile       string                    `json:"alias_file"`
@@ -128,6 +130,9 @@ func sensitiveConfigPath(path string) bool {
 }
 
 func validateTrackedFileConfig(tracked TrackedFileConfig) error {
+	if err := rejectCatalogFallbackTracking(tracked.Source); err != nil {
+		return err
+	}
 	if !filepath.IsAbs(tracked.Source) {
 		return fmt.Errorf("tracked file source must be an absolute path: %s", tracked.Source)
 	}
@@ -399,8 +404,9 @@ func loadConfig() (AppConfig, error) {
 	if err != nil {
 		return config, err
 	}
-	contents, err := os.ReadFile(path)
+	contents, err := readManagedPrivateFile(path, transaction.MaxPrivateFileSize)
 	if errors.Is(err, os.ErrNotExist) {
+		config.observed, _ = json.Marshal(config)
 		return config, nil
 	}
 	if err != nil {
@@ -433,6 +439,7 @@ func loadConfig() (AppConfig, error) {
 	if err := validateAppConfig(config); err != nil {
 		return defaultConfig(), fmt.Errorf("parse %s: %w", path, err)
 	}
+	config.observed, _ = json.Marshal(config)
 	return config, nil
 }
 
@@ -443,7 +450,7 @@ func ensureConfigDefaults(config AppConfig) AppConfig {
 	if config.AliasFile == "" {
 		adapter, err := shellAdapter(config.Shell)
 		if err != nil {
-			adapter = bashShellAdapter{}
+			adapter = mustShellAdapter("bash")
 		}
 		config.AliasFile = adapter.AliasFilename()
 	}
@@ -498,55 +505,101 @@ func defaultConfig() AppConfig {
 }
 
 func saveConfig(config AppConfig) error {
-	path, err := configPath()
-	if err != nil {
-		return err
+	return withMutation(func(session *mutationSession) error { return saveConfigInSession(session, config) })
+}
+func updateConfig(change func(*AppConfig) error) error {
+	return withMutation(func(session *mutationSession) error { return updateConfigInSession(session, change) })
+}
+func updateConfigInSession(session *mutationSession, change func(*AppConfig) error) error {
+	config, e := loadConfig()
+	if e != nil {
+		return e
+	}
+	if e = change(&config); e != nil {
+		return e
+	}
+	return saveConfigInSession(session, config)
+}
+func saveConfigInSession(session *mutationSession, config AppConfig) error {
+	path, e := configPath()
+	if e != nil {
+		return e
 	}
 	config = ensureConfigDefaults(config)
 	config.Version = currentConfigVersion
-	if err := validateAppConfig(config); err != nil {
-		return err
+	if len(config.observed) > 0 {
+		current, e := loadConfig()
+		if e != nil {
+			return e
+		}
+		before := map[string]json.RawMessage{}
+		after := map[string]json.RawMessage{}
+		fresh := map[string]json.RawMessage{}
+		if e = json.Unmarshal(config.observed, &before); e != nil {
+			return e
+		}
+		b, e := json.Marshal(config)
+		if e != nil {
+			return e
+		}
+		if e = json.Unmarshal(b, &after); e != nil {
+			return e
+		}
+		b, e = json.Marshal(current)
+		if e != nil {
+			return e
+		}
+		if e = json.Unmarshal(b, &fresh); e != nil {
+			return e
+		}
+		keys := map[string]bool{}
+		for k := range before {
+			keys[k] = true
+		}
+		for k := range after {
+			keys[k] = true
+		}
+		for k := range keys {
+			if bytes.Equal(before[k], after[k]) {
+				continue
+			}
+			if !bytes.Equal(fresh[k], before[k]) && !bytes.Equal(fresh[k], after[k]) {
+				return fmt.Errorf("configuration changed after reading it; run the command again")
+			}
+			if v, ok := after[k]; ok {
+				fresh[k] = v
+			} else {
+				delete(fresh, k)
+			}
+		}
+		b, e = json.Marshal(fresh)
+		if e != nil {
+			return e
+		}
+		var merged AppConfig
+		if e = json.Unmarshal(b, &merged); e != nil {
+			return e
+		}
+		config = ensureConfigDefaults(merged)
 	}
-	return saveConfigFile(path, config)
+	if e = validateAppConfig(config); e != nil {
+		return e
+	}
+	contents, e := json.MarshalIndent(config, "", "  ")
+	if e != nil {
+		return e
+	}
+	return session.writePrivate(path, append(contents, '\n'))
 }
-
 func saveConfigFile(path string, config AppConfig) error {
-	directoryPath := filepath.Dir(path)
-	if err := os.MkdirAll(directoryPath, 0o700); err != nil {
-		return err
+	expected, e := configPath()
+	if e != nil {
+		return e
 	}
-	if err := os.Chmod(directoryPath, 0o700); err != nil {
-		return err
+	if filepath.Clean(path) != expected {
+		return transaction.ErrUnsafePath
 	}
-	contents, err := json.MarshalIndent(config, "", "  ")
-	if err != nil {
-		return err
-	}
-	temporary, err := os.CreateTemp(directoryPath, ".config-*.tmp")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(0o600); err != nil {
-		temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(append(contents, '\n')); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		return err
-	}
-	return syncDirectory(directoryPath)
+	return saveConfig(config)
 }
 
 func syncDirectory(path string) error {

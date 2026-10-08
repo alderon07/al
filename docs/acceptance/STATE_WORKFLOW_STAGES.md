@@ -1,5 +1,10 @@
 # State workflow implementation approval
 
+## Implementation amendment approved 2026-10-03
+
+The user approved `docs/CATALOG_PLAN.md` for implementation. That contract supersedes conflicting pre-release details below: adoption retains and maintains exact native fallback ranges; init and enable compose individual native review; verified complete generation bytes are loaded through a read-only helper; proven single user source statements are preserved; installed state records every required startup route. Native-input drift declines the overlay. Public format contracts remain stable. `docs/acceptance/CATALOG_BOOTSTRAP.md` supplies bootstrap test criteria. Native platform checks remain release gates.
+
+
 Status: approved for staged implementation by the user on 2026-09-19. The user will perform the remaining native terminal checks later. The phase 4 WSL shutdown-and-reopen result remains a release gate and is not marked complete by this approval.
 
 ## Approved stages

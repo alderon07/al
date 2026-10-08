@@ -96,7 +96,7 @@ func TestNativeBashCheckDoesNotLoadBashEnv(t *testing.T) {
 }
 
 func TestRunAliasCheckStrictFailsWarnings(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	path := filepath.Join(home, ".bash_aliases")

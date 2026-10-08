@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestDetectShortcutProfile(t *testing.T) {
@@ -101,7 +101,7 @@ func TestProfilesDoNotRepurposeCommonShortcuts(t *testing.T) {
 }
 
 func TestShortcutCommandSavesChoicePrivately(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	if err := runShortcutsCommand([]string{"macos"}); err != nil {
 		t.Fatal(err)
@@ -124,7 +124,7 @@ func TestShortcutCommandSavesChoicePrivately(t *testing.T) {
 }
 
 func TestShortcutCommandRestoresAutomaticSelection(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	config := defaultConfig()
 	config.ShortcutProfile = "macos"
@@ -165,7 +165,7 @@ func TestShortcutCommandRestoresAutomaticSelection(t *testing.T) {
 }
 
 func TestShortcutTestKeepsSavedChoice(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	config := defaultConfig()
 	config.ShortcutProfile = "macos"
@@ -407,7 +407,7 @@ func TestSelectModeGuideOnlyShowsAvailableActions(t *testing.T) {
 }
 
 func TestInvalidSettingsStopPickerBeforeAliasAccess(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	path := filepath.Join(home, ".config", "alias-lens", "config.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {

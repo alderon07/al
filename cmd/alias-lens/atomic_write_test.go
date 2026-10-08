@@ -8,7 +8,8 @@ import (
 )
 
 func TestInterruptedAliasWriteKeepsOriginalAndBackup(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	path := filepath.Join(directory, ".bash_aliases")
 	original := []byte("alias old='true'\n")
 	if err := os.WriteFile(path, original, 0o600); err != nil {
@@ -38,7 +39,8 @@ func TestInterruptedAliasWriteKeepsOriginalAndBackup(t *testing.T) {
 }
 
 func TestEditingEmptyAliasFileSavesBackupAndRevision(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	if err := os.WriteFile(path, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +58,8 @@ func TestEditingEmptyAliasFileSavesBackupAndRevision(t *testing.T) {
 }
 
 func TestCreatingAliasFileDoesNotSavePriorRevision(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	if err := writeAliasFile(path, nil, []byte("alias gs='git status'\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +73,8 @@ func TestCreatingAliasFileDoesNotSavePriorRevision(t *testing.T) {
 }
 
 func TestAliasWriteRejectsEditBeforeFinalRename(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	original := []byte("alias old='true'\n")
 	concurrent := []byte("alias newer='true'\n")
 	if err := os.WriteFile(path, original, 0o600); err != nil {
@@ -90,7 +94,8 @@ func TestAliasWriteRejectsEditBeforeFinalRename(t *testing.T) {
 }
 
 func TestInterruptedTrackedReplacementKeepsOriginalAndBackup(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	path := filepath.Join(directory, "settings")
 	original := []byte("old\n")
 	if err := os.WriteFile(path, original, 0o640); err != nil {

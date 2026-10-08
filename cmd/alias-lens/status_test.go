@@ -13,7 +13,7 @@ import (
 )
 
 func TestStatusIsObservational(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	configDirectory := filepath.Join(home, ".config", "alias-lens")
 	if err := os.MkdirAll(configDirectory, 0o700); err != nil {
@@ -48,7 +48,7 @@ func TestStatusIsObservational(t *testing.T) {
 }
 
 func TestStatusReportsCatalogWithoutLeakingCommands(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	directory := filepath.Join(home, ".config", "alias-lens")
 	if err := os.MkdirAll(directory, 0o700); err != nil {
@@ -81,7 +81,7 @@ func TestStatusReportsCatalogWithoutLeakingCommands(t *testing.T) {
 }
 
 func TestStatusReportsCorruptStateAsUnreadable(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	configDirectory := filepath.Join(home, ".config", "alias-lens")
 	stateDirectory := filepath.Join(home, ".local", "state", "alias-lens")
@@ -106,7 +106,7 @@ func TestStatusReportsCorruptStateAsUnreadable(t *testing.T) {
 }
 
 func TestStatusReadsEnrolledCatalogInsideRepository(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	repository := filepath.Join(home, "dotfiles")
 	if err := os.MkdirAll(filepath.Join(repository, "custom"), 0o700); err != nil {

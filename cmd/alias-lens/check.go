@@ -1,32 +1,23 @@
 package main
 
 import (
+	"alias-lens/internal/shell"
 	"fmt"
 	"os"
 	"os/exec"
 	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 )
 
-type checkSeverity string
+type checkSeverity = shell.CheckSeverity
 
 const (
-	checkError   checkSeverity = "ERROR"
-	checkWarning checkSeverity = "WARN"
+	checkError   = shell.CheckError
+	checkWarning = shell.CheckWarning
 )
 
-type aliasCheckFinding struct {
-	Line     int
-	Severity checkSeverity
-	Message  string
-}
-
-var shellSyntaxLinePatterns = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)line\s+([0-9]+)`),
-	regexp.MustCompile(`:([0-9]+):`),
-}
+type aliasCheckFinding = shell.CheckFinding
 
 var executableName = regexp.MustCompile(`^[A-Za-z0-9_.+-]+$`)
 
@@ -36,6 +27,11 @@ func runAliasCheck(arguments []string) (int, error) {
 		strict = true
 	} else if len(arguments) != 0 {
 		return 2, fmt.Errorf("usage: al check [--strict]")
+	}
+	if active, err := catalogManagedEditing(); err != nil {
+		return 2, err
+	} else if active {
+		return runCatalogCheck(strict)
 	}
 	path, err := aliasesPath()
 	if err != nil {
@@ -245,49 +241,9 @@ func checkNativeShellSyntax(path, shell string) *aliasCheckFinding {
 	return adapter.CheckSyntax(path)
 }
 
-func (bashShellAdapter) CheckSyntax(path string) *aliasCheckFinding {
-	return checkNativeShellSyntaxCommand("bash", []string{"--noprofile", "--norc", "-n", path})
-}
+func shellCheckEnvironment() []string { return shell.LegacyCheckEnvironment() }
 
-func (zshShellAdapter) CheckSyntax(path string) *aliasCheckFinding {
-	return checkNativeShellSyntaxCommand("zsh", []string{"-f", "-n", path})
-}
-
-func checkNativeShellSyntaxCommand(shell string, arguments []string) *aliasCheckFinding {
-	if _, err := exec.LookPath(shell); err != nil {
-		return &aliasCheckFinding{Severity: checkWarning, Message: shell + " is not installed; native syntax was not checked"}
-	}
-	command := exec.Command(shell, arguments...)
-	command.Env = shellCheckEnvironment()
-	output, err := command.CombinedOutput()
-	if err == nil {
-		return nil
-	}
-	line := shellSyntaxLine(output)
-	return &aliasCheckFinding{Line: line, Severity: checkError, Message: shell + " reports invalid shell syntax"}
-}
-
-func shellCheckEnvironment() []string {
-	environment := make([]string, 0, len(os.Environ())+2)
-	for _, variable := range os.Environ() {
-		if strings.HasPrefix(variable, "BASH_ENV=") || strings.HasPrefix(variable, "ENV=") {
-			continue
-		}
-		environment = append(environment, variable)
-	}
-	return append(environment, "BASH_ENV=/dev/null", "ENV=/dev/null")
-}
-
-func shellSyntaxLine(output []byte) int {
-	for _, pattern := range shellSyntaxLinePatterns {
-		match := pattern.FindSubmatch(output)
-		if len(match) == 2 {
-			line, _ := strconv.Atoi(string(match[1]))
-			return line
-		}
-	}
-	return 0
-}
+func shellSyntaxLine(output []byte) int { return shell.SyntaxLine(output) }
 
 func aliasSyntaxDoctorCheck(path, shell string) DoctorCheck {
 	contents, err := os.ReadFile(path)

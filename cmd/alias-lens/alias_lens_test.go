@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alias-lens/internal/providers"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,10 +9,11 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestParseAliasDefinitionRoundTripsShellQuotes(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	command := `awk '{print $1}'`
 	name, parsed, ok := parseAliasDefinition("alias first=" + shellQuote(command))
 	if !ok || name != "first" || parsed != command {
@@ -20,20 +22,22 @@ func TestParseAliasDefinitionRoundTripsShellQuotes(t *testing.T) {
 }
 
 func TestParseAliasDefinitionRejectsUnsafeExecutableName(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	if _, _, ok := parseAliasDefinition(`alias 'safe; echo exposed'='git status'`); ok {
 		t.Fatal("accepted an alias name that is unsafe to execute through the shell integration")
 	}
 }
 
 func TestAddAliasPlacesRelatedCommandsTogetherAndCreatesPrivateBackup(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	path := filepath.Join(directory, ".bash_aliases")
 	original := "alias gst='git stash'\n\nalias gp='git push'\n"
 	if err := os.WriteFile(path, []byte(original), 0o640); err != nil {
 		t.Fatal(err)
 	}
 	backupPath := path + ".alias-lens.bak"
-	if err := os.WriteFile(backupPath, []byte("stale backup\n"), 0o644); err != nil {
+	if err := os.WriteFile(backupPath, []byte("stale backup\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -65,7 +69,8 @@ func TestAddAliasPlacesRelatedCommandsTogetherAndCreatesPrivateBackup(t *testing
 }
 
 func TestAliasWritePreservesSymlink(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	target := filepath.Join(directory, "aliases")
 	path := filepath.Join(directory, ".bash_aliases")
 	original := []byte("alias gs='git status'\n")
@@ -89,6 +94,7 @@ func TestAliasWritePreservesSymlink(t *testing.T) {
 }
 
 func TestWrapTextKeepsDescriptionWithinWidth(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	wrapped := wrapText("Long listing view with permissions owner size and date", 18)
 	for _, line := range strings.Split(wrapped, "\n") {
 		if len([]rune(line)) > 18 {
@@ -98,6 +104,7 @@ func TestWrapTextKeepsDescriptionWithinWidth(t *testing.T) {
 }
 
 func TestBuiltInThemesCanCycle(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	absolutely := nextTheme("phosphor")
 	ayu := nextTheme(absolutely.Preset)
 	catppuccin := nextTheme(ayu.Preset)
@@ -111,6 +118,7 @@ func TestBuiltInThemesCanCycle(t *testing.T) {
 }
 
 func TestOfficialThemePaletteValues(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	dracula := builtInTheme("dracula")
 	if dracula.Background != "#282A36" || dracula.Text != "#F8F8F2" || dracula.Selected != "#44475A" || dracula.Accent != "#FF79C6" {
 		t.Fatalf("Dracula preset drifted from its official palette: %+v", dracula)
@@ -122,7 +130,8 @@ func TestOfficialThemePaletteValues(t *testing.T) {
 }
 
 func TestEditAndDeleteAliasRemainRecoverable(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	path := filepath.Join(directory, ".bash_aliases")
 	original := "# Show status\nalias gs='git status'\n\n# Push changes\nalias gp='git push'\n"
 	if err := os.WriteFile(path, []byte(original), 0o640); err != nil {
@@ -149,6 +158,7 @@ func TestEditAndDeleteAliasRemainRecoverable(t *testing.T) {
 }
 
 func TestRankedSearchFindsMeaningAndTypos(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	aliases := []Alias{
 		{Name: "dps", Command: "docker ps", Description: "List containers"},
 		{Name: "gs", Command: "git status -sb", Description: "Show status"},
@@ -163,6 +173,7 @@ func TestRankedSearchFindsMeaningAndTypos(t *testing.T) {
 }
 
 func TestSingleLetterSearchReturnsEveryMatchingPrefix(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	aliases := []Alias{
 		{Name: "ll", Command: "eza -l"},
 		{Name: "gs", Command: "git status"},
@@ -176,6 +187,7 @@ func TestSingleLetterSearchReturnsEveryMatchingPrefix(t *testing.T) {
 }
 
 func TestHealthChecksFlagDuplicatesDangerAndMissingTools(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	aliases := []Alias{
 		{Name: "wipe", Command: "git reset --hard"},
 		{Name: "same", Command: "definitely-not-a-real-alias-lens-tool run"},
@@ -191,7 +203,8 @@ func TestHealthChecksFlagDuplicatesDangerAndMissingTools(t *testing.T) {
 }
 
 func TestRepositorySyncCommitsOnlyAliasFile(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	repository := filepath.Join(directory, "dotfiles")
 	if err := os.Mkdir(repository, 0o755); err != nil {
 		t.Fatal(err)
@@ -233,7 +246,8 @@ func runGit(t *testing.T, directory string, args ...string) string {
 }
 
 func TestFilterRemoteRepos(t *testing.T) {
-	repositories := []RemoteRepo{
+	t.Setenv("HOME", privateTestHome(t))
+	repositories := []providers.RemoteRepo{
 		{Provider: "github", FullName: "naqi/al", Description: "Alias manager"},
 		{Provider: "gitlab", FullName: "naqi/dotfiles", Description: "Shell configuration"},
 	}
@@ -252,16 +266,8 @@ func TestFilterRemoteRepos(t *testing.T) {
 	}
 }
 
-func TestTrustedNextURLRejectsCredentialRedirects(t *testing.T) {
-	if got := trustedNextURL("https://api.bitbucket.org/2.0/example?page=2", "api.bitbucket.org"); got == "" {
-		t.Fatal("trusted Bitbucket pagination URL was rejected")
-	}
-	if got := trustedNextURL("https://evil.example/steal", "api.bitbucket.org"); got != "" {
-		t.Fatalf("untrusted pagination URL was accepted: %s", got)
-	}
-}
-
 func TestConfigDefaultsAddProviderLayer(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	config := ensureConfigDefaults(AppConfig{Repository: "/tmp/dotfiles", AliasFile: "shell/.bash_aliases"})
 	github, exists := config.Providers["github"]
 	if !exists || !github.Enabled || github.Protocol != "auto" {
@@ -273,7 +279,8 @@ func TestConfigDefaultsAddProviderLayer(t *testing.T) {
 }
 
 func TestHistorySuggestionsUseRepeatedLongCommands(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	path := filepath.Join(directory, ".bash_history")
 	history := "#1700000000\ngo test ./...\ngo test ./...\ngo test ./...\ngit status\n"
 	if err := os.WriteFile(path, []byte(history), 0o600); err != nil {
@@ -290,6 +297,7 @@ func TestHistorySuggestionsUseRepeatedLongCommands(t *testing.T) {
 }
 
 func TestSecretScanReportsLocationWithoutValue(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	secret := "github_" + "pat_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456"
 	findings := findSecretFindings([]byte("alias safe='git status'\nalias leak='echo " + secret + "'\n"))
 	if len(findings) != 1 || findings[0].Line != 2 || findings[0].Kind != "GitHub token" {
@@ -302,7 +310,8 @@ func TestSecretScanReportsLocationWithoutValue(t *testing.T) {
 }
 
 func TestPushWithSecretStopsBeforeRepositoryWrite(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	repository := filepath.Join(directory, "dotfiles")
 	if err := os.Mkdir(repository, 0o755); err != nil {
 		t.Fatal(err)
@@ -323,6 +332,7 @@ func TestPushWithSecretStopsBeforeRepositoryWrite(t *testing.T) {
 }
 
 func TestFunctionsAndMetadataAreDiscoverable(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	contents := `# al: tags=git,work platforms=linux,wsl favorite=true
 # Open the current branch
 function gopen() {
@@ -343,7 +353,8 @@ function gopen() {
 }
 
 func TestMetadataEditPreservesUnchangedFields(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	path := filepath.Join(directory, ".bash_aliases")
 	original := "# al: tags=git platforms=linux category=work\nalias gs='git status'\n"
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
@@ -359,7 +370,8 @@ func TestMetadataEditPreservesUnchangedFields(t *testing.T) {
 }
 
 func TestAliasFormMetadataWritesEditableCategoryAndTags(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	path := filepath.Join(directory, ".bash_aliases")
 	if err := os.WriteFile(path, []byte("# Clear the screen\nalias cl='clear'\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -376,6 +388,7 @@ func TestAliasFormMetadataWritesEditableCategoryAndTags(t *testing.T) {
 }
 
 func TestSearchMatchesCustomCategory(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	aliases := []Alias{{Name: "cl", Command: "clear", Description: "Clear the screen", Category: "utility"}}
 	results := filterAliases(aliases, "utility")
 	if len(results) != 1 || results[0].Name != "cl" {
@@ -384,6 +397,7 @@ func TestSearchMatchesCustomCategory(t *testing.T) {
 }
 
 func TestAliasComparisonReportsBothSides(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	local := []byte("alias gs='git status -sb'\nalias ll='ls -la'\n")
 	remote := []byte("alias gs='git status'\nalias gp='git push'\n")
 	localOnly, remoteOnly, conflicts := compareAliasFiles(local, remote)
@@ -396,6 +410,7 @@ func TestAliasComparisonReportsBothSides(t *testing.T) {
 }
 
 func TestAliasDefinitionMapDoesNotConvertFunctions(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	contents := []byte("alias gs='git status'\nfunction gopen() { gh browse; }\n")
 	aliases := aliasDefinitionMap(contents)
 	if len(aliases) != 1 || aliases["gs"] != "git status" {
@@ -407,7 +422,8 @@ func TestAliasDefinitionMapDoesNotConvertFunctions(t *testing.T) {
 }
 
 func TestTimestampedRevisionCanBeListed(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	path := filepath.Join(directory, ".bash_aliases")
 	if err := os.WriteFile(path, []byte("alias gs='git status'\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -426,7 +442,8 @@ func TestTimestampedRevisionCanBeListed(t *testing.T) {
 }
 
 func TestBashLoaderSetupIsIdempotent(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bashrc")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bashrc")
 	if err := ensureStartupFileLoads(path, ".bash_aliases", bashAliasLoader); err != nil {
 		t.Fatal(err)
 	}
@@ -440,8 +457,9 @@ func TestBashLoaderSetupIsIdempotent(t *testing.T) {
 }
 
 func TestLinuxAndWSLSetupCoverInteractiveAndLoginShells(t *testing.T) {
-	home := t.TempDir()
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "linux", ""); err != nil {
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
+	if err := (mustShellAdapter("bash")).ConfigureStartup(home, "linux", ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".bashrc")); err != nil {
@@ -454,8 +472,9 @@ func TestLinuxAndWSLSetupCoverInteractiveAndLoginShells(t *testing.T) {
 }
 
 func TestMacBashSetupCoversLoginShells(t *testing.T) {
-	home := t.TempDir()
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
+	if err := (mustShellAdapter("bash")).ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
 	bashrc, err := os.ReadFile(filepath.Join(home, ".bashrc"))
@@ -469,13 +488,14 @@ func TestMacBashSetupCoversLoginShells(t *testing.T) {
 }
 
 func TestMacBashSetupPreservesProfileThatLoadsBashrc(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	profilePath := filepath.Join(home, ".bash_profile")
 	original := []byte("source ~/.bashrc\n")
 	if err := os.WriteFile(profilePath, original, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
+	if err := (mustShellAdapter("bash")).ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(profilePath)
@@ -488,14 +508,15 @@ func TestMacBashSetupPreservesProfileThatLoadsBashrc(t *testing.T) {
 }
 
 func TestBashSetupUsesExistingLoginFilePrecedence(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	for _, platform := range []string{"darwin", "linux"} {
 		t.Run(platform, func(t *testing.T) {
-			home := t.TempDir()
+			home := privateTestHome(t)
 			profilePath := filepath.Join(home, ".profile")
 			if err := os.WriteFile(profilePath, []byte("export EDITOR=vi\n"), 0o644); err != nil {
 				t.Fatal(err)
 			}
-			if err := (bashShellAdapter{}).ConfigureStartup(home, platform, ""); err != nil {
+			if err := (mustShellAdapter("bash")).ConfigureStartup(home, platform, ""); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := os.Stat(filepath.Join(home, ".bash_profile")); !os.IsNotExist(err) {
@@ -513,7 +534,8 @@ func TestBashSetupUsesExistingLoginFilePrecedence(t *testing.T) {
 }
 
 func TestCommentedStartupReferenceDoesNotBlockSetup(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bashrc")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bashrc")
 	if err := os.WriteFile(path, []byte("# old ~/.bash_aliases loader removed\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -530,9 +552,10 @@ func TestCommentedStartupReferenceDoesNotBlockSetup(t *testing.T) {
 }
 
 func TestShellIntegrationDoesNotAccumulateBlankLines(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	initial := []string{"alias gs='git status'", "", "", "# Alias Lens shell integration", `eval "$(command alias-lens shell-init bash)"`}
-	once := withShellIntegration(initial, bashShellAdapter{})
-	twice := withShellIntegration(once, bashShellAdapter{})
+	once := withShellIntegration(initial, mustShellAdapter("bash"))
+	twice := withShellIntegration(once, mustShellAdapter("bash"))
 	if strings.Join(once, "\n") != strings.Join(twice, "\n") {
 		t.Fatalf("shell integration was not idempotent:\n%q\n%q", once, twice)
 	}
@@ -542,6 +565,7 @@ func TestShellIntegrationDoesNotAccumulateBlankLines(t *testing.T) {
 }
 
 func TestAutoSyncDecisionNeverOverwritesConcurrentChanges(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	base := contentHash([]byte("base"))
 	local := contentHash([]byte("local"))
 	remote := contentHash([]byte("remote"))
@@ -567,7 +591,8 @@ func TestAutoSyncDecisionNeverOverwritesConcurrentChanges(t *testing.T) {
 }
 
 func TestNewAliasFileUsesPrivatePermissions(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_aliases")
 	if err := writeNewAliasFile(path, []byte("alias gs='git status'\n")); err != nil {
 		t.Fatal(err)
 	}
@@ -581,6 +606,7 @@ func TestNewAliasFileUsesPrivatePermissions(t *testing.T) {
 }
 
 func TestCredentialShapedFilesCannotBeTracked(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	rejected := []string{".env", ".env.production", "credentials.json", "private.key", "client.p12", "my-secrets.toml"}
 	for _, path := range rejected {
 		if !sensitiveConfigPath(path) {
@@ -595,7 +621,8 @@ func TestCredentialShapedFilesCannotBeTracked(t *testing.T) {
 }
 
 func TestTrackedFilesViewShowsSourceDestinationAndState(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	m := model{
 		width:           100,
@@ -622,7 +649,8 @@ func TestTrackedFilesViewShowsSourceDestinationAndState(t *testing.T) {
 }
 
 func TestTrackedFilesViewExplainsEmptyRegistry(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	view := (model{width: 90, height: 24, trackedOnly: true}).View()
 	if !strings.Contains(view, "SYNC STATUS") || !strings.Contains(view, "AUTO OFF") || !strings.Contains(view, "PRIMARY ALIAS FILE") || !strings.Contains(view, "None. Add one with") || !strings.Contains(view, "al track PATH") {
@@ -631,7 +659,8 @@ func TestTrackedFilesViewExplainsEmptyRegistry(t *testing.T) {
 }
 
 func TestF6LoadsPrimarySyncStatus(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	config := defaultConfig()
@@ -658,6 +687,7 @@ func TestF6LoadsPrimarySyncStatus(t *testing.T) {
 }
 
 func TestEnterSelectsAliasAndQuitsTheTUI(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	m := model{aliases: []Alias{{Name: "gc", Command: "git commit"}}, query: "g"}
 	updated, command := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	result := updated.(model)
@@ -670,6 +700,7 @@ func TestEnterSelectsAliasAndQuitsTheTUI(t *testing.T) {
 }
 
 func TestExecuteModeExplainsThatEnterRunsTheAlias(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	m := model{
 		aliases:     []Alias{{Name: "gs", Command: "git status", Description: "Show status", Category: "git"}},
@@ -686,6 +717,7 @@ func TestExecuteModeExplainsThatEnterRunsTheAlias(t *testing.T) {
 }
 
 func TestBashIntegrationExecutesAliasNameInsteadOfCommandText(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	if !strings.Contains(bashIntegration, `_alias_lens_name="$(command env ALIAS_LENS_SHELL=bash ALIAS_LENS_HISTORY_FILE=`) {
 		t.Fatal("shell integration does not capture the selected alias name")
 	}
@@ -716,6 +748,7 @@ func TestBashIntegrationExecutesAliasNameInsteadOfCommandText(t *testing.T) {
 }
 
 func TestTallTerminalShowsMoreSuggestedAliases(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	if count := (model{height: 40}).visibleCount(); count != 6 {
 		t.Fatalf("tall terminal pages by %d aliases, want 6", count)

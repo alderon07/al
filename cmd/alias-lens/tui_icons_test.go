@@ -39,7 +39,7 @@ func TestPixelIconsHaveOneFixedWidthRow(t *testing.T) {
 }
 
 func TestInteractiveViewsUsePlainTextLabels(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	applyTheme(builtInTheme("phosphor"))
 	t.Cleanup(func() { applyTheme(defaultTheme()) })
 

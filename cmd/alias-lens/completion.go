@@ -23,12 +23,6 @@ const (
 	completionMaxResults  = 1000
 )
 
-type commandSpec struct {
-	Name    string
-	Summary string
-	Usage   string
-}
-
 type completionRule struct {
 	Path    []string
 	Values  []string
@@ -36,67 +30,6 @@ type completionRule struct {
 }
 
 var completionCandidateName = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_.-]{0,254}$`)
-
-// publicCommandSpecs is the shared index for command help and shell completion.
-// Detailed help remains in commandUsage so existing 1.x text stays byte-for-byte
-// compatible while the command index has one source of names and summaries.
-var publicCommandSpecs = newPublicCommandSpecs()
-
-func newPublicCommandSpecs() []commandSpec {
-	rows := [][2]string{
-		{"pick", "Select an alias without using it"},
-		{"use", "Select and use an alias through the shell integration"},
-		{"search", "Find aliases by name or metadata"},
-		{"context", "Mark aliases for the current project or folder"},
-		{"stats", "Show alias usage"},
-		{"export", "Export aliases or usage data"},
-		{"import", "Preview or import aliases from a file"},
-		{"suggest", "Find repeated commands in shell history"},
-		{"meta", "Edit alias metadata"},
-		{"describe", "Add missing alias descriptions"},
-		{"check", "Check alias syntax without using it"},
-		{"scan", "Find likely secrets without showing their values"},
-		{"history", "List private alias revisions"},
-		{"undo", "Restore a private alias revision"},
-		{"doctor", "Diagnose the Alias Lens installation"},
-		{"setup", "Install, repair, or remove shell integration"},
-		{"data", "Show or clear private local data"},
-		{"status", "Show what is ready without changing files"},
-		{"plan", "Preview a change without applying it"},
-		{"catalog", "Inspect the shell-neutral catalog"},
-		{"repo", "Configure a Git repository"},
-		{"config", "Show or change Alias Lens settings"},
-		{"track", "Add a file to automatic sync"},
-		{"untrack", "Remove a file from automatic sync"},
-		{"sync", "Synchronize aliases with the configured repository"},
-		{"diff", "Compare local and repository aliases"},
-		{"autosync", "Configure background synchronization"},
-		{"watch", "Check once for changes that need to sync"},
-		{"theme", "Show or select a terminal theme"},
-		{"shortcuts", "Show or configure keyboard shortcuts"},
-		{"completion", "Print Bash or Zsh completion code"},
-		{"shell-init", "Print shell integration code"},
-		{"--web", "Start the optional local browser"},
-		{"--version", "Print the installed version"},
-	}
-	result := make([]commandSpec, 0, len(rows))
-	for _, row := range rows {
-		result = append(result, commandSpec{Name: row[0], Summary: row[1], Usage: commandUsage[row[0]]})
-	}
-	return result
-}
-
-func lookupCommandSpec(name string) (commandSpec, bool) {
-	if name == "version" || name == "-v" {
-		name = "--version"
-	}
-	for _, spec := range publicCommandSpecs {
-		if spec.Name == name {
-			return spec, true
-		}
-	}
-	return commandSpec{}, false
-}
 
 func completionRules() []completionRule {
 	commands := make([]string, 0, len(publicCommandSpecs))
@@ -129,14 +62,35 @@ func completionRules() []completionRule {
 		{Path: []string{"config", "profile", "remove"}, Dynamic: "profiles"},
 		{Path: []string{"data"}, Values: []string{"paths", "clear-usage", "clear-revisions"}},
 		{Path: []string{"status"}, Values: []string{"--json"}},
-		{Path: []string{"plan"}, Values: []string{"--json", "config", "completion"}},
+		{Path: []string{"plan"}, Values: []string{"--json", "config", "completion", "catalog", "init"}},
+		{Path: []string{"init"}, Values: []string{"--shell", "--startup-path", "--catalog-path", "--apply"}},
+		{Path: []string{"init", "--shell"}, Values: shells},
+		{Path: []string{"plan", "init"}, Values: []string{"--shell", "--startup-path", "--catalog-path"}},
+		{Path: []string{"plan", "init", "--shell"}, Values: shells},
+		{Path: []string{"catalog", "enable"}, Values: []string{"--shell", "--startup-path", "--apply"}},
+		{Path: []string{"catalog", "enable", "--shell"}, Values: shells},
+		{Path: []string{"catalog", "plan"}, Values: []string{"--shell", "--startup-path", "--json"}},
+		{Path: []string{"catalog", "plan", "--shell"}, Values: shells},
+		{Path: []string{"catalog", "review"}, Values: []string{"--shell", "--startup-path"}},
+		{Path: []string{"catalog", "review", "--shell"}, Values: shells},
+		{Path: []string{"catalog", "approve"}, Values: []string{"--shell", "--startup-path"}},
+		{Path: []string{"catalog", "approve", "--shell"}, Values: shells},
+		{Path: []string{"catalog", "adopt"}, Values: []string{"--shell", "--startup-path"}},
+		{Path: []string{"catalog", "adopt", "--shell"}, Values: shells},
+		{Path: []string{"catalog", "rollback"}, Values: []string{"--shell", "--apply"}},
+		{Path: []string{"catalog", "rollback", "--shell"}, Values: shells},
+		{Path: []string{"plan", "catalog", "enable"}, Values: []string{"--shell", "--startup-path"}},
+		{Path: []string{"plan", "catalog", "enable", "--shell"}, Values: shells},
+		{Path: []string{"plan", "catalog", "rollback"}, Values: []string{"--shell", "--startup-path"}},
+		{Path: []string{"plan", "catalog", "rollback", "--shell"}, Values: shells},
+		{Path: []string{"plan", "catalog"}, Values: []string{"enable", "rollback"}},
 		{Path: []string{"plan", "config"}, Values: []string{"profile"}},
 		{Path: []string{"plan", "config", "profile"}, Values: []string{"add", "remove"}},
 		{Path: []string{"plan", "config", "profile", "remove"}, Dynamic: "profiles"},
 		{Path: []string{"plan", "completion"}, Values: []string{"install", "remove"}},
 		{Path: []string{"plan", "completion", "install"}, Values: shells},
 		{Path: []string{"plan", "completion", "remove"}, Values: shells},
-		{Path: []string{"catalog"}, Values: []string{"preview", "import", "shadow", "diff"}},
+		{Path: []string{"catalog"}, Values: []string{"preview", "import", "shadow", "diff", "enable", "plan", "review", "approve", "adopt", "rollback", "recover"}},
 		{Path: []string{"catalog", "preview"}, Values: []string{"--json", "--from", "--shell"}},
 		{Path: []string{"catalog", "preview", "--from"}, Values: shells},
 		{Path: []string{"catalog", "preview", "--shell"}, Values: shells},
@@ -163,7 +117,7 @@ func completionRules() []completionRule {
 		{Path: []string{"export", "stats", "--period"}, Values: periods},
 		{Path: []string{"import"}, Values: []string{"--apply"}},
 		{Path: []string{"check"}, Values: []string{"--strict"}},
-		{Path: []string{"sync"}, Values: []string{"--push", "--pull"}},
+		{Path: []string{"sync"}, Values: []string{"--push", "--pull", "--catalog", "--apply", "--resolve"}},
 		{Path: []string{"autosync"}, Values: []string{"enable", "disable", "status"}},
 		{Path: []string{"shortcuts"}, Values: []string{"auto", "windows", "linux", "macos", "test", "set", "reset", "reset-all"}},
 		{Path: []string{"shortcuts", "set"}, Values: shortcutCompletionActions()},
@@ -467,6 +421,9 @@ func runCompletionCandidates(arguments []string, output io.Writer) bool {
 }
 
 func completionEntryCandidates(adapter ShellAdapter) ([]string, error) {
+	if names, handled, err := catalogInstalledCompletionNames(adapter.Name()); handled || err != nil {
+		return names, err
+	}
 	active, err := completionCatalogActive(adapter.Name())
 	if err != nil {
 		return nil, err

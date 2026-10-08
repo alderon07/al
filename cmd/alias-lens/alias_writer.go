@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alias-lens/internal/transaction"
 	"bytes"
 	"fmt"
 	"os"
@@ -18,6 +19,11 @@ func addAlias(name, command, description string) error {
 }
 
 func addAliasWithMetadata(name, command, description string, metadata EntryMetadata) error {
+	if active, err := catalogManagedEditing(); err != nil {
+		return err
+	} else if active {
+		return addCatalogAlias(name, command, description, metadata)
+	}
 	path, err := aliasesPath()
 	if err != nil {
 		return err
@@ -68,6 +74,10 @@ type aliasAddition struct {
 }
 
 func addAliasesToFile(path string, additions []aliasAddition) error {
+	return withMutation(func(session *mutationSession) error { return addAliasesToFileInSession(session, path, additions) })
+}
+
+func addAliasesToFileInSession(session *mutationSession, path string, additions []aliasAddition) error {
 	contents, mode, lines, err := readAliasFile(path)
 	if err != nil {
 		return err
@@ -102,7 +112,7 @@ func addAliasesToFile(path string, additions []aliasAddition) error {
 	if len(updated) > aliasFileLimit {
 		return fmt.Errorf("alias file would exceed %d bytes", aliasFileLimit)
 	}
-	return writeAliasFile(path, contents, updated, mode)
+	return writeAliasFileInSession(session, path, contents, updated, mode)
 }
 
 func editAlias(originalName, name, command, description string) error {
@@ -110,6 +120,11 @@ func editAlias(originalName, name, command, description string) error {
 }
 
 func editAliasWithMetadata(originalName, name, command, description string, metadata EntryMetadata) error {
+	if active, err := catalogManagedEditing(); err != nil {
+		return err
+	} else if active {
+		return editCatalogAlias(originalName, name, command, description, metadata)
+	}
 	path, err := aliasesPath()
 	if err != nil {
 		return err
@@ -165,6 +180,11 @@ func editAliasInFileWithMetadata(path, originalName, name, command, description 
 }
 
 func deleteAlias(name string) error {
+	if active, err := catalogManagedEditing(); err != nil {
+		return err
+	} else if active {
+		return deleteCatalogAlias(name)
+	}
 	path, err := aliasesPath()
 	if err != nil {
 		return err
@@ -198,6 +218,11 @@ func deleteAliasFromFile(path, name string) error {
 }
 
 func addAliasDescriptions() error {
+	if active, e := catalogManagedEditing(); e != nil {
+		return e
+	} else if active {
+		return addCatalogDescriptions()
+	}
 	path, err := aliasesPath()
 	if err != nil {
 		return err
@@ -362,62 +387,32 @@ func isDescriptionComment(line string) bool {
 }
 
 func writeAliasFile(path string, contents, updated []byte, mode os.FileMode) error {
-	if err := aliasFileMatchesExpected(path, contents); err != nil {
-		return err
+	return withMutation(func(session *mutationSession) error {
+		return writeAliasFileInSession(session, path, contents, updated, mode)
+	})
+}
+func writeAliasFileInSession(session *mutationSession, path string, contents, updated []byte, mode os.FileMode) error {
+	id, e := transaction.InspectWorkflowTarget(path, aliasFileLimit, true)
+	if e != nil {
+		return e
 	}
-	if _, err := os.Lstat(path); err == nil {
-		if err := saveRevision(path, contents); err != nil {
-			return fmt.Errorf("save revision: %w", err)
+	if id.Exists && id.SHA256 != hashBytes(contents) || !id.Exists && len(contents) != 0 {
+		return fmt.Errorf("alias file changed since it was read; retry the edit")
+	}
+	if id.Exists {
+		if e = saveRevisionInSession(session, path, contents); e != nil {
+			return fmt.Errorf("save revision: %w", e)
 		}
-		if err := writePrivateBackup(path+".alias-lens.bak", contents); err != nil {
-			return fmt.Errorf("create backup: %w", err)
-		}
-	} else if !os.IsNotExist(err) {
-		return err
-	}
-	writePath := path
-	if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
-		resolved, resolveErr := filepath.EvalSymlinks(path)
-		if resolveErr != nil {
-			return fmt.Errorf("resolve alias file symlink: %w", resolveErr)
-		}
-		writePath = resolved
-	} else if err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	temporary, err := os.CreateTemp(filepath.Dir(writePath), ".alias-lens-write-*")
-	if err != nil {
-		return err
-	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(mode); err != nil {
-		temporary.Close()
-		return err
-	}
-	if _, err := temporary.Write(updated); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if atomicWriteBeforeRename != nil {
-		if err := atomicWriteBeforeRename(writePath); err != nil {
-			return err
+		if e = writePrivateBackupInSession(session, path+".alias-lens.bak", contents); e != nil {
+			return fmt.Errorf("create backup: %w", e)
 		}
 	}
-	if err := aliasFileMatchesExpected(writePath, contents); err != nil {
-		return err
+	if !id.Exists {
+		mode = 0o600
+	} else {
+		mode = os.FileMode(id.Mode)
 	}
-	if err := os.Rename(temporaryPath, writePath); err != nil {
-		return err
-	}
-	return syncDirectory(filepath.Dir(writePath))
+	return session.writeUserFile(path, contents, updated, mode, true, 0, true)
 }
 
 func aliasFileMatchesExpected(path string, expected []byte) error {
@@ -435,36 +430,17 @@ func aliasFileMatchesExpected(path string, expected []byte) error {
 }
 
 func writePrivateBackup(path string, contents []byte) error {
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".alias-lens-backup-*")
-	if err != nil {
-		return err
+	return withMutation(func(session *mutationSession) error { return writePrivateBackupInSession(session, path, contents) })
+}
+func writePrivateBackupInSession(session *mutationSession, path string, contents []byte) error {
+	id, previous, e := transaction.ReadWorkflowTarget(path, aliasFileLimit)
+	if e != nil {
+		return e
 	}
-	temporaryPath := temporary.Name()
-	defer os.Remove(temporaryPath)
-	if err := temporary.Chmod(0o600); err != nil {
-		temporary.Close()
-		return err
+	if id.Exists && id.Mode != 0o600 {
+		return transaction.ErrUnsafePath
 	}
-	if _, err := temporary.Write(contents); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Sync(); err != nil {
-		temporary.Close()
-		return err
-	}
-	if err := temporary.Close(); err != nil {
-		return err
-	}
-	if atomicWriteBeforeRename != nil {
-		if err := atomicWriteBeforeRename(path); err != nil {
-			return err
-		}
-	}
-	if err := os.Rename(temporaryPath, path); err != nil {
-		return err
-	}
-	return syncDirectory(filepath.Dir(path))
+	return session.writeUserFile(path, previous, contents, 0o600, false, 3, false)
 }
 
 func writeFileAtomically(path string, contents []byte, mode os.FileMode) error {

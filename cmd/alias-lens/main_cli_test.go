@@ -7,7 +7,7 @@ import (
 )
 
 func TestMainFailureExitCodes(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	missingImport := filepath.Join(home, "missing.aliases")
 

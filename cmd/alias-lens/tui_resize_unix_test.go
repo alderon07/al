@@ -14,7 +14,7 @@ import (
 
 	"github.com/creack/pty/v2"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestTUIFooterSurvivesPTYResize(t *testing.T) {
@@ -186,7 +186,7 @@ func TestControlPunctuationPTY(t *testing.T) {
 }
 
 func TestManagedRepositoryPathPTY(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	command := exec.Command(os.Args[0], "-test.run=^TestManagedRepositoryPathHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_SYNC_PATH_HELPER=1", "HOME="+home, "NO_COLOR=1", "TERM=xterm-256color")
 	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})

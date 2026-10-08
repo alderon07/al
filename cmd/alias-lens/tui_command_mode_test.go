@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func letterKey(letter rune) tea.KeyMsg {
@@ -70,7 +70,7 @@ func TestCustomSingleLetterActionWorksInCommandMode(t *testing.T) {
 }
 
 func TestSyncActionTakesPriorityOverSameLetterPageAction(t *testing.T) {
-	t.Setenv("HOME", t.TempDir())
+	t.Setenv("HOME", privateTestHome(t))
 	for _, overrides := range []map[string]string{{"delete": "b", "help": "d"}, {"sync.diff": "h"}} {
 		config := defaultConfig()
 		config.Shortcuts = overrides

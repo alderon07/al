@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"alias-lens/cmd/alias-lens/internal/usagelog"
+	"alias-lens/internal/usagelog"
 )
 
 func recordAliasUse(name string) error {
@@ -16,5 +16,10 @@ func recordAliasUse(name string) error {
 	if err != nil {
 		return err
 	}
-	return usagelog.Record(home, name, time.Now())
+	return withMutation(func(session *mutationSession) error {
+		if _, e := session.dataRoot(); e != nil {
+			return e
+		}
+		return usagelog.RecordUnlocked(home, name, time.Now())
+	})
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"alias-lens/internal/providers"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -61,7 +62,7 @@ func ensureManagedRepositoryPath(root, target string) error {
 	return nil
 }
 
-func managedRepositoryDestination(home string, repo RemoteRepo) (string, error) {
+func managedRepositoryDestination(home string, repo providers.RemoteRepo) (string, error) {
 	provider, err := cleanRepositoryPathComponent(repo.Provider)
 	if err != nil {
 		return "", fmt.Errorf("invalid repository provider: %w", err)

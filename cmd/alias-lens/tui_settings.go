@@ -3,7 +3,7 @@ package main
 import (
 	"strings"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 	"github.com/rivo/uniseg"
 )
 

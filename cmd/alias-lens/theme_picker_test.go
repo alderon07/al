@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestThemePickerPreviewsAndEscRestores(t *testing.T) {
@@ -37,7 +37,7 @@ func TestThemePickerPreviewsAndEscRestores(t *testing.T) {
 }
 
 func TestThemePickerEnterSavesPreview(t *testing.T) {
-	home := t.TempDir()
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	applyTheme(builtInTheme("tokyo-night"))
 	defer applyTheme(defaultTheme())

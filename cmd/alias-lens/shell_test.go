@@ -8,10 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/cmd/alias-lens/internal/tea"
+	tea "alias-lens/internal/tea"
 )
 
 func TestSetupDetectsShellFromEnvironment(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "")
 	t.Setenv("SHELL", "/usr/local/bin/zsh")
 	adapter, err := requestedShellAdapter("")
@@ -24,6 +25,7 @@ func TestSetupDetectsShellFromEnvironment(t *testing.T) {
 }
 
 func TestExplicitSetupShellOverridesEnvironment(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "zsh")
 	t.Setenv("SHELL", "/bin/zsh")
 	adapter, err := requestedShellAdapter("bash")
@@ -36,6 +38,7 @@ func TestExplicitSetupShellOverridesEnvironment(t *testing.T) {
 }
 
 func TestActiveShellAdapterSelectionTable(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	cases := []struct {
 		name        string
 		integration string
@@ -50,7 +53,7 @@ func TestActiveShellAdapterSelectionTable(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			home := t.TempDir()
+			home := privateTestHome(t)
 			t.Setenv("HOME", home)
 			t.Setenv(activeShellEnvironment, test.integration)
 			t.Setenv("SHELL", test.shell)
@@ -65,6 +68,7 @@ func TestActiveShellAdapterSelectionTable(t *testing.T) {
 }
 
 func TestRequestedShellAdapterSelectionTable(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	cases := []struct {
 		name        string
 		explicit    string
@@ -84,7 +88,7 @@ func TestRequestedShellAdapterSelectionTable(t *testing.T) {
 	}
 	for _, test := range cases {
 		t.Run(test.name, func(t *testing.T) {
-			home := t.TempDir()
+			home := privateTestHome(t)
 			t.Setenv("HOME", home)
 			t.Setenv(activeShellEnvironment, test.integration)
 			t.Setenv("SHELL", test.shell)
@@ -109,7 +113,8 @@ func TestRequestedShellAdapterSelectionTable(t *testing.T) {
 }
 
 func TestActiveShellSelectionMalformedConfigDoesNotRewriteIt(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "")
 	path := filepath.Join(home, ".config", "alias-lens", "config.json")
@@ -133,6 +138,7 @@ func TestActiveShellSelectionMalformedConfigDoesNotRewriteIt(t *testing.T) {
 }
 
 func TestSetupRejectsUnsupportedDetectedShell(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv(activeShellEnvironment, "")
 	t.Setenv("SHELL", "/usr/bin/fish")
 	if _, err := requestedShellAdapter(""); err == nil || !strings.Contains(err.Error(), "unsupported shell") {
@@ -141,9 +147,10 @@ func TestSetupRejectsUnsupportedDetectedShell(t *testing.T) {
 }
 
 func TestZshStartupSetupIsIdempotent(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	t.Setenv("ZDOTDIR", "")
-	home := t.TempDir()
-	adapter := zshShellAdapter{}
+	home := privateTestHome(t)
+	adapter := mustShellAdapter("zsh")
 	if err := adapter.ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -160,13 +167,14 @@ func TestZshStartupSetupIsIdempotent(t *testing.T) {
 }
 
 func TestZshSetupRespectsZdotdir(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	zdotdir := filepath.Join(home, "zsh")
 	if err := os.MkdirAll(zdotdir, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("ZDOTDIR", zdotdir)
-	if err := (zshShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
+	if err := (mustShellAdapter("zsh")).ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(filepath.Join(zdotdir, ".zshrc"))
@@ -179,10 +187,11 @@ func TestZshSetupRespectsZdotdir(t *testing.T) {
 }
 
 func TestAdapterPathMatrix(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(historyFileEnvironment, "")
-	bash := bashShellAdapter{}
+	bash := mustShellAdapter("bash")
 	if path, err := aliasPathFor(bash); err == nil {
 		if want := filepath.Join(home, ".bash_aliases"); path != want {
 			t.Fatalf("Bash alias path = %q, want %q", path, want)
@@ -200,7 +209,7 @@ func TestAdapterPathMatrix(t *testing.T) {
 
 	zdotdir := filepath.Join(home, "zsh")
 	t.Setenv("ZDOTDIR", zdotdir)
-	zsh := zshShellAdapter{}
+	zsh := mustShellAdapter("zsh")
 	if got := historyPathFor(zsh, home); got != filepath.Join(home, ".zsh_history") {
 		t.Fatalf("Zsh history path = %q", got)
 	}
@@ -217,7 +226,8 @@ func TestAdapterPathMatrix(t *testing.T) {
 }
 
 func TestBashSetupKeepsUserBinaryOnPathAfterRestart(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	binDir := filepath.Join(home, ".local", "bin")
 	if err := os.MkdirAll(binDir, 0o700); err != nil {
 		t.Fatal(err)
@@ -236,7 +246,7 @@ func TestBashSetupKeepsUserBinaryOnPathAfterRestart(t *testing.T) {
 	if err := os.WriteFile(bashrc, original, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	adapter := bashShellAdapter{}
+	adapter := mustShellAdapter("bash")
 	if err := adapter.ConfigureStartup(home, "linux", binDir); err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +285,8 @@ func TestBashSetupKeepsUserBinaryOnPathAfterRestart(t *testing.T) {
 }
 
 func TestSetupRemoveKeepsAliasesAndUnrelatedBashSettings(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	aliasPath := filepath.Join(home, ".bash_aliases")
@@ -332,7 +343,8 @@ func TestSetupRemoveKeepsAliasesAndUnrelatedBashSettings(t *testing.T) {
 }
 
 func TestSetupRemoveRespectsZdotdir(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	zdotdir := filepath.Join(home, "zsh")
 	t.Setenv("HOME", home)
 	t.Setenv("ZDOTDIR", zdotdir)
@@ -361,7 +373,8 @@ func TestSetupRemoveRespectsZdotdir(t *testing.T) {
 }
 
 func TestSetupRepairNormalizesDuplicateGeneratedBlocks(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	aliasPath := filepath.Join(home, ".bash_aliases")
@@ -388,12 +401,13 @@ func TestSetupRepairNormalizesDuplicateGeneratedBlocks(t *testing.T) {
 }
 
 func TestMacBashSetupNormalizesDuplicateLoginLoaders(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	profilePath := filepath.Join(home, ".bash_profile")
 	if err := os.WriteFile(profilePath, []byte(bashLoginLoader+bashLoginLoader), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := (bashShellAdapter{}).ConfigureStartup(home, "darwin", ""); err != nil {
+	if err := (mustShellAdapter("bash")).ConfigureStartup(home, "darwin", ""); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(profilePath)
@@ -406,9 +420,10 @@ func TestMacBashSetupNormalizesDuplicateLoginLoaders(t *testing.T) {
 }
 
 func TestZshSetupPersistsUserBinaryDirectory(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	binDir := filepath.Join(home, ".local", "bin")
-	if err := (zshShellAdapter{}).ConfigureStartup(home, "linux", binDir); err != nil {
+	if err := (mustShellAdapter("zsh")).ConfigureStartup(home, "linux", binDir); err != nil {
 		t.Fatal(err)
 	}
 	contents, err := os.ReadFile(filepath.Join(home, ".zshrc"))
@@ -421,7 +436,8 @@ func TestZshSetupPersistsUserBinaryDirectory(t *testing.T) {
 }
 
 func TestUserOwnedExecutableDirectory(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	want := filepath.Join(home, ".local", "bin")
 	if got := userOwnedExecutableDirectory(filepath.Join(want, "alias-lens"), home); got != want {
 		t.Fatalf("user executable directory = %q, want %q", got, want)
@@ -432,7 +448,8 @@ func TestUserOwnedExecutableDirectory(t *testing.T) {
 }
 
 func TestZshExtendedHistoryIsNormalized(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".zsh_history")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".zsh_history")
 	contents := ": 1789059600:4;git status --short --branch\n: 1789059610:0;git status --short --branch\n"
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
@@ -447,33 +464,36 @@ func TestZshExtendedHistoryIsNormalized(t *testing.T) {
 }
 
 func TestBash32SetupInstructionsUseDirectCommand(t *testing.T) {
-	binDirectory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	binDirectory := privateTestHome(t)
 	bash := filepath.Join(binDirectory, "bash")
 	if err := os.WriteFile(bash, []byte("#!/bin/sh\nprintf 'GNU bash, version 3.2.57(1)-release\\n'\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", binDirectory)
-	if message := shellSetupInstruction(bashShellAdapter{}); !strings.Contains(message, "run al") || !strings.Contains(message, "Bash 4") {
+	if message := shellSetupInstruction(mustShellAdapter("bash")); !strings.Contains(message, "run al") || !strings.Contains(message, "Bash 4") {
 		t.Fatalf("Bash 3.2 setup instruction = %q", message)
 	}
-	if message := shellActionsMessage(bashShellAdapter{}); !strings.Contains(message, "run al") || strings.Contains(message, "Ctrl+G are enabled") {
+	if message := shellActionsMessage(mustShellAdapter("bash")); !strings.Contains(message, "run al") || strings.Contains(message, "Ctrl+G are enabled") {
 		t.Fatalf("Bash 3.2 doctor instruction = %q", message)
 	}
 }
 
 func TestModernBashSetupInstructionsAdvertiseCtrlG(t *testing.T) {
-	binDirectory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	binDirectory := privateTestHome(t)
 	bash := filepath.Join(binDirectory, "bash")
 	if err := os.WriteFile(bash, []byte("#!/bin/sh\nprintf 'GNU bash, version 5.2.15(1)-release\\n'\n"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", binDirectory)
-	if message := shellSetupInstruction(bashShellAdapter{}); !strings.Contains(message, "press Ctrl+G") {
+	if message := shellSetupInstruction(mustShellAdapter("bash")); !strings.Contains(message, "press Ctrl+G") {
 		t.Fatalf("modern Bash setup instruction = %q", message)
 	}
 }
 
 func TestZshIntegrationExecutesAliasName(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	if !strings.Contains(zshIntegration, `ALIAS_LENS_SHELL=zsh ALIAS_LENS_HISTORY_FILE=`) {
 		t.Fatal("Zsh integration does not pin commands to the Zsh adapter")
 	}
@@ -501,6 +521,7 @@ func TestZshIntegrationExecutesAliasName(t *testing.T) {
 }
 
 func TestShellEntryDefinitionReloadsAliasesAndFunctions(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	definition, err := shellEntryDefinition(Alias{Name: "cl", Command: "printf '%s\\n' cleared", Type: "alias"})
 	if err != nil {
 		t.Fatal(err)
@@ -511,13 +532,14 @@ func TestShellEntryDefinitionReloadsAliasesAndFunctions(t *testing.T) {
 	}
 
 	definition, err = shellEntryDefinition(Alias{Name: "mkcd", Command: "mkdir -p \"$1\"; cd \"$1\"", Type: "function"})
-	if err != nil || !strings.Contains(definition, "mkcd() {") || !strings.Contains(definition, "mkdir -p") {
+	if err != nil || !strings.Contains(definition, "function mkcd {") || !strings.Contains(definition, "mkdir -p") {
 		t.Fatalf("function definition was not reconstructed: %q, %v", definition, err)
 	}
 }
 
 func TestNewlyWrittenAliasCanBeLoadedIntoCurrentShell(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv(activeShellEnvironment, "bash")
 	path := filepath.Join(home, ".bash_aliases")
@@ -538,7 +560,8 @@ func TestNewlyWrittenAliasCanBeLoadedIntoCurrentShell(t *testing.T) {
 }
 
 func TestBashIntegrationLoadsNewAliasBeforeRunningIt(t *testing.T) {
-	directory := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	directory := privateTestHome(t)
 	shim := filepath.Join(directory, "alias-lens")
 	contents := `#!/bin/sh
 if [ "${1-}" = "shell-entry" ]; then
@@ -568,11 +591,13 @@ fi
 }
 
 func TestBashShellIntegrationGolden(t *testing.T) {
-	assertShellIntegrationGolden(t, bashShellAdapter{}, "bash-integration.golden")
+	t.Setenv("HOME", privateTestHome(t))
+	assertShellIntegrationGolden(t, mustShellAdapter("bash"), "bash-integration.golden")
 }
 
 func TestZshShellIntegrationGolden(t *testing.T) {
-	assertShellIntegrationGolden(t, zshShellAdapter{}, "zsh-integration.golden")
+	t.Setenv("HOME", privateTestHome(t))
+	assertShellIntegrationGolden(t, mustShellAdapter("zsh"), "zsh-integration.golden")
 }
 
 func assertShellIntegrationGolden(t *testing.T, adapter ShellAdapter, filename string) {
@@ -587,11 +612,13 @@ func assertShellIntegrationGolden(t *testing.T, adapter ShellAdapter, filename s
 }
 
 func TestShellAdapterContractBash(t *testing.T) {
-	assertShellAdapterContract(t, bashShellAdapter{}, "builtin history -s", "clear-readline-buffer")
+	t.Setenv("HOME", privateTestHome(t))
+	assertShellAdapterContract(t, mustShellAdapter("bash"), "builtin history -s", "clear-readline-buffer")
 }
 
 func TestShellAdapterContractZsh(t *testing.T) {
-	assertShellAdapterContract(t, zshShellAdapter{}, "print -s", "zle-send-break")
+	t.Setenv("HOME", privateTestHome(t))
+	assertShellAdapterContract(t, mustShellAdapter("zsh"), "print -s", "zle-send-break")
 }
 
 func assertShellAdapterContract(t *testing.T, adapter ShellAdapter, historyCommand, promptAction string) {
@@ -608,7 +635,8 @@ func assertShellAdapterContract(t *testing.T, adapter ShellAdapter, historyComma
 }
 
 func TestAdapterNameMatrix(t *testing.T) {
-	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+	t.Setenv("HOME", privateTestHome(t))
+	for _, adapter := range []ShellAdapter{mustShellAdapter("bash"), mustShellAdapter("zsh")} {
 		for _, name := range []string{"ll", "g.s", "1x", "-x", "_x"} {
 			if err := adapter.ValidateEntryName(name, "alias"); err != nil {
 				t.Errorf("%s rejected baseline alias name %q: %v", adapter.Name(), name, err)
@@ -628,7 +656,8 @@ func TestAdapterNameMatrix(t *testing.T) {
 }
 
 func TestUnknownEntryTypeBaseline(t *testing.T) {
-	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+	t.Setenv("HOME", privateTestHome(t))
+	for _, adapter := range []ShellAdapter{mustShellAdapter("bash"), mustShellAdapter("zsh")} {
 		definition, err := adapter.RenderEntryDefinition(Alias{Name: "ll", Command: "ls -al", Type: "unknown"})
 		if err != nil || definition != "alias ll='ls -al'" {
 			t.Fatalf("%s unknown entry type baseline = %q, %v", adapter.Name(), definition, err)
@@ -637,9 +666,10 @@ func TestUnknownEntryTypeBaseline(t *testing.T) {
 }
 
 func TestAdapterParsingDoesNotExecuteContent(t *testing.T) {
-	sentinel := filepath.Join(t.TempDir(), "executed")
+	t.Setenv("HOME", privateTestHome(t))
+	sentinel := filepath.Join(privateTestHome(t), "executed")
 	command := "touch " + sentinel
-	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+	for _, adapter := range []ShellAdapter{mustShellAdapter("bash"), mustShellAdapter("zsh")} {
 		definition, err := adapter.RenderEntryDefinition(Alias{Name: "unsafe", Command: command, Type: "alias"})
 		if err != nil {
 			t.Fatal(err)
@@ -655,7 +685,8 @@ func TestAdapterParsingDoesNotExecuteContent(t *testing.T) {
 }
 
 func TestZshHistoryAdapterPreservesMalformedPrefixBaseline(t *testing.T) {
-	adapter := zshShellAdapter{}
+	t.Setenv("HOME", privateTestHome(t))
+	adapter := mustShellAdapter("zsh")
 	if got := adapter.HistoryCommand(": not-a-time;git status"); got != "git status" {
 		t.Fatalf("malformed Zsh prefix baseline = %q", got)
 	}
@@ -666,7 +697,8 @@ func TestZshHistoryAdapterPreservesMalformedPrefixBaseline(t *testing.T) {
 }
 
 func TestBashHistoryAdapterPreservesInvalidCommentBaseline(t *testing.T) {
-	adapter := bashShellAdapter{}
+	t.Setenv("HOME", privateTestHome(t))
+	adapter := mustShellAdapter("bash")
 	state := shellHistoryState{}
 	if _, _, skip := adapter.HistoryUsageLine("#1700000000", &state); !skip {
 		t.Fatal("valid Bash timestamp was not consumed")
@@ -681,7 +713,8 @@ func TestBashHistoryAdapterPreservesInvalidCommentBaseline(t *testing.T) {
 }
 
 func TestBashHistoryAdapterFixture(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".bash_history")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".bash_history")
 	contents := "#1700000000\nll\n#invalid\ngs\nplain command"
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
@@ -703,7 +736,8 @@ func TestBashHistoryAdapterFixture(t *testing.T) {
 }
 
 func TestZshHistoryAdapterFixture(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".zsh_history")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".zsh_history")
 	contents := ": 1700000000:4;ll\n: not-a-time;gs\n: metadata-without-semicolon\nprintf 'a;b'"
 	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
 		t.Fatal(err)
@@ -725,7 +759,8 @@ func TestZshHistoryAdapterFixture(t *testing.T) {
 }
 
 func TestHistoryAdapterMissingFile(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "missing")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), "missing")
 	counts, err := historyCountsFromShell(path, "bash")
 	if err != nil || len(counts) != 0 {
 		t.Fatalf("missing history counts = %#v, %v", counts, err)
@@ -737,7 +772,8 @@ func TestHistoryAdapterMissingFile(t *testing.T) {
 }
 
 func TestHistoryAdapterReadError(t *testing.T) {
-	path := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	path := privateTestHome(t)
 	if _, err := historyCountsFromShell(path, "bash"); err == nil {
 		t.Fatal("history count read error was ignored")
 	}
@@ -747,7 +783,8 @@ func TestHistoryAdapterReadError(t *testing.T) {
 }
 
 func TestHistoryAdapterScannerLimit(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "history")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), "history")
 	if err := os.WriteFile(path, []byte(strings.Repeat("x", 1024*1024+1)), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -760,7 +797,8 @@ func TestHistoryAdapterScannerLimit(t *testing.T) {
 }
 
 func TestPureAdapterOperationsAggregateManifest(t *testing.T) {
-	home := t.TempDir()
+	t.Setenv("HOME", privateTestHome(t))
+	home := privateTestHome(t)
 	t.Setenv("HOME", home)
 	t.Setenv("ZDOTDIR", filepath.Join(home, "zsh"))
 	if err := os.MkdirAll(filepath.Join(home, "zsh"), 0o700); err != nil {
@@ -778,7 +816,7 @@ func TestPureAdapterOperationsAggregateManifest(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := testTreeManifest(t, home)
-	for _, adapter := range []ShellAdapter{bashShellAdapter{}, zshShellAdapter{}} {
+	for _, adapter := range []ShellAdapter{mustShellAdapter("bash"), mustShellAdapter("zsh")} {
 		adapter.ValidateEntryName("unsafe", "alias")
 		adapter.ParseAliasDefinition("alias unsafe='" + command + "'")
 		adapter.ParseFunctions("unsafe() {\n" + command + "\n}")
@@ -846,6 +884,7 @@ func testTreeManifest(t *testing.T, root string) string {
 }
 
 func TestAliasFormAcceptsSpacesInCommandsAndDescriptions(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	m := model{adding: true, field: 1}
 	m.form[1] = "git"
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
@@ -864,6 +903,7 @@ func TestAliasFormAcceptsSpacesInCommandsAndDescriptions(t *testing.T) {
 }
 
 func TestAliasFormRejectsSpacesInAliasName(t *testing.T) {
+	t.Setenv("HOME", privateTestHome(t))
 	m := model{adding: true, field: 0}
 	m.form[0] = "git"
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeySpace})
@@ -874,7 +914,8 @@ func TestAliasFormRejectsSpacesInAliasName(t *testing.T) {
 }
 
 func TestZshRevisionsUseAliasFilename(t *testing.T) {
-	path := filepath.Join(t.TempDir(), ".zsh_aliases")
+	t.Setenv("HOME", privateTestHome(t))
+	path := filepath.Join(privateTestHome(t), ".zsh_aliases")
 	if err := saveRevision(path, []byte("alias gs='git status'\n")); err != nil {
 		t.Fatal(err)
 	}
