@@ -1,10 +1,10 @@
 package tui
 
-import "alias-lens/internal/entry"
+import "github.com/alderon07/al/internal/entry"
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"

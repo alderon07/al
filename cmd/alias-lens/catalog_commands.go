@@ -2,14 +2,14 @@
 
 package main
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
 import (
 	"fmt"
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	workflowplan "alias-lens/internal/plan"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {

@@ -3,9 +3,9 @@
 package app
 
 import (
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 
-	workflowstate "alias-lens/internal/state"
+	workflowstate "github.com/alderon07/al/internal/state"
 
 	"fmt"
 )

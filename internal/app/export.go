@@ -3,7 +3,7 @@ package app
 import (
 	"time"
 
-	"alias-lens/internal/exportfile"
+	"github.com/alderon07/al/internal/exportfile"
 )
 
 type aliasExport struct {

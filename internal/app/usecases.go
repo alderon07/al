@@ -1,12 +1,12 @@
 package app
 
 import (
-	catalog "alias-lens/internal/catalog"
+	catalog "github.com/alderon07/al/internal/catalog"
 
-	workflowplan "alias-lens/internal/plan"
-	providers "alias-lens/internal/providers"
-	workflowstate "alias-lens/internal/state"
 	context "context"
+	workflowplan "github.com/alderon07/al/internal/plan"
+	providers "github.com/alderon07/al/internal/providers"
+	workflowstate "github.com/alderon07/al/internal/state"
 	os "os"
 	time "time"
 )

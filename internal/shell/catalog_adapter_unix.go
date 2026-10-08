@@ -3,29 +3,32 @@
 package shell
 
 import (
-	"alias-lens/internal/catalogstore"
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/alderon07/al/internal/catalogstore"
 	"regexp"
 	"strings"
 	"time"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
 
 var catalogNameTokens = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_.-]*`)
+
+var catalogProtectedNames = func() map[string]bool {
+	names := map[string]bool{}
+	for _, name := range strings.Fields("alias bind bg break builtin cd command compdef compgen complete compopt continue declare dirs disown echo enable eval exec exit export false help fc fg functions getopts hash jobs kill let local logout mapfile popd pushd printf pwd read readarray readonly rehash return set shift source test type suspend times trap true typeset ulimit umask unalias unset wait whence where which zcompile zformat zle zmodload zparseopts zprof zpty zregexparse zsocket zstyle emulate getcap setcap limit unlimit integer float autoload disable log print pushln sched vared if then else elif fi case esac for select while until do done in function time coproc repeat nocorrect noglob [[ ]]") {
+		names[name] = true
+	}
+	return names
+}()
 
 func CatalogProtectedName(name string) bool {
 	if name == "al" || name == "alias-lens" || strings.HasPrefix(name, "_alias_lens") {
 		return true
 	}
-	for _, word := range strings.Fields("alias bind bg break builtin cd command compdef compgen complete compopt continue declare dirs disown echo enable eval exec exit export false help fc fg functions getopts hash jobs kill let local logout mapfile popd pushd printf pwd read readarray readonly rehash return set shift source test type suspend times trap true typeset ulimit umask unalias unset wait whence where which zcompile zformat zle zmodload zparseopts zprof zpty zregexparse zsocket zstyle emulate getcap setcap limit unlimit integer float autoload disable log print pushln sched vared if then else elif fi case esac for select while until do done in function time coproc repeat nocorrect noglob [[ ]]") {
-		if name == word {
-			return true
-		}
-	}
-	return false
+	return catalogProtectedNames[name]
 }
 
 func ValidateCatalogNames(value neutralcatalog.Catalog) error {

@@ -19,11 +19,11 @@ import (
 
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	shellapi "alias-lens/internal/shell"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	shellapi "github.com/alderon07/al/internal/shell"
 	"testing"
 
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 )
 
 func TestShadowRenderDeterministic(t *testing.T) {

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"alias-lens/internal/shortcuts"
-	tea "alias-lens/internal/tea"
 	"errors"
 	"fmt"
+	"github.com/alderon07/al/internal/shortcuts"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 type ShortcutProfile = shortcuts.Profile

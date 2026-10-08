@@ -1,5 +1,5 @@
 package app
 
-import "alias-lens/internal/entry"
+import "github.com/alderon07/al/internal/entry"
 
 type Alias = entry.Alias

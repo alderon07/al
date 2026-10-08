@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"alias-lens/internal/catalog"
+	"github.com/alderon07/al/internal/catalog"
 )
 
 func TestRenderSkipsUnapprovedNativeAndUsesApprovedHash(t *testing.T) {

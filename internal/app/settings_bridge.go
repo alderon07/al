@@ -1,8 +1,8 @@
 package app
 
 import (
-	"alias-lens/internal/presentation"
-	"alias-lens/internal/shortcuts"
+	"github.com/alderon07/al/internal/presentation"
+	"github.com/alderon07/al/internal/shortcuts"
 )
 
 type Theme = presentation.Theme

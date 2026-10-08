@@ -7,9 +7,9 @@ import (
 
 	"path/filepath"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/catalogrender"
-	"alias-lens/internal/catalogstore"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogrender"
+	"github.com/alderon07/al/internal/catalogstore"
 )
 
 func (s *Services) CheckCatalog() (CatalogCheck, error) {

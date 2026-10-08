@@ -3,9 +3,9 @@
 package shell_test
 
 import (
-	"alias-lens/internal/entry"
-	"alias-lens/internal/shell"
 	"bytes"
+	"github.com/alderon07/al/internal/entry"
+	"github.com/alderon07/al/internal/shell"
 	"github.com/creack/pty/v2"
 	"io"
 	"os"

@@ -1,6 +1,6 @@
 package main
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
 func suggestedAliases(aliases []Alias) []Alias {
 	return applicationServices().SuggestedEntries(aliases, nil)

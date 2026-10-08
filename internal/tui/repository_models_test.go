@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"alias-lens/internal/providers"
+	"github.com/alderon07/al/internal/providers"
 	"testing"
 )
 

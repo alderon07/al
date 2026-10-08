@@ -3,8 +3,8 @@
 package main
 
 import (
-	"alias-lens/internal/app"
 	"fmt"
+	"github.com/alderon07/al/internal/app"
 	"os"
 )
 

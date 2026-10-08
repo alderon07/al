@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"alias-lens/internal/app"
 	"fmt"
+	"github.com/alderon07/al/internal/app"
 	"io"
 	"os"
 	"path/filepath"

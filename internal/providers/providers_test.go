@@ -1,12 +1,12 @@
 package providers
 
 import (
-	"alias-lens/internal/catalog"
 	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/alderon07/al/internal/catalog"
 	"io"
 	"net/http"
 	"os"

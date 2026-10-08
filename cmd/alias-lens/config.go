@@ -8,7 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func runTrackCommand(arguments []string, remove bool) error {

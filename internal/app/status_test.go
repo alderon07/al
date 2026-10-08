@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	workflowstate "alias-lens/internal/state"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	workflowstate "github.com/alderon07/al/internal/state"
 )
 
 func TestStatusIsObservational(t *testing.T) {

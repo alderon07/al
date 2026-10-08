@@ -1,9 +1,9 @@
 package main
 
-import terminalui "alias-lens/internal/tui"
+import terminalui "github.com/alderon07/al/internal/tui"
 
 import (
-	"alias-lens/internal/providers"
+	"github.com/alderon07/al/internal/providers"
 
 	"fmt"
 	"strings"

@@ -1,12 +1,12 @@
 package app
 
 import (
-	"alias-lens/internal/transaction"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alderon07/al/internal/transaction"
 	"os"
 	"os/exec"
 	"path/filepath"

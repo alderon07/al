@@ -1,7 +1,7 @@
 package main
 
 import "fmt"
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
 func runThemeCommand(arguments []string) error {
 	if len(arguments) > 1 {

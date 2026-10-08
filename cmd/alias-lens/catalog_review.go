@@ -2,10 +2,10 @@
 
 package main
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
 import (
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 
 	"bufio"
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	"os"
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
 
 type catalogReviewByteReader struct{ reader io.Reader }

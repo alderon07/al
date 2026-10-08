@@ -1,8 +1,8 @@
 package shortcuts
 
 import (
-	tea "alias-lens/internal/tea"
 	"errors"
+	tea "github.com/alderon07/al/internal/tea"
 	"slices"
 	"strings"
 	"testing"

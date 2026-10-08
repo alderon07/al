@@ -3,11 +3,11 @@
 package main
 
 import (
-	"alias-lens/internal/app"
-	"alias-lens/internal/catalog"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alderon07/al/internal/app"
+	"github.com/alderon07/al/internal/catalog"
 	"io"
 	"os"
 	"os/exec"
@@ -285,6 +285,11 @@ func runStartupBenchmark(fixture startupBenchmarkFixture, login, fullMembership 
 			check = "declare -F al >/dev/null && [[ $(type -t " + last + ") == " + category + " ]]"
 			if fullMembership {
 				check += " && { count=0; while IFS= read -r name; do case $name in bench_*) count=$((count+1));; esac; done < <(compgen -A " + category + "); [ \"$count\" = " + fmt.Sprint(fixture.count) + " ]; }"
+				lookup := "builtin alias \"$name\" >/dev/null 2>&1"
+				if fixture.kind == "catalog" {
+					lookup = "builtin declare -F \"$name\" >/dev/null && ! builtin alias \"$name\" >/dev/null 2>&1"
+				}
+				check += " && { expected=0; while [ \"$expected\" -lt " + fmt.Sprint(fixture.count) + " ]; do builtin printf -v name 'bench_%05d' \"$expected\"; " + lookup + " || break; expected=$((expected+1)); done; [ \"$expected\" = " + fmt.Sprint(fixture.count) + " ]; }"
 			}
 		} else {
 			table := "aliases"
@@ -294,6 +299,11 @@ func runStartupBenchmark(fixture startupBenchmarkFixture, login, fullMembership 
 			check = "(( $+functions[al] == 1 && $+" + table + "[" + last + "] == 1 ))"
 			if fullMembership {
 				check += " && { count=0; for name in ${(k)" + table + "}; do [[ $name == bench_* ]] && (( count++ )); done; [[ $count == " + fmt.Sprint(fixture.count) + " ]]; }"
+				lookup := "(( $+" + table + "[$name] == 1 ))"
+				if fixture.kind == "catalog" {
+					lookup += " && (( $+aliases[$name] == 0 ))"
+				}
+				check += " && { expected=0; while (( expected < " + fmt.Sprint(fixture.count) + " )); do builtin printf -v name 'bench_%05d' \"$expected\"; " + lookup + " || break; (( expected++ )); done; (( expected == " + fmt.Sprint(fixture.count) + " )); }"
 			}
 		}
 	}
@@ -355,5 +365,70 @@ func TestStartupBenchmarkRejectsMissingDeclarationsPTY(t *testing.T) {
 				t.Fatal("membership validation executed an entry", err)
 			}
 		})
+	}
+}
+
+func TestStartupBenchmarkCompleteMembershipPTY(t *testing.T) {
+	for _, shell := range []string{"bash", "zsh"} {
+		executable, err := exec.LookPath(shell)
+		if err != nil {
+			if os.Getenv("AL_REQUIRE_PTY_SHELLS") == "1" {
+				t.Fatal(err)
+			}
+			t.Skip(shell + " runtime unavailable")
+		}
+		for _, kind := range []string{"native", "catalog"} {
+			for _, scenario := range []string{"complete", "first", "middle", "last", "wrong-kind"} {
+				t.Run(shell+"/"+kind+"/"+scenario, func(t *testing.T) {
+					home := t.TempDir()
+					if err := os.Chmod(home, 0700); err != nil {
+						t.Fatal(err)
+					}
+					var declarations strings.Builder
+					declarations.WriteString(initPTYStartup(shell, "") + "function al { :; }\n")
+					for index := 0; index < 3; index++ {
+						name := fmt.Sprintf("bench_%05d", index)
+						if (scenario == "first" && index == 0) || (scenario == "middle" && index == 1) || (scenario == "last" && index == 2) {
+							name = "bench_99999"
+						}
+						function := kind == "catalog"
+						if scenario == "wrong-kind" && index == 1 {
+							function = !function
+						}
+						if function {
+							fmt.Fprintf(&declarations, "function %s { touch benchmark-entry-executed; }\n", name)
+						} else {
+							fmt.Fprintf(&declarations, "alias %s='touch benchmark-entry-executed'\n", name)
+						}
+					}
+					if scenario == "wrong-kind" {
+						if kind == "catalog" {
+							declarations.WriteString("function bench_99999 { touch benchmark-entry-executed; }\n")
+						} else {
+							declarations.WriteString("alias bench_99999='touch benchmark-entry-executed'\n")
+						}
+					}
+					startup := ".bashrc"
+					if shell == "zsh" {
+						startup = ".zshrc"
+					}
+					if err := os.WriteFile(filepath.Join(home, startup), []byte(declarations.String()), 0600); err != nil {
+						t.Fatal(err)
+					}
+					fixture := startupBenchmarkFixture{home: home, shell: shell, executable: executable, path: os.Getenv("PATH"), kind: kind, count: 3}
+					err := runStartupBenchmark(fixture, false, true)
+					if scenario == "complete" {
+						if err != nil {
+							t.Fatal(err)
+						}
+					} else if err == nil || !strings.Contains(err.Error(), "membership check failed") {
+						t.Fatalf("incomplete fixture accepted: %v", err)
+					}
+					if _, err := os.Stat(filepath.Join(home, "benchmark-entry-executed")); !os.IsNotExist(err) {
+						t.Fatal("membership verification executed an entry", err)
+					}
+				})
+			}
+		}
 	}
 }

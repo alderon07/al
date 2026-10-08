@@ -11,7 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 func TestMakerCreditIsCenteredAtTheRequestedWidth(t *testing.T) {

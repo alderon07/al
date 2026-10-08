@@ -3,8 +3,8 @@
 package app
 
 import (
-	"alias-lens/internal/managedgit"
 	"context"
+	"github.com/alderon07/al/internal/managedgit"
 
 	"encoding/base64"
 	"encoding/json"
@@ -17,10 +17,10 @@ import (
 	"strings"
 	"testing"
 
-	"alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
+	"github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
 
-	shellapi "alias-lens/internal/shell"
+	shellapi "github.com/alderon07/al/internal/shell"
 )
 
 func TestRemotePullEditPushUncertainReconciliation(t *testing.T) {

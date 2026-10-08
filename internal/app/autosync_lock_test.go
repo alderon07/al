@@ -1,8 +1,8 @@
 package app
 
 import (
-	"alias-lens/internal/transaction"
 	"errors"
+	"github.com/alderon07/al/internal/transaction"
 	"os"
 	"path/filepath"
 	"testing"

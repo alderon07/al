@@ -1,10 +1,11 @@
 package catalogstore
 
 import (
-	"alias-lens/internal/catalog"
 	"bytes"
+	"github.com/alderon07/al/internal/catalog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -286,5 +287,82 @@ func TestGenerationConfirmationIdentity(t *testing.T) {
 		if identity(other) == base {
 			t.Fatalf("approval identity omitted field %d", i)
 		}
+	}
+}
+
+func TestDecodeRejectsMalformedNestedStateWithoutChangingDestination(t *testing.T) {
+	_, valid, _ := syntheticGeneration(t)
+	cases := map[string][]byte{
+		"missing nested required field": bytes.Replace(valid, []byte(`"pass_arguments": true`), []byte(`"extra": true`), 1),
+		"missing nested field":          bytes.Replace(valid, []byte(`"program": "printf",`), nil, 1),
+		"unknown nested field":          bytes.Replace(valid, []byte(`"program": "printf"`), []byte(`"program": "printf", "extra": 1`), 1),
+		"case variant":                  bytes.Replace(valid, []byte(`"program": "printf"`), []byte(`"Program": "printf"`), 1),
+		"duplicate escaped field":       bytes.Replace(valid, []byte(`"program": "printf"`), []byte(`"program": "printf", "\u0070rogram": "printf"`), 1),
+		"null optional object":          bytes.Replace(valid, []byte(`"portable": {`), []byte(`"when": null, "portable": {`), 1),
+		"null optional scalar":          bytes.Replace(valid, []byte(`"portable": {`), []byte(`"favorite": null, "portable": {`), 1),
+		"array as object":               bytes.Replace(valid, []byte(`"profiles": []`), []byte(`"profiles": {}`), 1),
+		"object as scalar":              bytes.Replace(valid, []byte(`"program": "printf"`), []byte(`"program": {}`), 1),
+		"invalid scalar type":           bytes.Replace(valid, []byte(`"program": "printf"`), []byte(`"program": 1`), 1),
+		"invalid utf8":                  append(append([]byte{}, valid...), 0xff),
+		"oversized":                     bytes.Repeat([]byte(" "), MaxDocumentBytes+1),
+		"trailing data":                 append(append([]byte{}, valid...), []byte(` {}`)...),
+		"truncated":                     valid[:len(valid)-2],
+	}
+	for name, data := range cases {
+		t.Run(name, func(t *testing.T) {
+			if bytes.Equal(data, valid) {
+				t.Fatal("mutation did not change input")
+			}
+			before := GenerationManifest{Version: 73, Profiles: []string{"unchanged"}}
+			out := before
+			if err := Decode(data, &out); err == nil {
+				t.Fatal("accepted malformed state")
+			}
+			if !reflect.DeepEqual(out, before) {
+				t.Fatal("failed decode changed destination")
+			}
+		})
+	}
+	var nilDestination *GenerationManifest
+	if Decode(valid, nilDestination) == nil || Decode(valid, GenerationManifest{}) == nil {
+		t.Fatal("accepted invalid destination")
+	}
+}
+
+func TestPrivateReadSizesAndConcurrentTruncation(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "state")
+	for _, data := range [][]byte{nil, []byte("synthetic"), bytes.Repeat([]byte("s"), 128<<10)} {
+		if err := os.WriteFile(path, data, 0600); err != nil {
+			t.Fatal(err)
+		}
+		limit := max(1, int64(len(data)))
+		got, err := ReadPrivateBytes(path, limit)
+		if err != nil || !bytes.Equal(got, data) {
+			t.Fatalf("size=%d read failed: %v", len(data), err)
+		}
+		if len(data) > 1 {
+			if _, err := ReadPrivateBytes(path, limit-1); err == nil {
+				t.Fatal("read exceeded caller limit")
+			}
+		}
+	}
+	data, err := Encode(ApprovalFile{Version: 2, Records: []ApprovalRecord{}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	before := ApprovalFile{Version: 73, Records: []ApprovalRecord{}}
+	out := before
+	if err := readPrivate(path, &out, func() {
+		if err := os.Truncate(path, 1); err != nil {
+			t.Fatal(err)
+		}
+	}); err == nil {
+		t.Fatal("concurrently truncated file accepted")
+	}
+	if !reflect.DeepEqual(out, before) {
+		t.Fatal("failed read changed destination")
 	}
 }

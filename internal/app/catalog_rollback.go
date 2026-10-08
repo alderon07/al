@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"alias-lens/internal/catalogstore"
-	workflowplan "alias-lens/internal/plan"
+	"github.com/alderon07/al/internal/catalogstore"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 const catalogRollbackBaselineWarning = "Restore enrollment baseline; aliases renamed or deleted since enrollment can return"

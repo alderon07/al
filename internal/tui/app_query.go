@@ -1,6 +1,6 @@
 package tui
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
 func suggestedAliases(services *app.Services, aliases []aliasEntry) []aliasEntry {
 	return services.SuggestedEntries(aliases, nil)

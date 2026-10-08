@@ -1,9 +1,9 @@
 package app
 
 import (
-	neutralcatalog "alias-lens/internal/catalog"
 	"errors"
 	"fmt"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 	"os"
 )
 

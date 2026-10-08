@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func privateTestHome(t *testing.T) string {

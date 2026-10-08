@@ -1,8 +1,8 @@
 package catalogstore
 
 import (
-	"alias-lens/internal/catalog"
 	"errors"
+	"github.com/alderon07/al/internal/catalog"
 	"path/filepath"
 	"regexp"
 	"strings"

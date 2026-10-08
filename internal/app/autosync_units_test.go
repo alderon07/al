@@ -3,7 +3,7 @@
 package app
 
 import (
-	"alias-lens/internal/catalogstore"
+	"github.com/alderon07/al/internal/catalogstore"
 
 	"os"
 	"path/filepath"

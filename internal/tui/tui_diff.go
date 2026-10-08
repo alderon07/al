@@ -1,8 +1,8 @@
 package tui
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
 import (
 	"bytes"
@@ -15,7 +15,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/rivo/uniseg"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 type diffRow struct {

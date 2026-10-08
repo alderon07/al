@@ -3,12 +3,12 @@
 package app
 
 import (
-	workflowplan "alias-lens/internal/plan"
-	"alias-lens/internal/transaction"
 	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
+	workflowplan "github.com/alderon07/al/internal/plan"
+	"github.com/alderon07/al/internal/transaction"
 	"os"
 
 	"path/filepath"

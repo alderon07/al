@@ -1,9 +1,9 @@
 package app
 
 import (
-	"alias-lens/internal/usagelog"
 	"bytes"
 	"fmt"
+	"github.com/alderon07/al/internal/usagelog"
 	"os"
 	"path/filepath"
 	"strings"

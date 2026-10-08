@@ -1,6 +1,6 @@
 package main
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
 type Theme = presentation.Theme
 

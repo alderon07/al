@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 	"strings"
 	"testing"
 	"time"
@@ -13,7 +13,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 )
 
 func TestStatsDashboardFitsTerminalWidth(t *testing.T) {

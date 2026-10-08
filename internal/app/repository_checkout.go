@@ -1,8 +1,8 @@
 package app
 
 import (
-	"alias-lens/internal/providers"
 	"fmt"
+	"github.com/alderon07/al/internal/providers"
 	"os"
 	"path/filepath"
 	"strings"

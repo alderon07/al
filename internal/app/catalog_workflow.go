@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
 
 func (svc *Services) localCatalogPath() string {

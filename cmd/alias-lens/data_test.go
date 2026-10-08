@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"alias-lens/internal/usagelog"
+	"github.com/alderon07/al/internal/usagelog"
 )
 
 func TestDataClearCommandsRemoveOnlyRequestedData(t *testing.T) {

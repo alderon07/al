@@ -1,13 +1,13 @@
 package catalogstore
 
 import (
-	"alias-lens/internal/catalog"
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/alderon07/al/internal/catalog"
 	"sort"
 	"strings"
 )
@@ -84,15 +84,18 @@ func canonical(m GenerationManifest) GenerationManifest {
 	return m
 }
 func identity(m GenerationManifest) string {
+	return canonicalIdentity(canonical(m))
+}
+func canonicalIdentity(m GenerationManifest) string {
 	m.ID = ""
 	m.FileSHA256 = ""
-	b, _ := json.Marshal(canonical(m))
+	b, _ := json.Marshal(m)
 	return FramedHash(b)
 }
 func BuildGeneration(m GenerationManifest, body []byte) (GenerationManifest, []byte, error) {
 	m = canonical(m)
 	m.FileSHA256 = Hash(body)
-	m.ID = identity(m)
+	m.ID = canonicalIdentity(m)
 	if err := Validate(m); err != nil {
 		return GenerationManifest{}, nil, err
 	}
@@ -123,10 +126,11 @@ func VerifyGeneration(manifest, body, pointer, native []byte, validateNative fun
 	if err := Decode(manifest, &m); err != nil {
 		return GenerationManifest{}, err
 	}
-	if id != m.ID || identity(m) != m.ID || Hash(body) != m.FileSHA256 || Hash(native) != m.NativeInputSHA256 {
+	normalized := canonical(m)
+	if id != m.ID || canonicalIdentity(normalized) != m.ID || Hash(body) != m.FileSHA256 || Hash(native) != m.NativeInputSHA256 {
 		return GenerationManifest{}, errors.New("generation integrity mismatch")
 	}
-	expected, err := Encode(canonical(m))
+	expected, err := Encode(normalized)
 	if err != nil || !bytes.Equal(expected, manifest) {
 		return GenerationManifest{}, errors.New("noncanonical generation manifest")
 	}

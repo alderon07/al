@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"alias-lens/internal/shortcuts"
-	tea "alias-lens/internal/tea"
+	"github.com/alderon07/al/internal/shortcuts"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 type shortcutProfile = shortcuts.Profile

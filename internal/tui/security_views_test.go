@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"alias-lens/internal/presentation"
 	"bytes"
+	"github.com/alderon07/al/internal/presentation"
 	"strings"
 	"testing"
 )

@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"alias-lens/internal/catalogstore"
-	"alias-lens/internal/shell"
+	"github.com/alderon07/al/internal/catalogstore"
+	"github.com/alderon07/al/internal/shell"
 )
 
 func (svc *Services) catalogStateRoot() string {

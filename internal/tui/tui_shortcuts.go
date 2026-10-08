@@ -1,12 +1,12 @@
 package tui
 
 import (
-	"alias-lens/internal/shortcuts"
 	"fmt"
+	"github.com/alderon07/al/internal/shortcuts"
 	"strings"
 	"unicode/utf8"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 )
 

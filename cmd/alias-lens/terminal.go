@@ -1,8 +1,8 @@
 package main
 
 import (
-	"alias-lens/internal/app"
-	terminalui "alias-lens/internal/tui"
+	"github.com/alderon07/al/internal/app"
+	terminalui "github.com/alderon07/al/internal/tui"
 	"time"
 )
 

@@ -1,14 +1,14 @@
 package main
 
 import (
-	"alias-lens/internal/presentation"
+	"github.com/alderon07/al/internal/presentation"
 
 	"fmt"
 	"io"
 
 	"strings"
 
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 type completionRule struct {

@@ -1,0 +1,17 @@
+goos: linux
+goarch: amd64
+pkg: github.com/alderon07/al/internal/app
+cpu: 13th Gen Intel(R) Core(TM) i7-13705H
+BenchmarkEntrySearch/typo/10000-20         	       7	  52058781 ns/op	     10000 entries	   1828301 input-B	11737277 B/op	  310017 allocs/op
+BenchmarkEntrySearch/typo/10000-20         	       7	  32842574 ns/op	     10000 entries	   1828301 input-B	11736451 B/op	  310016 allocs/op
+BenchmarkEntrySearch/typo/10000-20         	       7	  29365930 ns/op	     10000 entries	   1828301 input-B	11736465 B/op	  310016 allocs/op
+BenchmarkEntrySearch/no-match/10000-20     	       6	  38910240 ns/op	     10000 entries	   1828301 input-B	20960149 B/op	  310003 allocs/op
+BenchmarkEntrySearch/no-match/10000-20     	       6	  36258364 ns/op	     10000 entries	   1828301 input-B	20960120 B/op	  310003 allocs/op
+BenchmarkEntrySearch/no-match/10000-20     	       6	  64829472 ns/op	     10000 entries	   1828301 input-B	20960117 B/op	  310003 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/10000-20         	       1	 717731878 ns/op	     10000 entries	  10381084 fixture-B	350387840 B/op	 2625899 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/10000-20         	       1	 774144411 ns/op	     10000 entries	  10381084 fixture-B	323857408 B/op	 2625827 allocs/op
+BenchmarkEntryLoad/bash/installed-catalog/10000-20         	       1	 693857245 ns/op	     10000 entries	  10381084 fixture-B	323884312 B/op	 2625863 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/10000-20          	       1	 705535476 ns/op	     10000 entries	  10411078 fixture-B	323778080 B/op	 2615841 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/10000-20          	       1	 761780635 ns/op	     10000 entries	  10411078 fixture-B	323791368 B/op	 2615859 allocs/op
+BenchmarkEntryLoad/zsh/installed-catalog/10000-20          	       1	 657714859 ns/op	     10000 entries	  10411078 fixture-B	323778304 B/op	 2615844 allocs/op
+PASS

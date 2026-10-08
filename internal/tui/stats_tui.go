@@ -1,6 +1,6 @@
 package tui
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 )

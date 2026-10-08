@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 func TestSetupTourAppearsOnceAndCanOpenHelp(t *testing.T) {

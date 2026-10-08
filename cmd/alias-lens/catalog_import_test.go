@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
 
 func TestCatalogPreviewIsReadOnlyAndUsesFriendlyNextStep(t *testing.T) {

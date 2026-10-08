@@ -1,12 +1,12 @@
 package app
 
 import (
-	"alias-lens/internal/catalogstore"
-	"alias-lens/internal/managedgit"
-	"alias-lens/internal/providers"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/alderon07/al/internal/catalogstore"
+	"github.com/alderon07/al/internal/managedgit"
+	"github.com/alderon07/al/internal/providers"
 	"net/http"
 
 	"regexp"

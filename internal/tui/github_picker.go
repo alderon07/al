@@ -1,17 +1,17 @@
 package tui
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
 import (
-	"alias-lens/internal/providers"
 	"context"
 	"fmt"
+	"github.com/alderon07/al/internal/providers"
 	"strings"
 	"unicode/utf8"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 )
 

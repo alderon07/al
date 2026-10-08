@@ -6,16 +6,16 @@ import (
 	"errors"
 	"fmt"
 
-	"alias-lens/internal/presentation"
-	"alias-lens/internal/shell"
-	"alias-lens/internal/shortcuts"
+	"github.com/alderon07/al/internal/presentation"
+	"github.com/alderon07/al/internal/shell"
+	"github.com/alderon07/al/internal/shortcuts"
 	"os"
 	"path/filepath"
 	"regexp"
 
 	"strings"
 
-	"alias-lens/internal/transaction"
+	"github.com/alderon07/al/internal/transaction"
 )
 
 const currentConfigVersion = 2

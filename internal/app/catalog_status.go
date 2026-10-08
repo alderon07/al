@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"sort"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/catalogrender"
-	"alias-lens/internal/catalogstore"
-	workflowstate "alias-lens/internal/state"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogrender"
+	"github.com/alderon07/al/internal/catalogstore"
+	workflowstate "github.com/alderon07/al/internal/state"
 )
 
 func (svc *Services) readLifecycleInstalledSnapshot(shell string) (neutralcatalog.Catalog, bool, error) {

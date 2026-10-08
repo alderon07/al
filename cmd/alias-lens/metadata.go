@@ -1,9 +1,9 @@
 package main
 
-import "alias-lens/internal/entry"
+import "github.com/alderon07/al/internal/entry"
 
 import (
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 
 	"fmt"
 

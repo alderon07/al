@@ -3,9 +3,9 @@
 package app
 
 import (
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
 	"encoding/json"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
 	"os"
 	"path/filepath"
 )

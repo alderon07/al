@@ -1,8 +1,8 @@
 package main
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
 import (
 	"errors"
@@ -12,7 +12,7 @@ import (
 
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
 
 const catalogReportLimit = 8 << 20

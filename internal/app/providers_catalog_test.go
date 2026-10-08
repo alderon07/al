@@ -1,10 +1,10 @@
 package app
 
 import (
-	"alias-lens/internal/catalog"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/alderon07/al/internal/catalog"
 	"io"
 	"net/http"
 	"strings"

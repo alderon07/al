@@ -1,4 +1,4 @@
-module alias-lens
+module github.com/alderon07/al
 
 go 1.24.2
 

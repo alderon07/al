@@ -1,7 +1,7 @@
 package main
 
 import (
-	"alias-lens/internal/catalog"
+	"github.com/alderon07/al/internal/catalog"
 
 	"net/http"
 	"testing"

@@ -3,9 +3,9 @@
 package main
 
 import (
-	"alias-lens/internal/app"
 	"errors"
 	"fmt"
+	"github.com/alderon07/al/internal/app"
 )
 
 func runCatalogCheck(strict bool) (int, error) {

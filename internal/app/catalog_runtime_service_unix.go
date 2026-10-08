@@ -3,8 +3,8 @@
 package app
 
 import (
-	catalog "alias-lens/internal/catalog"
 	"fmt"
+	catalog "github.com/alderon07/al/internal/catalog"
 	"path/filepath"
 )
 

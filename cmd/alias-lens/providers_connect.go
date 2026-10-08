@@ -1,11 +1,11 @@
 package main
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
 import (
-	"alias-lens/internal/providers"
 	"context"
 	"fmt"
+	"github.com/alderon07/al/internal/providers"
 	"os"
 	"os/exec"
 	"strings"

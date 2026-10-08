@@ -11,10 +11,10 @@ import (
 	"sort"
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/catalogrender"
-	workflowstate "alias-lens/internal/state"
-	"alias-lens/internal/transaction"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogrender"
+	workflowstate "github.com/alderon07/al/internal/state"
+	"github.com/alderon07/al/internal/transaction"
 )
 
 type catalogStateFile struct {

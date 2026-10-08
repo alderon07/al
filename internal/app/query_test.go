@@ -36,3 +36,18 @@ func TestSearchMatchesCustomCategory(t *testing.T) {
 		t.Fatalf("category search returned %#v", results)
 	}
 }
+
+func TestLevenshteinDistances(t *testing.T) {
+	for _, item := range []struct {
+		left, right string
+		want        int
+	}{
+		{"", "", 0}, {"", "abc", 3}, {"abc", "", 3},
+		{"kitten", "sitting", 3}, {"abc", "abc", 0}, {"ab", "ba", 2},
+		{"a", "abcdefgh", 7}, {"abcdefgh", "a", 7}, {"tool00042", "tpol00042", 1},
+	} {
+		if got := levenshtein(item.left, item.right); got != item.want {
+			t.Errorf("distance(%q, %q)=%d want %d", item.left, item.right, got, item.want)
+		}
+	}
+}

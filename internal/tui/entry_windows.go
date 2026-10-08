@@ -3,8 +3,8 @@
 package tui
 
 import (
-	"alias-lens/internal/app"
 	"fmt"
+	"github.com/alderon07/al/internal/app"
 )
 
 func CatalogConflict(_ *app.Services, _ string) error {

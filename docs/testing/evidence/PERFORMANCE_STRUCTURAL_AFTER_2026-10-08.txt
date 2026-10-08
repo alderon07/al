@@ -1,0 +1,23 @@
+goos: linux
+goarch: amd64
+pkg: github.com/alderon07/al/internal/shell
+cpu: 13th Gen Intel(R) Core(TM) i7-13705H
+BenchmarkShellParse/bash/structural/100-20         	     877	    246558 ns/op	  16.63 MB/s	       100.0 entries	  163208 B/op	    1516 allocs/op
+BenchmarkShellParse/bash/structural/100-20         	    1108	    311918 ns/op	  13.14 MB/s	       100.0 entries	  163208 B/op	    1516 allocs/op
+BenchmarkShellParse/bash/structural/100-20         	     601	    335731 ns/op	  12.21 MB/s	       100.0 entries	  163205 B/op	    1516 allocs/op
+BenchmarkShellParse/bash/structural/1000-20        	      87	   2553950 ns/op	  16.05 MB/s	      1000 entries	 1714495 B/op	   15025 allocs/op
+BenchmarkShellParse/bash/structural/1000-20        	      90	   2530753 ns/op	  16.20 MB/s	      1000 entries	 1714482 B/op	   15025 allocs/op
+BenchmarkShellParse/bash/structural/1000-20        	      87	   2672279 ns/op	  15.34 MB/s	      1000 entries	 1714466 B/op	   15025 allocs/op
+BenchmarkShellParse/bash/structural/10000-20       	       8	  32506258 ns/op	  12.61 MB/s	     10000 entries	21445563 B/op	  150046 allocs/op
+BenchmarkShellParse/bash/structural/10000-20       	       8	  31854173 ns/op	  12.87 MB/s	     10000 entries	21443849 B/op	  150044 allocs/op
+BenchmarkShellParse/bash/structural/10000-20       	       6	  41857402 ns/op	   9.80 MB/s	     10000 entries	21444144 B/op	  150045 allocs/op
+BenchmarkShellParse/zsh/structural/100-20          	     561	    475149 ns/op	   8.63 MB/s	       100.0 entries	  163206 B/op	    1516 allocs/op
+BenchmarkShellParse/zsh/structural/100-20          	     627	    392477 ns/op	  10.45 MB/s	       100.0 entries	  163208 B/op	    1516 allocs/op
+BenchmarkShellParse/zsh/structural/100-20          	     662	    380245 ns/op	  10.78 MB/s	       100.0 entries	  163209 B/op	    1516 allocs/op
+BenchmarkShellParse/zsh/structural/1000-20         	      50	   5321542 ns/op	   7.70 MB/s	      1000 entries	 1714460 B/op	   15025 allocs/op
+BenchmarkShellParse/zsh/structural/1000-20         	      52	   5845640 ns/op	   7.01 MB/s	      1000 entries	 1714429 B/op	   15025 allocs/op
+BenchmarkShellParse/zsh/structural/1000-20         	      42	   5375104 ns/op	   7.63 MB/s	      1000 entries	 1714420 B/op	   15025 allocs/op
+BenchmarkShellParse/zsh/structural/10000-20        	      10	  22967195 ns/op	  17.85 MB/s	     10000 entries	21442996 B/op	  150044 allocs/op
+BenchmarkShellParse/zsh/structural/10000-20        	      10	  31106235 ns/op	  13.18 MB/s	     10000 entries	21443252 B/op	  150044 allocs/op
+BenchmarkShellParse/zsh/structural/10000-20        	      10	  22005561 ns/op	  18.63 MB/s	     10000 entries	21442961 B/op	  150043 allocs/op
+PASS

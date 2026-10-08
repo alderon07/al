@@ -3,7 +3,7 @@
 package main
 
 import (
-	"alias-lens/internal/transaction"
+	"github.com/alderon07/al/internal/transaction"
 
 	"crypto/sha256"
 

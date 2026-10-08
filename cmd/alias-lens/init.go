@@ -3,9 +3,9 @@
 package main
 
 import (
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 
 	"fmt"
 )

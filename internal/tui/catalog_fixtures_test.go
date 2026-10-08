@@ -1,11 +1,11 @@
 package tui
 
-import catalog "alias-lens/internal/catalog"
+import catalog "github.com/alderon07/al/internal/catalog"
 import filepath "path/filepath"
-import neutralcatalog "alias-lens/internal/catalog"
+import neutralcatalog "github.com/alderon07/al/internal/catalog"
 import strings "strings"
 import os "os"
-import catalogstore "alias-lens/internal/catalogstore"
+import catalogstore "github.com/alderon07/al/internal/catalogstore"
 import testing "testing"
 
 func setupCatalogSyncFixture(t *testing.T) (string, catalog.Catalog) {

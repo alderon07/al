@@ -38,18 +38,11 @@ func Decode(data []byte, destination any) error {
 	}
 	d := json.NewDecoder(bytes.NewReader(data))
 	d.UseNumber()
-	if err := walk(d, 0); err != nil {
+	if err := walk(d, 0, t.Elem(), map[reflect.Type]map[string]stateField{}); err != nil {
 		return err
 	}
 	if _, err := d.Token(); err != io.EOF {
 		return errors.New("trailing catalog state data")
-	}
-	var raw any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return errors.New("invalid catalog state JSON")
-	}
-	if err := required(raw, t.Elem()); err != nil {
-		return err
 	}
 	v := reflect.New(t.Elem())
 	decoder := json.NewDecoder(bytes.NewReader(data))
@@ -63,38 +56,92 @@ func Decode(data []byte, destination any) error {
 	reflect.ValueOf(destination).Elem().Set(v.Elem())
 	return nil
 }
-func walk(d *json.Decoder, depth int) error {
+
+type stateField struct {
+	typeOf   reflect.Type
+	required bool
+}
+
+func stateFields(t reflect.Type, schemas map[reflect.Type]map[string]stateField) map[string]stateField {
+	if fields, ok := schemas[t]; ok {
+		return fields
+	}
+	fields := make(map[string]stateField, t.NumField())
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		tag := field.Tag.Get("json")
+		name := strings.Split(tag, ",")[0]
+		if name != "" && name != "-" {
+			fields[name] = stateField{typeOf: field.Type, required: !strings.Contains(tag, ",omitempty")}
+		}
+	}
+	schemas[t] = fields
+	return fields
+}
+
+func walk(d *json.Decoder, depth int, t reflect.Type, schemas map[reflect.Type]map[string]stateField) error {
 	if depth > 40 {
 		return errors.New("catalog state nesting exceeds limit")
+	}
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
 	}
 	token, err := d.Token()
 	if err != nil || token == nil {
 		return errors.New("invalid catalog state JSON")
 	}
-	delim, ok := token.(json.Delim)
-	if !ok {
+	delim, container := token.(json.Delim)
+	if !container {
+		if t.Kind() == reflect.Struct || t.Kind() == reflect.Map || t.Kind() == reflect.Slice {
+			return errors.New("invalid catalog state field shape")
+		}
 		return nil
 	}
 	switch delim {
 	case '{':
+		if t.Kind() != reflect.Struct && t.Kind() != reflect.Map {
+			return errors.New("catalog state object required")
+		}
 		seen := map[string]bool{}
+		var fields map[string]stateField
+		if t.Kind() == reflect.Struct {
+			fields = stateFields(t, schemas)
+		}
 		for d.More() {
 			key, err := d.Token()
 			if err != nil {
 				return errors.New("invalid catalog state object")
 			}
-			s, ok := key.(string)
-			if !ok || seen[s] {
+			name, ok := key.(string)
+			if !ok || seen[name] {
 				return errors.New("duplicate catalog state field")
 			}
-			seen[s] = true
-			if err := walk(d, depth+1); err != nil {
+			seen[name] = true
+			var child reflect.Type
+			if t.Kind() == reflect.Map {
+				child = t.Elem()
+			} else {
+				field, known := fields[name]
+				if !known {
+					return errors.New("unknown catalog state field")
+				}
+				child = field.typeOf
+			}
+			if err := walk(d, depth+1, child, schemas); err != nil {
 				return err
 			}
 		}
+		for name, field := range fields {
+			if field.required && !seen[name] {
+				return errors.New("required catalog state field missing")
+			}
+		}
 	case '[':
+		if t.Kind() != reflect.Slice {
+			return errors.New("catalog state array required")
+		}
 		for d.More() {
-			if err := walk(d, depth+1); err != nil {
+			if err := walk(d, depth+1, t.Elem(), schemas); err != nil {
 				return err
 			}
 		}
@@ -104,69 +151,6 @@ func walk(d *json.Decoder, depth int) error {
 	end, err := d.Token()
 	if err != nil || (delim == '{' && end != json.Delim('}')) || (delim == '[' && end != json.Delim(']')) {
 		return errors.New("invalid catalog state delimiter")
-	}
-	return nil
-}
-func required(raw any, t reflect.Type) error {
-	if t.Kind() == reflect.Pointer {
-		return required(raw, t.Elem())
-	}
-	switch t.Kind() {
-	case reflect.Struct:
-		obj, ok := raw.(map[string]any)
-		if !ok {
-			return errors.New("catalog state object required")
-		}
-		known := map[string]bool{}
-		for i := 0; i < t.NumField(); i++ {
-			name := strings.Split(t.Field(i).Tag.Get("json"), ",")[0]
-			if name != "" && name != "-" {
-				known[name] = true
-			}
-		}
-		for key := range obj {
-			if !known[key] {
-				return errors.New("unknown catalog state field")
-			}
-		}
-		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-			tag := f.Tag.Get("json")
-			name := strings.Split(tag, ",")[0]
-			if name == "" || name == "-" {
-				continue
-			}
-			v, exists := obj[name]
-			if !exists {
-				if !strings.Contains(tag, ",omitempty") {
-					return errors.New("required catalog state field missing")
-				}
-				continue
-			}
-			if err := required(v, f.Type); err != nil {
-				return err
-			}
-		}
-	case reflect.Slice:
-		values, ok := raw.([]any)
-		if !ok {
-			return errors.New("catalog state array required")
-		}
-		for _, v := range values {
-			if err := required(v, t.Elem()); err != nil {
-				return err
-			}
-		}
-	case reflect.Map:
-		values, ok := raw.(map[string]any)
-		if !ok {
-			return errors.New("catalog state map required")
-		}
-		for _, v := range values {
-			if err := required(v, t.Elem()); err != nil {
-				return err
-			}
-		}
 	}
 	return nil
 }

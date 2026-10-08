@@ -24,7 +24,7 @@ import (
 	"sync"
 	"syscall"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 	"testing"
 	"time"
 	"unicode/utf8"

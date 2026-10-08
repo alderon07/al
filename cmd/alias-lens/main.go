@@ -1,9 +1,9 @@
 package main
 
 import (
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 
-	"alias-lens/internal/entry"
+	"github.com/alderon07/al/internal/entry"
 
 	"crypto/rand"
 	"crypto/subtle"

@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"alias-lens/internal/app"
-	tea "alias-lens/internal/tea"
+	"github.com/alderon07/al/internal/app"
+	tea "github.com/alderon07/al/internal/tea"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 )

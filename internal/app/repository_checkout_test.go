@@ -1,7 +1,7 @@
 package app
 
 import (
-	"alias-lens/internal/providers"
+	"github.com/alderon07/al/internal/providers"
 	"path/filepath"
 	"testing"
 )

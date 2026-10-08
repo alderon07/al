@@ -1,7 +1,7 @@
 package main
 
 import (
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 
 	"fmt"
 )

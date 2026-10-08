@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func runPlanCommand(arguments []string) (int, error) {

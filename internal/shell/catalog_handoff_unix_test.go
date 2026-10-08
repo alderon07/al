@@ -3,10 +3,10 @@
 package shell_test
 
 import (
-	"alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
-	"alias-lens/internal/shell"
 	"encoding/json"
+	"github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
+	"github.com/alderon07/al/internal/shell"
 	"os"
 	"testing"
 )

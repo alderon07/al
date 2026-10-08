@@ -1,6 +1,6 @@
 package main
 
-import "alias-lens/internal/shortcuts"
+import "github.com/alderon07/al/internal/shortcuts"
 
 func shortcutCompletionActions() []string { return shortcuts.CompletionActions() }
 func validateShortcutOverrides(config AppConfig) error {

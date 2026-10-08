@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 
-	"alias-lens/internal/usagelog"
+	"github.com/alderon07/al/internal/usagelog"
 )
 
 func (svc *Services) recordAliasUse(name string) error {

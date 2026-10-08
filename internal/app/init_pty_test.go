@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"alias-lens/internal/catalog"
+	"github.com/alderon07/al/internal/catalog"
 
 	"github.com/creack/pty/v2"
 )

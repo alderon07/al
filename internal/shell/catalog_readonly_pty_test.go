@@ -3,9 +3,6 @@
 package shell_test
 
 import (
-	"alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
-	"alias-lens/internal/shell"
 	"bytes"
 	"io"
 	"os"
@@ -16,6 +13,10 @@ import (
 	"time"
 
 	"github.com/creack/pty/v2"
+
+	"github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
+	"github.com/alderon07/al/internal/shell"
 )
 
 func TestBashRuntimeHandoffReadonlyPreflightPTY(t *testing.T) {
@@ -127,9 +128,12 @@ func TestBashRuntimeHandoffReadonlyPreflightPTY(t *testing.T) {
 	}
 }
 
-func readonlyHandoffPTY(t *testing.T, executable, home string) func(string) string {
+func readonlyHandoffPTY(t *testing.T, executable, home string, arguments ...string) func(string) string {
 	t.Helper()
-	command := exec.Command(executable, "--noprofile", "--norc", "-i")
+	if len(arguments) == 0 {
+		arguments = []string{"--noprofile", "--norc", "-i"}
+	}
+	command := exec.Command(executable, arguments...)
 	command.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin", "TERM=xterm", "PS1=READONLY_READY> "}
 	terminal, err := pty.Start(command)
 	if err != nil {

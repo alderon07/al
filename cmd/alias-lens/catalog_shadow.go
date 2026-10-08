@@ -3,9 +3,9 @@
 package main
 
 import (
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 
-	shellapi "alias-lens/internal/shell"
+	shellapi "github.com/alderon07/al/internal/shell"
 
 	"encoding/json"
 
@@ -15,7 +15,7 @@ import (
 
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
 
 var shadowStdout io.Writer = os.Stdout

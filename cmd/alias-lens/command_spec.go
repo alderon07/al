@@ -1,7 +1,7 @@
 package main
 
 import (
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 
 	"fmt"
 )

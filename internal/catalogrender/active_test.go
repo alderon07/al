@@ -1,10 +1,10 @@
 package catalogrender
 
 import (
-	"alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
 	"bytes"
 	"errors"
+	"github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
 	"testing"
 )
 

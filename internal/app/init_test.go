@@ -3,9 +3,9 @@
 package app
 
 import (
-	"alias-lens/internal/catalogstore"
-	workflowplan "alias-lens/internal/plan"
 	"bytes"
+	"github.com/alderon07/al/internal/catalogstore"
+	workflowplan "github.com/alderon07/al/internal/plan"
 	"os"
 	"os/exec"
 	"path/filepath"

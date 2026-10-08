@@ -2,7 +2,7 @@
 
 package app
 
-import shellapi "alias-lens/internal/shell"
+import shellapi "github.com/alderon07/al/internal/shell"
 
 type catalogStartupEdit struct {
 	Path   string

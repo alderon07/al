@@ -1,8 +1,8 @@
 package app
 
 import (
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/presentation"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/presentation"
 )
 
 func terminalSafeText(value string) string     { return presentation.TerminalSafeText(value) }

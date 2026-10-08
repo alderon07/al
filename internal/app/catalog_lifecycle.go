@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/catalogrender"
-	"alias-lens/internal/catalogstore"
-	workflowplan "alias-lens/internal/plan"
-	shellapi "alias-lens/internal/shell"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogrender"
+	"github.com/alderon07/al/internal/catalogstore"
+	workflowplan "github.com/alderon07/al/internal/plan"
+	shellapi "github.com/alderon07/al/internal/shell"
 )
 
 type CatalogLifecycleDecisions struct {

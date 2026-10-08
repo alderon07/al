@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 	"strings"
 	"testing"
 

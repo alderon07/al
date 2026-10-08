@@ -3,10 +3,10 @@
 package main
 
 import (
-	"alias-lens/internal/catalogstore"
+	"github.com/alderon07/al/internal/catalogstore"
 
-	"alias-lens/internal/transaction"
 	"encoding/json"
+	"github.com/alderon07/al/internal/transaction"
 	"os"
 	"os/exec"
 	"path/filepath"

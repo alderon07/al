@@ -1,9 +1,9 @@
 package app
 
 import (
-	workflowplan "alias-lens/internal/plan"
 	"bytes"
 	"fmt"
+	workflowplan "github.com/alderon07/al/internal/plan"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"

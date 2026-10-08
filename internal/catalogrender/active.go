@@ -1,8 +1,8 @@
 package catalogrender
 
 import (
-	"alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
+	"github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
 	"path/filepath"
 )
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	workflowstate "alias-lens/internal/state"
+	workflowstate "github.com/alderon07/al/internal/state"
 )
 
 func runStatusCommand(arguments []string) (int, error) {

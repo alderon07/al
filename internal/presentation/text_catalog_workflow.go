@@ -5,7 +5,7 @@ import (
 
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
 
 func CatalogFieldValue(entry neutralcatalog.Entry, path string) any {

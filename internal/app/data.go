@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"alias-lens/internal/transaction"
-	"alias-lens/internal/usagelog"
+	"github.com/alderon07/al/internal/transaction"
+	"github.com/alderon07/al/internal/usagelog"
 )
 
 type DataPath struct {

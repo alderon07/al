@@ -1,11 +1,11 @@
 package usagelog
 
 import (
-	"alias-lens/internal/transaction"
 	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/alderon07/al/internal/transaction"
 	"os"
 	"path/filepath"
 	"strconv"

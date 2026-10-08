@@ -3,8 +3,8 @@
 package app
 
 import (
-	shellapi "alias-lens/internal/shell"
 	"context"
+	shellapi "github.com/alderon07/al/internal/shell"
 )
 
 func (svc *Services) validateSyntax(ctx context.Context, name string, contents []byte) error {

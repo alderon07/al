@@ -10,8 +10,8 @@ import (
 	"sort"
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
 )
 
 func (svc *Services) catalogShellInstalled(shell string) (bool, error) {

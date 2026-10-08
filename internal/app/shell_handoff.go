@@ -1,6 +1,6 @@
 package app
 
-import "alias-lens/internal/shell"
+import "github.com/alderon07/al/internal/shell"
 
 func guardedShellIntegration(text string) string { return shell.GuardedIntegration(text) }
 func legacyShellEntryHandoff(adapter ShellAdapter, entry Alias) (string, error) {

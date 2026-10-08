@@ -4,7 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 	"strings"
 	"testing"
 )

@@ -1,11 +1,11 @@
 package tui
 
 import (
-	"alias-lens/internal/app"
-	"alias-lens/internal/catalog"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/alderon07/al/internal/app"
+	"github.com/alderon07/al/internal/catalog"
 	"os"
 	"path/filepath"
 	"testing"

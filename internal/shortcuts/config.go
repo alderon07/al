@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 var shortcutActionNames = map[Action]string{

@@ -2,10 +2,10 @@
 
 package tui
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
 import (
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 type catalogTUIView struct {

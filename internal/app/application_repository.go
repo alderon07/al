@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"alias-lens/internal/providers"
+	"github.com/alderon07/al/internal/providers"
 )
 
 type RepositoryConfiguration struct {

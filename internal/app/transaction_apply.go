@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"sort"
 
-	workflowplan "alias-lens/internal/plan"
-	"alias-lens/internal/transaction"
+	workflowplan "github.com/alderon07/al/internal/plan"
+	"github.com/alderon07/al/internal/transaction"
 )
 
 type planBuilder func() (workflowplan.OperationPlan, error)

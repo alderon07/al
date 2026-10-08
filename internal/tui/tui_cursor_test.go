@@ -5,7 +5,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 	"github.com/charmbracelet/lipgloss"
 )
 

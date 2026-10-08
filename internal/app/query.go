@@ -194,8 +194,8 @@ func levenshtein(left, right string) int {
 	for column := range row {
 		row[column] = column
 	}
+	next := make([]int, len(right)+1)
 	for i := 1; i <= len(left); i++ {
-		next := make([]int, len(right)+1)
 		next[0] = i
 		for j := 1; j <= len(right); j++ {
 			cost := 0
@@ -204,7 +204,7 @@ func levenshtein(left, right string) int {
 			}
 			next[j] = min(min(next[j-1]+1, row[j]+1), row[j-1]+cost)
 		}
-		row = next
+		row, next = next, row
 	}
 	return row[len(right)]
 }

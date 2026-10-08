@@ -9,7 +9,49 @@ permissions:
   contents: read
 
 jobs:
+  verify:
+    strategy:
+      matrix:
+        os:
+          - macos-14
+          - ubuntu-24.04
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install Zsh on Ubuntu
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes zsh
+      - name: Prepare private test temporary directory
+        run: |
+          test_tmp=$(mktemp -d /tmp/al-release.XXXXXX)
+          chmod 700 "$test_tmp"
+          test_tmp=$(cd "$test_tmp" && pwd -P)
+          printf 'TMPDIR=%s\n' "$test_tmp" >> "$GITHUB_ENV"
+      - name: Check with required shells
+        env:
+          AL_REQUIRE_PTY_SHELLS: "1"
+        run: make check
+      - name: Verify catalog workflow in disposable homes
+        env:
+          AL_REQUIRE_PTY_SHELLS: "1"
+        run: scripts/verify-catalog-workflow.sh
+      - name: Verify Go installation from the tag
+        timeout-minutes: 10
+        env:
+          CANDIDATE_VERSION: ${{ github.ref_name }}
+        run: scripts/verify-go-install.sh "$CANDIDATE_VERSION"
+
   build:
+    needs: verify
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:

@@ -11,8 +11,8 @@ import (
 	"sort"
 	"strings"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	workflowplan "alias-lens/internal/plan"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func (svc *Services) buildProfilePlan(action, name string) (workflowplan.OperationPlan, error) {

@@ -9,7 +9,7 @@ Read [the compatibility policy](COMPATIBILITY.md) before changing commands, flag
 ## Prepare a release candidate
 
 1. Choose one commit for every platform check. Push it without a tag.
-2. Complete the platform checklists and save dated, sanitized evidence:
+2. Run the available platform checks and save dated, sanitized evidence. Record remaining manual checks for the candidate; all required results must pass before stable `v1.0.0`:
 
    - [Linux](testing/RELEASE_LINUX.md)
    - [WSL 2](testing/RELEASE_WSL.md)
@@ -31,17 +31,17 @@ Read [the compatibility policy](COMPATIBILITY.md) before changing commands, flag
    Review available dependency updates. An update is not automatically a release blocker, but every vulnerability finding needs a written decision.
 
 4. Confirm that every GitHub Actions job passes for the release commit.
-   Catalog release evidence must include new-shell Bash and Zsh PTYs, guided native review and cancellation, fallback drift and offline rollback, exact installed completion membership, semantic sync with unrelated staged files, and restricted bootstrap. Run `scripts/verify-catalog-workflow.sh` in a disposable home and retain sanitized results in [catalog review evidence](testing/evidence/CATALOG_REVIEW.md). A missing supported shell must fail the required CI evidence job. Native macOS and WSL results remain release gates; Linux tests and cross-compilation do not complete them.
+   Catalog release evidence must include new-shell Bash and Zsh PTYs, guided native review and cancellation, fallback drift and offline rollback, exact installed completion membership, semantic sync with unrelated staged files, and restricted bootstrap. Run `scripts/verify-catalog-workflow.sh` in a disposable home and retain sanitized results in [catalog review evidence](testing/evidence/CATALOG_REVIEW.md). A missing supported shell must fail the required CI evidence job. Native macOS and WSL results remain stable release gates; Linux tests and cross-compilation do not complete them.
 5. Review `git status --short`, `git diff --check`, and the files that the release archives contain. Do not tag a dirty worktree.
 6. Inspect the staged file list and diff for tokens, private keys, shell alias files, environment files, and local config before the final commit and push.
-7. Tag a stable semantic version and push it:
+7. Tag a release candidate for the remaining platform checks and push it:
 
    ```bash
-   git tag -a v1.0.0 -m "Alias Lens v1.0.0"
-   git push origin v1.0.0
+   git tag -a v1.0.0-rc.1 -m "Alias Lens v1.0.0-rc.1"
+   git push origin v1.0.0-rc.1
    ```
 
-The tag starts `.github/workflows/release.yml`.
+The tag starts `.github/workflows/release.yml`. Its Linux and macOS verification jobs require Bash and Zsh, run the catalog verifier in disposable homes, and verify `go install` from the exact public tag before artifacts can be built or published. Candidate tags create a GitHub prerelease. Create stable `v1.0.0` only after the required manual platform results are recorded for its candidate commit.
 
 ## Checks for the release owner
 
@@ -60,6 +60,8 @@ These checks require repository access, another operating system, or a decision 
 - [ ] Keep the release as a prerelease until every required manual result has dated evidence. Publish it only after reviewing all failures and exceptions.
 
 The personal Homebrew tap is a separate repository. Keep AUR, Debian, RPM, and other package repositories as later distribution work rather than blocking the first release.
+
+Run `scripts/verify-go-install.sh VERSION` from any checkout to verify the published installation route. It installs outside the checkout in a disposable home, checks the binary's module identity and version, and runs version/help commands. Go-installed binaries report the selected module version through `alias-lens --version`; `go version -m` also verifies the module identity and version.
 
 ## Publish through a personal tap
 

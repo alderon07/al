@@ -3,12 +3,12 @@
 package app
 
 import (
-	"alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
-	"alias-lens/internal/managedgit"
-	workflowplan "alias-lens/internal/plan"
 	"context"
 	"fmt"
+	"github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
+	"github.com/alderon07/al/internal/managedgit"
+	workflowplan "github.com/alderon07/al/internal/plan"
 	"os"
 	"os/exec"
 	"path/filepath"

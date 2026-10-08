@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"alias-lens/internal/app"
-	tea "alias-lens/internal/tea"
+	"github.com/alderon07/al/internal/app"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 func TestShellIntegrationUsesConfiguredLauncher(t *testing.T) {

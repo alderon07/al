@@ -1,12 +1,12 @@
 package tui
 
 import (
-	"alias-lens/internal/app"
-	"alias-lens/internal/presentation"
-	"alias-lens/internal/providers"
-	tea "alias-lens/internal/tea"
 	"context"
 	"fmt"
+	"github.com/alderon07/al/internal/app"
+	"github.com/alderon07/al/internal/presentation"
+	"github.com/alderon07/al/internal/providers"
+	tea "github.com/alderon07/al/internal/tea"
 	"time"
 )
 

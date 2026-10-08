@@ -7,7 +7,7 @@ import pty "github.com/creack/pty/v2"
 import (
 	"io"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 	"os"
 	"os/exec"
 	"path/filepath"

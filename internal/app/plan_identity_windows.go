@@ -5,7 +5,7 @@ package app
 import (
 	"os"
 
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func observePlanIdentity(path string) workflowplan.Identity {

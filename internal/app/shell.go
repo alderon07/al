@@ -1,9 +1,9 @@
 package app
 
 import (
-	"alias-lens/internal/shell"
-	"alias-lens/internal/transaction"
 	"fmt"
+	"github.com/alderon07/al/internal/shell"
+	"github.com/alderon07/al/internal/transaction"
 	"os"
 	"path/filepath"
 	"strconv"

@@ -7,10 +7,10 @@ import (
 
 	"path/filepath"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
-	workflowplan "alias-lens/internal/plan"
-	shellapi "alias-lens/internal/shell"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
+	workflowplan "github.com/alderon07/al/internal/plan"
+	shellapi "github.com/alderon07/al/internal/shell"
 )
 
 func (svc *Services) catalogAdoptionForEntry(entry neutralcatalog.Entry, shell, path string, native []byte) (catalogstore.Adoption, error) {

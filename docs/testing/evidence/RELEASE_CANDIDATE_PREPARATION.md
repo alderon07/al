@@ -1,0 +1,11 @@
+# Release candidate preparation
+
+Preparation on 2026-10-08 aligns the module and all 359 internal imports with `github.com/alderon07/al`. Dependencies and the minimum Go version are unchanged. A separate high review found no issues, including offline Linux, Darwin and Windows package identities.
+
+The release tag workflow now requires native Linux and macOS full checks and the disposable catalog verifier with system Bash and Zsh. Exact-tag Go installation runs outside the checkout in a disposable home and checks the binary module identity and version. Build waits for both platform jobs, and privileged publication waits for the verified build. Separate high review found one conflicting manual-check instruction; correction and re-review resolved it. Candidate tags remain prereleases; stable `v1.0.0` requires dated manual platform results.
+
+Core and shell performance changes received separate high reviews with no remaining findings. Repeated synthetic measurements and focused genuine Bash/Zsh PTYs are recorded in [core performance evidence](PERFORMANCE_OPTIMIZATION.md) and [shell startup evidence](PERFORMANCE_SHELL_STARTUP.md). Bash 3.2 handoff PTYs also passed with a disposable Linux runtime; this does not establish native Apple Bash installation evidence.
+
+The final local `make fmt check` passed again after review strengthened the untimed startup benchmark to check every installed name and kind. It includes all packages, vet, build, formatting and whitespace checks; the [actual final output](RELEASE_CANDIDATE_CHECK_2026-10-08.txt) is retained. Dependency verification and `go mod tidy -diff` passed, and the pinned Actionlint validator passed all workflows. The host used a disposable home, an offline dependency cache, actual Bash and a disposable Zsh 5.9 runtime. The compiled trusted-system Zsh validator remains a native CI check; the temporary runtime does not satisfy that policy.
+
+Published-tag installation, candidate CI, archives, checksums, SBOMs and attestations are verified during publication. This preparation record does not claim they have already passed. Manual macOS Terminal.app/native architecture package checks, WSL restart/Windows Terminal checks, and native platform performance remain pending for stable release.

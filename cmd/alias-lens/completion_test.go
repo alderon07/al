@@ -6,7 +6,7 @@ import (
 	"os"
 	"os/exec"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 	"path/filepath"
 	"slices"
 	"strings"

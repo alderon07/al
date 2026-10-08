@@ -7,7 +7,7 @@ import pty "github.com/creack/pty/v2"
 import (
 	"bytes"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 	"io"
 	"os"
 	"os/exec"
@@ -17,8 +17,8 @@ import (
 	"testing"
 	"time"
 
-	"alias-lens/internal/catalogstore"
-	tea "alias-lens/internal/tea"
+	"github.com/alderon07/al/internal/catalogstore"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 func TestCatalogDrawerStagesSpecificApprovalAndCancels(t *testing.T) {

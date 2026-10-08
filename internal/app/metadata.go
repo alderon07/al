@@ -1,9 +1,9 @@
 package app
 
 import (
-	"alias-lens/internal/entry"
-	"alias-lens/internal/shell"
 	"fmt"
+	"github.com/alderon07/al/internal/entry"
+	"github.com/alderon07/al/internal/shell"
 
 	"regexp"
 	"runtime"

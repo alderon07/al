@@ -3,14 +3,14 @@
 package app
 
 import (
-	shellapi "alias-lens/internal/shell"
+	shellapi "github.com/alderon07/al/internal/shell"
 
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 
-	neutralcatalog "alias-lens/internal/catalog"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
 
 func resolveCatalogExecutable(program, searchPath string) (string, error) {

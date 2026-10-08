@@ -7,7 +7,7 @@ import (
 	"runtime"
 	"strings"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 type Profile struct {

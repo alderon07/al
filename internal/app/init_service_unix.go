@@ -3,10 +3,10 @@
 package app
 
 import (
-	workflowplan "alias-lens/internal/plan"
 	"bytes"
 	"context"
 	"fmt"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func (s *Services) ApplyRemoteCatalogInit(ctx context.Context, config AppConfig, options CatalogInitOptions, remote RemoteCatalogPreview, decisions CatalogLifecycleDecisions, preview workflowplan.OperationPlan) error {

@@ -1,0 +1,42 @@
+goos: linux
+goarch: amd64
+pkg: github.com/alderon07/al/cmd/alias-lens
+cpu: 13th Gen Intel(R) Core(TM) i7-13705H
+BenchmarkShellStartup/bash/catalog/100/nonlogin-20         	       7	  29328022 ns/op	       100.0 entries	     26845 input-bytes	   44092 B/op	      68 allocs/op
+BenchmarkShellStartup/bash/catalog/100/nonlogin-20         	       8	  30422927 ns/op	       100.0 entries	     26845 input-bytes	   44140 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/100/nonlogin-20         	       7	  32478828 ns/op	       100.0 entries	     26845 input-bytes	   44094 B/op	      68 allocs/op
+BenchmarkShellStartup/bash/catalog/100/login-20            	       3	  95072665 ns/op	       100.0 entries	     26845 input-bytes	   44394 B/op	      71 allocs/op
+BenchmarkShellStartup/bash/catalog/100/login-20            	       3	  75775472 ns/op	       100.0 entries	     26845 input-bytes	   44096 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/100/login-20            	       4	  60828347 ns/op	       100.0 entries	     26845 input-bytes	   44028 B/op	      68 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/nonlogin-20        	       2	 200030219 ns/op	      1000 entries	    268045 input-bytes	   44432 B/op	      73 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/nonlogin-20        	       2	 124237427 ns/op	      1000 entries	    268045 input-bytes	   44264 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/nonlogin-20        	       2	 118935410 ns/op	      1000 entries	    268045 input-bytes	   44264 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/login-20           	       2	 158863018 ns/op	      1000 entries	    268045 input-bytes	   44256 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/login-20           	       2	 157267752 ns/op	      1000 entries	    268045 input-bytes	   44160 B/op	      70 allocs/op
+BenchmarkShellStartup/bash/catalog/1000/login-20           	       1	 242730267 ns/op	      1000 entries	    268045 input-bytes	   44400 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/nonlogin-20       	       1	1003834760 ns/op	     10000 entries	   2680045 input-bytes	   44088 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/nonlogin-20       	       1	 939539572 ns/op	     10000 entries	   2680045 input-bytes	   44504 B/op	      74 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/nonlogin-20       	       1	 930798470 ns/op	     10000 entries	   2680045 input-bytes	   44088 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/login-20          	       1	1207531822 ns/op	     10000 entries	   2680045 input-bytes	   44272 B/op	      72 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/login-20          	       1	 959264167 ns/op	     10000 entries	   2680045 input-bytes	   44080 B/op	      69 allocs/op
+BenchmarkShellStartup/bash/catalog/10000/login-20          	       1	 918082097 ns/op	     10000 entries	   2680045 input-bytes	   44272 B/op	      72 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/nonlogin-20          	       4	  61469492 ns/op	       100.0 entries	     26845 input-bytes	   43868 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/nonlogin-20          	       4	  59793597 ns/op	       100.0 entries	     26845 input-bytes	   43932 B/op	      67 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/nonlogin-20          	       4	  55136983 ns/op	       100.0 entries	     26845 input-bytes	   43772 B/op	      67 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/login-20             	       4	  55662123 ns/op	       100.0 entries	     26845 input-bytes	   44004 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/login-20             	       4	  57061818 ns/op	       100.0 entries	     26845 input-bytes	   43892 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/100/login-20             	       3	  95287076 ns/op	       100.0 entries	     26845 input-bytes	   43928 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/nonlogin-20         	       2	 134772754 ns/op	      1000 entries	    268045 input-bytes	   43880 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/nonlogin-20         	       2	 125194584 ns/op	      1000 entries	    268045 input-bytes	   43880 B/op	      69 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/nonlogin-20         	       2	 183415348 ns/op	      1000 entries	    268045 input-bytes	   43984 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/login-20            	       2	 141603782 ns/op	      1000 entries	    268045 input-bytes	   44144 B/op	      70 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/login-20            	       2	 127091394 ns/op	      1000 entries	    268045 input-bytes	   43808 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/1000/login-20            	       2	 129043140 ns/op	      1000 entries	    268045 input-bytes	   44008 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/nonlogin-20        	       1	1439910928 ns/op	     10000 entries	   2680045 input-bytes	   43984 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/nonlogin-20        	       1	1570480278 ns/op	     10000 entries	   2680045 input-bytes	   43792 B/op	      68 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/nonlogin-20        	       1	1400821706 ns/op	     10000 entries	   2680045 input-bytes	   43984 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/login-20           	       1	1376956617 ns/op	     10000 entries	   2680045 input-bytes	   44008 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/login-20           	       1	1444315929 ns/op	     10000 entries	   2680045 input-bytes	   44008 B/op	      71 allocs/op
+BenchmarkShellStartup/zsh/catalog/10000/login-20           	       1	1393073775 ns/op	     10000 entries	   2680045 input-bytes	   43816 B/op	      68 allocs/op
+PASS
+ok  	github.com/alderon07/al/cmd/alias-lens	68.841s

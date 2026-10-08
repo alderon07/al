@@ -1,6 +1,6 @@
 package tui
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
 type themePalette = presentation.Theme
 

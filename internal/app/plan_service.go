@@ -1,7 +1,7 @@
 package app
 
 import (
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 	"path/filepath"
 )
 

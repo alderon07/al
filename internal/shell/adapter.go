@@ -1,8 +1,8 @@
 package shell
 
 import (
-	"alias-lens/internal/entry"
 	"fmt"
+	"github.com/alderon07/al/internal/entry"
 	"os"
 	"path/filepath"
 	"regexp"

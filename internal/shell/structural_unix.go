@@ -3,14 +3,14 @@
 package shell
 
 import (
-	neutralcatalog "alias-lens/internal/catalog"
-	sharedentry "alias-lens/internal/entry"
 	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	sharedentry "github.com/alderon07/al/internal/entry"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -87,6 +87,7 @@ func ImportShadowSource(shell string, source []byte) []Result {
 		return []Result{{Status: "unsupported", EndByte: len(source), Diagnostics: []Diagnostic{{Code: "unsupported_source", Message: "unsupported shell or source bounds"}}}}
 	}
 
+	digest := sha256.Sum256(source)
 	lines := SourceLines(source)
 	results := []Result{}
 	pendingComments := []SourceLine{}
@@ -122,7 +123,7 @@ func ImportShadowSource(shell string, source []byte) []Result {
 				continue
 			}
 			entry := newShadowEntry(shell, name, "command", value, description, metadata)
-			results = append(results, newShadowResult(source, shell, start, line.End, startLine, index+1, &entry))
+			results = append(results, newShadowResult(digest[:], shell, start, line.End, startLine, index+1, &entry))
 			index++
 			continue
 		}
@@ -133,7 +134,7 @@ func ImportShadowSource(shell string, source []byte) []Result {
 				continue
 			}
 			entry := newShadowEntry(shell, name, "function", body, description, metadata)
-			results = append(results, newShadowResult(source, shell, start, lines[endIndex].End, startLine, endIndex+1, &entry))
+			results = append(results, newShadowResult(digest[:], shell, start, lines[endIndex].End, startLine, endIndex+1, &entry))
 			index = endIndex + 1
 			continue
 		}
@@ -764,8 +765,8 @@ func newShadowEntry(shell, name, kind, value, description string, metadata Entry
 	entry.Native[shell] = implementation
 	return entry
 }
-func newShadowResult(source []byte, shell string, start, end, startLine, endLine int, entry *neutralcatalog.Entry) Result {
-	origin := shadowOrigin(shell, source, start, end)
+func newShadowResult(digest []byte, shell string, start, end, startLine, endLine int, entry *neutralcatalog.Entry) Result {
+	origin := shadowOriginFromDigest(shell, digest, start, end)
 	entry.ID = origin[:32]
 	return Result{Unit: 0, Name: entry.Name, Kind: entry.Kind, Status: "equivalent", StartByte: start, EndByte: end, StartLine: startLine, EndLine: endLine, Diagnostics: []Diagnostic{}, Origin: origin, Entry: entry}
 }

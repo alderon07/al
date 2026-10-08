@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 )
 
 func TestConfiguredLauncherInShellPTY(t *testing.T) {

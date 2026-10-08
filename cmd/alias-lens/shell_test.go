@@ -5,12 +5,12 @@ import (
 	"os"
 	"path/filepath"
 
-	shellapi "alias-lens/internal/shell"
+	shellapi "github.com/alderon07/al/internal/shell"
 
 	"strings"
 	"testing"
 
-	"alias-lens/internal/app"
+	"github.com/alderon07/al/internal/app"
 )
 
 func TestSetupRemoveKeepsAliasesAndUnrelatedBashSettings(t *testing.T) {

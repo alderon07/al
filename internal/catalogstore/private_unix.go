@@ -58,9 +58,16 @@ func readPrivateBytes(path string, limit int64, observed func()) ([]byte, error)
 	if observed != nil {
 		observed()
 	}
-	data, err := io.ReadAll(io.LimitReader(f, limit+1))
-	if err != nil {
+	if before.Size > limit {
+		return nil, errors.New("private file exceeds limit")
+	}
+	data := make([]byte, int(before.Size))
+	if _, err := io.ReadFull(f, data); err != nil {
 		return nil, errors.New("cannot read catalog state")
+	}
+	var extra [1]byte
+	if n, err := f.Read(extra[:]); n != 0 || err != io.EOF {
+		return nil, errors.New("catalog state changed while reading")
 	}
 	var after, current unix.Stat_t
 	if unix.Fstat(opened, &after) != nil || unix.Fstatat(fd, leaf, &current, unix.AT_SYMLINK_NOFOLLOW) != nil || !stableStat(before, after) || !stableStat(after, current) || !privateStat(after) {

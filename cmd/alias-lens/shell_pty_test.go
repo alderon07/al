@@ -9,7 +9,7 @@ import (
 	"os"
 	"os/exec"
 
-	shellapi "alias-lens/internal/shell"
+	shellapi "github.com/alderon07/al/internal/shell"
 	"github.com/creack/pty/v2"
 	"path/filepath"
 	"regexp"

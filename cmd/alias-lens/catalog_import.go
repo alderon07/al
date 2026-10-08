@@ -5,7 +5,7 @@ package main
 import (
 	"fmt"
 
-	workflowplan "alias-lens/internal/plan"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func runCatalogPreviewCommand(arguments []string) (int, error) {

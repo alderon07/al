@@ -3,10 +3,10 @@
 package app
 
 import (
-	catalog "alias-lens/internal/catalog"
+	catalog "github.com/alderon07/al/internal/catalog"
 
-	catalogstore "alias-lens/internal/catalogstore"
-	workflowplan "alias-lens/internal/plan"
+	catalogstore "github.com/alderon07/al/internal/catalogstore"
+	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
 func (s *Services) BuildCatalogDecisionPlan(decisions CatalogLifecycleDecisions) (workflowplan.OperationPlan, error) {

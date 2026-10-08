@@ -3,9 +3,9 @@
 package app
 
 import (
-	shellapi "alias-lens/internal/shell"
 	"bytes"
 	"context"
+	shellapi "github.com/alderon07/al/internal/shell"
 
 	"encoding/json"
 	"errors"

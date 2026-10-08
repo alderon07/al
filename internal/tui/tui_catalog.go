@@ -2,18 +2,18 @@
 
 package tui
 
-import "alias-lens/internal/presentation"
+import "github.com/alderon07/al/internal/presentation"
 
-import "alias-lens/internal/app"
+import "github.com/alderon07/al/internal/app"
 
 import (
 	"fmt"
 	"os"
 	"strings"
 
-	"alias-lens/internal/catalogstore"
-	workflowplan "alias-lens/internal/plan"
-	tea "alias-lens/internal/tea"
+	"github.com/alderon07/al/internal/catalogstore"
+	workflowplan "github.com/alderon07/al/internal/plan"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 type catalogTUIReviewItem struct {

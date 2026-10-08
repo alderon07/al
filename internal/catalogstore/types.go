@@ -1,6 +1,6 @@
 package catalogstore
 
-import "alias-lens/internal/catalog"
+import "github.com/alderon07/al/internal/catalog"
 
 type ApprovalKey struct {
 	EntryID              string `json:"entry_id"`

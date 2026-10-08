@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"alias-lens/internal/app"
-	"alias-lens/internal/entry"
+	"github.com/alderon07/al/internal/app"
+	"github.com/alderon07/al/internal/entry"
 )
 
 type aliasEntry = entry.Alias

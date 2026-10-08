@@ -8,11 +8,11 @@ import (
 	"os/exec"
 	"path/filepath"
 
-	"alias-lens/internal/catalog"
+	"github.com/alderon07/al/internal/catalog"
 	"strings"
 	"testing"
 
-	shellapi "alias-lens/internal/shell"
+	shellapi "github.com/alderon07/al/internal/shell"
 	"github.com/creack/pty/v2"
 )
 

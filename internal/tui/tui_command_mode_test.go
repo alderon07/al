@@ -3,7 +3,7 @@ package tui
 import (
 	"testing"
 
-	tea "alias-lens/internal/tea"
+	tea "github.com/alderon07/al/internal/tea"
 )
 
 func letterKey(letter rune) tea.KeyMsg {

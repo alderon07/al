@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
-	neutralcatalog "alias-lens/internal/catalog"
-	"alias-lens/internal/catalogstore"
-	workflowplan "alias-lens/internal/plan"
-	workflowstate "alias-lens/internal/state"
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/catalogstore"
+	workflowplan "github.com/alderon07/al/internal/plan"
+	workflowstate "github.com/alderon07/al/internal/state"
 )
 
 func TestCatalogStructuralBoundaryNeverExecutes(t *testing.T) {

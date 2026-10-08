@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"alias-lens/internal/catalog"
+	"github.com/alderon07/al/internal/catalog"
 )
 
 type NativeApprovalKey struct {

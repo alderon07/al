@@ -1,15 +1,15 @@
 package app
 
 import (
-	"alias-lens/internal/catalogstore"
-	"alias-lens/internal/managedgit"
-	workflowplan "alias-lens/internal/plan"
-	"alias-lens/internal/transaction"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/alderon07/al/internal/catalogstore"
+	"github.com/alderon07/al/internal/managedgit"
+	workflowplan "github.com/alderon07/al/internal/plan"
+	"github.com/alderon07/al/internal/transaction"
 	"os"
 	"path/filepath"
 	"strings"

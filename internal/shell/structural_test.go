@@ -3,11 +3,14 @@
 package shell_test
 
 import (
-	"alias-lens/internal/catalog"
-	"alias-lens/internal/shell"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
+	"github.com/alderon07/al/internal/catalog"
+	"github.com/alderon07/al/internal/shell"
 	"os"
 	"path/filepath"
 	"strings"
@@ -186,6 +189,37 @@ func TestNativeStructuralGrammarPreservesBodyAndFollowingAlias(t *testing.T) {
 					t.Fatalf("body changed: %q", actual)
 				}
 			})
+		}
+	}
+}
+
+func TestStructuralOriginsBindEntireSourceAndRanges(t *testing.T) {
+	for _, name := range []string{"bash", "zsh"} {
+		for _, source := range [][]byte{
+			[]byte("# Synthetic\nalias first='printf synthetic'\nfunction second {\n printf synthetic\n}\n"),
+			[]byte("alias first='printf synthetic'\nalias second='printf alternate'\n"),
+		} {
+			digest := sha256.Sum256(source)
+			results := shell.ImportShadowSource(name, source)
+			if len(results) != 2 {
+				t.Fatalf("%s result count=%d", name, len(results))
+			}
+			for _, result := range results {
+				var framed bytes.Buffer
+				for _, value := range [][]byte{[]byte(name), digest[:], binary.BigEndian.AppendUint64(nil, uint64(result.StartByte)), binary.BigEndian.AppendUint64(nil, uint64(result.EndByte))} {
+					framed.Write(binary.BigEndian.AppendUint64(nil, uint64(len(value))))
+					framed.Write(value)
+				}
+				origin := sha256.Sum256(framed.Bytes())
+				want := hex.EncodeToString(origin[:])
+				if result.Entry == nil || result.Origin != want || result.Entry.ID != want[:32] {
+					t.Fatalf("%s origin does not bind complete input and range", name)
+				}
+			}
+			changed := append(append([]byte{}, source...), []byte("# trailing synthetic\n")...)
+			if shell.ImportShadowSource(name, changed)[0].Origin == results[0].Origin {
+				t.Fatal("changed source reused an origin")
+			}
 		}
 	}
 }
