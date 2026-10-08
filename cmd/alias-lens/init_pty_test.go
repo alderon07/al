@@ -25,6 +25,11 @@ func TestMain(m *testing.M) {
 }
 
 func runHelperInitGuidedPTY(t *testing.T, binary, shellName string) {
+	runInitGuidedPTY(t, binary, shellName, false)
+}
+
+func runInitGuidedPTY(t *testing.T, binary, shellName string, insecureCompletions bool) {
+	t.Helper()
 	adapter, err := applicationServices().ShellAdapter(shellName)
 	if err != nil {
 		t.Fatal(err)
@@ -58,7 +63,19 @@ func runHelperInitGuidedPTY(t *testing.T, binary, shellName string) {
 				os.WriteFile(filepath.Join(os.Getenv("HOME"), adapter.AliasFilename()), []byte("alias demo='printf synthetic'\n"), 0600)
 			}
 			fallbackBefore, _ := os.ReadFile(filepath.Join(os.Getenv("HOME"), adapter.AliasFilename()))
-			os.WriteFile(filepath.Join(os.Getenv("HOME"), startup), []byte("PS1="+shellapi.Quote(ptyPrompt)+"\n"), 0600)
+			if shellName == "zsh" {
+				completionPath := filepath.Join(os.Getenv("HOME"), ".config", "alias-lens", "completion.zsh")
+				if err := os.WriteFile(completionPath, []byte(renderZshCompletion()), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			insecureDirectory := ""
+			if insecureCompletions {
+				insecureDirectory = seedInsecureZshCompletion(t, os.Getenv("HOME"))
+			}
+			if err := os.WriteFile(filepath.Join(os.Getenv("HOME"), startup), []byte(initPTYStartup(shellName, insecureDirectory)), 0600); err != nil {
+				t.Fatal(err)
+			}
 			args := []string{"init", repository, "--shell", shellName, "--catalog-path", "catalog.json"}
 			if apply {
 				args = append(args, "--apply")
@@ -100,11 +117,39 @@ func runHelperInitGuidedPTY(t *testing.T, binary, shellName string) {
 				}
 				return
 			}
+			if shellName == "zsh" {
+				zshEnvironment := "skip_global_compinit=1\n"
+				if insecureCompletions {
+					zshEnvironment += "fpath=(" + shellapi.Quote(insecureDirectory) + " $fpath)\n" + initPTYGlobalCompinit + "\n"
+				}
+				if err := os.WriteFile(filepath.Join(os.Getenv("HOME"), ".zshenv"), []byte(zshEnvironment), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			shellArgs := []string{"-i"}
 			if shellName == "bash" {
 				shellArgs = []string{"--noprofile", "-i"}
 			}
-			fresh := startShellPTY(t, shell, shellArgs, []string{"AL_INIT_PTY_HELPER=1", "HOME=" + os.Getenv("HOME"), "PATH=" + capturedPATH, "TERM=xterm-256color", "HISTFILE=/dev/null", "PS1=" + ptyPrompt, "ALIAS_LENS_SHELL=" + shellName})
+			freshEnvironment := []string{"AL_INIT_PTY_HELPER=1", "HOME=" + os.Getenv("HOME"), "PATH=" + capturedPATH, "TERM=xterm-256color", "HISTFILE=/dev/null", "PS1=" + ptyPrompt, "ALIAS_LENS_SHELL=" + shellName}
+			if fpath, ok := os.LookupEnv("FPATH"); ok {
+				freshEnvironment = append(freshEnvironment, "FPATH="+fpath)
+			}
+			fresh := startShellPTY(t, shell, shellArgs, freshEnvironment)
+			if shellName == "zsh" {
+				result := fresh.run(`print -r -- "AL_COMPLETION:${_comps[al]-}:${_comps[alias-lens]-}:$+functions[compdef]"`)
+				if !strings.Contains(result, "AL_COMPLETION:_alias_lens_complete:_alias_lens_complete:1") {
+					t.Fatal("real completion registration unavailable", result)
+				}
+				if insecureCompletions {
+					result := fresh.run(`print -r -- "AL_UNSAFE:$+functions[_al_unsafe_fixture]:${_comps[al_unsafe_fixture]-}:${fpath[(Ie)$HOME/insecure-completions]}"`)
+					if !strings.Contains(result, "AL_UNSAFE:0::0") {
+						t.Fatal("insecure completion was accepted", result)
+					}
+					if _, err := os.Stat(filepath.Join(os.Getenv("HOME"), "unsafe-completion-executed")); !os.IsNotExist(err) {
+						t.Fatal("insecure completion executed", err)
+					}
+				}
+			}
 			if result := fresh.run("demo; printf '\\n'"); !strings.Contains(result, "synthetic") {
 				t.Fatal("installed command unavailable", result)
 			}
@@ -136,3 +181,59 @@ func TestCompiledZshInitGuidedPTY(t *testing.T) {
 	}
 	runHelperInitGuidedPTY(t, binary, "zsh")
 }
+
+func initPTYStartup(shellName, insecureDirectory string) string {
+	startup := "PS1=" + shellapi.Quote(ptyPrompt) + "\n"
+	if shellName == "zsh" {
+		if insecureDirectory != "" {
+			startup += "fpath=(" + shellapi.Quote(insecureDirectory) + " $fpath)\n"
+		}
+		startup += "autoload -Uz compinit\ncompinit -i\n"
+	}
+	return startup
+}
+
+func seedInsecureZshCompletion(t *testing.T, home string) string {
+	t.Helper()
+	directory := filepath.Join(home, "insecure-completions")
+	if err := os.Mkdir(directory, 0777); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(directory, 0777); err != nil {
+		t.Fatal(err)
+	}
+	contents := "#compdef al_unsafe_fixture\nprint unsafe > \"$HOME/unsafe-completion-executed\"\n"
+	if err := os.WriteFile(filepath.Join(directory, "_al_unsafe_fixture"), []byte(contents), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return directory
+}
+
+func TestHelperInitGuidedZshInsecureCompletionsPTY(t *testing.T) {
+	executable, err := exec.LookPath("zsh")
+	if err != nil {
+		if os.Getenv("AL_REQUIRE_PTY_SHELLS") == "1" {
+			t.Fatal(err)
+		}
+		t.Skip("shell runtime unavailable")
+	}
+	home := privateTestHome(t)
+	directory := seedInsecureZshCompletion(t, home)
+	probeEnvironment := []string{"HOME=" + home, "PATH=" + os.Getenv("PATH"), "TERM=xterm-256color", "PS1=" + ptyPrompt, "HISTFILE=/dev/null"}
+	if fpath, ok := os.LookupEnv("FPATH"); ok {
+		probeEnvironment = append(probeEnvironment, "FPATH="+fpath)
+	}
+	probe := startShellPTY(t, executable, []string{"-f", "-i"}, probeEnvironment)
+	offset := probe.mark()
+	probe.write("fpath=(" + shellapi.Quote(directory) + " $fpath); " + initPTYGlobalCompinit + "\n")
+	probe.waitFor(offset, "Ignore insecure directories and continue")
+	probe.write("n\n")
+	probe.waitFor(offset, ptyPrompt)
+	binary, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	runInitGuidedPTY(t, binary, "zsh", true)
+}
+
+const initPTYGlobalCompinit = `if [[ -z "$skip_global_compinit" ]]; then autoload -Uz compinit; compinit; fi`

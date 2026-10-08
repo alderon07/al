@@ -14,6 +14,14 @@ Stage 3 extracts shared entry data and shell behavior from the command package. 
 - SP-006: Tests exercise the extracted package API directly as well as application call sites. Verify metadata and declaration compatibility, read-only planning, startup precedence, symlinks/freshness, structural refusal and validator boundaries. Existing compiled binary and actual Bash/Zsh PTYs must pass, including masking, readonly conflicts, arguments, exit status, signals and cancellation where covered by current runtime contracts.
 - SP-007: Run `make fmt check`, affected race tests and Darwin/Windows production compilation. Record the evidence and repeated independent high review. Unavailable native macOS, WSL and trusted system Zsh checks remain release gates. No dependency upgrades or application/TUI extraction in this stage.
 
+## SP-008 Apple Bash handoff compatibility
+
+The native Apple Bash 3.2 runtime must accept installed integration and `shell-entry` handoff when `al` is both a readonly function and a masking alias. Loading must preserve the readonly function and alias without syntax errors or executing an attempted replacement body. The PTY loads exact production bytes from private fixture files rather than pasting a large multiline program through terminal input. Any correction needs an actual Bash 3.2 reproduction, supported modern Bash/Zsh regression evidence and separate high review of declaration safety, shell options, golden outputs and generation/approval contracts. Do not skip this compatibility case or change the shell selected by macOS tests.
+
+## SP-009 atomic readonly preflight
+
+Runtime catalog handoff checks every selected name for readonly function conflicts before defining any entry or removing any masking alias. Bash 3.2 and modern Bash must reject ordinary and exported readonly functions, including alias-entry collisions, without partially applying the generation. Use supported shell builtins to inspect attributes without executing function bodies; preserve shell options, prior definitions and aliases. Regressions reproduce first-entry mutation followed by a readonly conflict and verify that both entries remain unchanged after refusal. This bounded runtime-wrapper correction preserves immutable stored declarations, renderer IDs, generation identities, approval keys and public JSON contracts. Separate high review and actual Bash 3.2/modern Bash/Zsh evidence are required.
+
 ## Review workflow
 
 Implement the entry substep before adapter extraction. A medium-effort implementer provides the bounded diff and verification; a separate high-effort reviewer compares it with the saved baseline and these criteria. Correct each finding with medium effort and repeat high review. Record concrete failure scenarios, corrections and remaining platform evidence in `docs/testing/evidence/PACKAGE_ORGANIZATION.md`.

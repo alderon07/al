@@ -53,6 +53,12 @@ jobs:
           zsh --version
           uname -a
           sw_vers || true
+      - name: Prepare private test temporary directory
+        run: |
+          test_tmp=$(mktemp -d /tmp/al-ci.XXXXXX)
+          chmod 700 "$test_tmp"
+          test_tmp=$(cd "$test_tmp" && pwd -P)
+          printf 'TMPDIR=%s\n' "$test_tmp" >> "$GITHUB_ENV"
       - name: Check
         run: make check
       - name: Verify catalog workflow in disposable homes

@@ -771,22 +771,34 @@ func TestCatalogGuardedLegacyIntegrationReadonlyAlPTY(t *testing.T) {
 	home := privateTestHome(t)
 	session := startShellPTY(t, executable, []string{"--noprofile", "--norc", "-i"}, []string{"HOME=" + home, "PATH=/usr/bin:/bin", "TERM=xterm-256color", "PS1=" + ptyPrompt})
 	session.run("function al { printf readonly-function; }; readonly -f al; alias al='printf preserved-mask'")
-	output := session.run("builtin eval " + quoteShadow(DefaultServices().mustShellAdapter("bash").Integration()))
-	if strings.Contains(output, "syntax error") {
-		t.Fatal(output)
-	}
-	output = session.run("al; printf '\\n'")
-	if !strings.Contains(output, "preserved-mask") {
-		t.Fatal("readonly integration removed alias before function replacement")
-	}
-	definition, err := legacyShellEntryHandoff(DefaultServices().mustShellAdapter("bash"), Alias{Name: "al", Type: "function", Command: "printf replacement"})
+	adapter := DefaultServices().mustShellAdapter("bash")
+	definition, err := legacyShellEntryHandoff(adapter, Alias{Name: "al", Type: "function", Command: "printf replacement"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	session.run("builtin eval " + quoteShadow(definition))
-	output = session.run("al; printf '\\n'")
-	if !strings.Contains(output, "preserved-mask") {
-		t.Fatal("readonly shell-entry removed alias before function replacement")
+	for _, input := range []struct{ name, contents string }{{"integration", adapter.Integration()}, {"shell-entry", definition}} {
+		t.Run(input.name, func(t *testing.T) {
+			path := filepath.Join(home, input.name+".bash")
+			if err := os.WriteFile(path, []byte(input.contents), 0600); err != nil {
+				t.Fatal(err)
+			}
+			output := session.run("builtin source " + quoteShadow(path))
+			if strings.Contains(output, "syntax error") || strings.Contains(output, "replacement") {
+				t.Fatal(output)
+			}
+			output = session.run(`al; builtin printf '\n'`)
+			if !strings.Contains(output, "preserved-mask") {
+				t.Fatal("readonly " + input.name + " removed alias before function replacement")
+			}
+			output = session.run(`\al; builtin printf '\n'`)
+			if !strings.Contains(output, "readonly-function") || strings.Contains(output, "replacement") {
+				t.Fatal("readonly " + input.name + " replaced or executed the function: " + output)
+			}
+			output = session.run("builtin readonly -f")
+			if !strings.Contains(output, "declare -fr al") && !strings.Contains(output, "declare -rf al") {
+				t.Fatal("readonly " + input.name + " lost the function attribute: " + output)
+			}
+		})
 	}
 }
 
