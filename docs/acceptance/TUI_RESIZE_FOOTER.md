@@ -51,3 +51,7 @@ no parent browser column to match.
 - A PTY test switches between aliases, stats, and keyboard help at one terminal
   size and checks the shared divider width after each switch.
 - `make fmt check` passes.
+
+### RF-005 waits for complete help footer output
+
+The PTY help-page transition waits for the keyboard-guide heading and a terminated divider run of exactly the expected width in valid UTF-8 output. It supports renderer delta output without requiring an unchanged maker-message prefix. It retains the keyboard-guide assertion, existing five-second timeout, exact width assertion, and all narrow and wide resize checks. Deterministic checks reject partial UTF-8, unterminated runs, and overlong runs. Repeated real PTY runs must pass at least 50 times.

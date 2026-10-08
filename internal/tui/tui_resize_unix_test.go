@@ -14,6 +14,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/alderon07/al/internal/app"
 	tea "github.com/alderon07/al/internal/tea"
@@ -75,7 +76,7 @@ func TestTUIFooterSurvivesPTYResize(t *testing.T) {
 	if _, err := terminal.Write([]byte("\x1bOP")); err != nil {
 		t.Fatal(err)
 	}
-	helpRedraw := waitForPTYText(t, output, helpOffset, "Keyboard guide")
+	helpRedraw := waitForPTYContentWidth(t, output, helpOffset, "Keyboard guide", '─', newMainTUIFrame(120, 36).footerWidth())
 	if !strings.Contains(helpRedraw, "Keyboard guide") {
 		t.Fatalf("help PTY redraw did not open keyboard guide:\n%q", helpRedraw)
 	}
@@ -352,4 +353,59 @@ func waitForPTYText(t *testing.T, output *synchronizedBuffer, offset int, expect
 	}
 	t.Fatalf("PTY redraw did not contain %q:\n%q", expected, output.stringFrom(offset))
 	return ""
+}
+
+func waitForPTYContentWidth(t *testing.T, output *synchronizedBuffer, offset int, heading string, rule rune, expected int) string {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		contents := output.stringFrom(offset)
+		if strings.Contains(contents, heading) && hasCompletePTYContentWidth(contents, rule, expected) {
+			return contents
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("PTY redraw did not contain %q and a complete divider of width %d:\n%q", heading, expected, output.stringFrom(offset))
+	return ""
+}
+
+func hasCompletePTYContentWidth(contents string, rule rune, expected int) bool {
+	if !utf8.ValidString(contents) {
+		return false
+	}
+	current := 0
+	for _, character := range contents {
+		if character == rule {
+			current++
+		} else {
+			if current == expected {
+				return true
+			}
+			current = 0
+		}
+	}
+	return false
+}
+
+func TestCompletePTYContentWidth(t *testing.T) {
+	rule := strings.Repeat("─", 113)
+	for _, test := range []struct {
+		name     string
+		contents string
+		want     bool
+	}{
+		{name: "partial UTF-8", contents: rule + "\xe2"},
+		{name: "unterminated exact run", contents: rule},
+		{name: "unterminated shorter run", contents: strings.Repeat("─", 30)},
+		{name: "terminated shorter run", contents: strings.Repeat("─", 30) + "\n"},
+		{name: "terminated longer run", contents: rule + "─\n"},
+		{name: "complete delta redraw", contents: "Keyboard guide\n" + rule + "\x1b[35;68Hhelp\x1b[K", want: true},
+		{name: "complete full redraw", contents: rule + "\nMade by Naqi", want: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			if got := hasCompletePTYContentWidth(test.contents, '─', 113); got != test.want {
+				t.Fatalf("complete divider = %v, want %v", got, test.want)
+			}
+		})
+	}
 }
