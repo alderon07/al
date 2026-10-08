@@ -91,7 +91,18 @@ Further high review reproduced a separate existing runtime-handoff defect: `decl
 
 Repeated independent high review approved SP-009 with no unresolved findings. The original two-function and alias reproductions now refuse atomically on Bash 3.2; exported readonly functions are also refused on modern Bash. Valid handoffs still apply. Independent GNU Bash 3.2 nine-case PTYs and wrapper vectors passed three repetitions in 2.924 seconds; targeted modern-shell race tests passed in 2.013 seconds. Medium affected app/shell race checks and Darwin/Windows builds also passed.
 
-The complete corrected `make fmt check` passed with genuine disposable Zsh completion functions: command 22.265 seconds, app 60.254 seconds, shell 1.384 seconds and TUI 12.952 seconds, plus all other packages, vet, build and whitespace checks. Native platform verification of these corrections is recorded after the next CI run.
+The complete corrected `make fmt check` passed with genuine disposable Zsh completion functions: command 22.265 seconds, app 60.254 seconds, shell 1.384 seconds and TUI 12.952 seconds, plus all other packages, vet, build and whitespace checks. The corrected binary also passed all 27 saved CLI output and exit-code comparisons without changing the disposable home.
+
+### Native CI verification, 2026-10-08
+
+The corrections were committed and pushed as `aa83bcc873154222074ac830ed8ab9c0e5e68324`. [CI run 37821864225](https://github.com/alderon07/al/actions/runs/37821864225) completed successfully for that exact commit. All six jobs passed:
+
+- Linux and macOS full checks and `scripts/verify-catalog-workflow.sh` passed with required Bash/Zsh PTYs and trusted system Zsh. This closes the strict verifier gate left open in the earlier local checkpoints.
+- Both native shadow matrices passed.
+- The vulnerability scan passed.
+- Release-candidate race tests, workflow syntax, snapshot archives, SBOMs and artifact verification passed.
+
+The native macOS suite supplies runtime evidence for Apple Bash and system Zsh, including the corrected readonly-conflict preflight. Manual macOS terminal, restart and installation checks in `docs/testing/RELEASE_MACOS.md`, and native WSL checks in `docs/testing/RELEASE_WSL.md`, remain release gates. Automated CI success does not complete those checklists.
 
 ## Baseline and scope
 

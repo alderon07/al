@@ -1,6 +1,6 @@
 # Catalog implementation evidence
 
-Implementation authorized on 2026-10-03. Baseline `make check` passed before code changes. A disposable Zsh 5.9 runtime was built under `/tmp` without installing system packages. Linux Bash and Zsh startup PTYs have run; native macOS and WSL evidence remains open.
+Implementation authorized on 2026-10-03. Baseline `make check` passed before code changes. A disposable Zsh 5.9 runtime was built under `/tmp` without installing system packages. Linux Bash and Zsh startup PTYs ran during implementation. Native CI verification and the remaining manual platform gates are recorded below.
 
 ## Review cadence
 
@@ -15,9 +15,15 @@ Record medium implementation, high review findings, medium corrections, high re-
 - Semantic sync: automated acceptance, actual Git isolation, and uncertain push reconciliation passed.
 - Local bootstrap: compiled Bash and helper Bash/Zsh guided apply/cancellation passed.
 - Remote bootstrap: synthetic provider, actual filtered Git, bounds, cancellation, promotion, and recovery evidence passed.
-- Complete end-to-end behavior: automated acceptance passed; strict system-shell release verifier remains open.
-- Trusted system Zsh bootstrap/verifier evidence: pending locally; strict CI gate added.
-- Native macOS and WSL release evidence: pending.
+- Complete end-to-end behavior: automated acceptance and strict system-shell verifier passed on Linux and macOS CI.
+- Trusted system Zsh bootstrap/verifier evidence: passed on Linux and macOS CI.
+- Native macOS automated runtime evidence: passed. Manual macOS terminal, restart and installation checks and native WSL release checks remain pending.
+
+## Native CI verification, 2026-10-08
+
+[CI run 37821864225](https://github.com/alderon07/al/actions/runs/37821864225) passed all six jobs for `aa83bcc873154222074ac830ed8ab9c0e5e68324`. Linux and macOS full checks and the disposable catalog workflow verifier passed with required Bash/Zsh PTYs and trusted system Zsh. Both native shadow matrices, vulnerability scanning and release-candidate checks also passed.
+
+The package refactor, CI fixture corrections and atomic readonly-conflict preflight review are recorded in `docs/testing/evidence/PACKAGE_ORGANIZATION.md`. This run closes the strict verifier gate reported in the earlier local checkpoints. The manual checks in `docs/testing/RELEASE_MACOS.md` and `docs/testing/RELEASE_WSL.md` remain required before release. Earlier dated sections below retain the intermediate findings and their verification context.
 
 ## Storage and renderer review, 2026-10-03
 

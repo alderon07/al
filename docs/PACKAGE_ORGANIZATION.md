@@ -36,7 +36,7 @@ Keep platform build tags, shell declaration bytes, generation identities, record
 
 ## Evidence
 
-Stage 4 and stage 5 were authorized on 2026-10-07. Their contracts are in `docs/acceptance/APPLICATION_PACKAGE.md` and `docs/acceptance/TERMINAL_PACKAGE.md`. Both require typed application services, private implementation helpers, no application dependency on terminal models or rendering, and unchanged configuration and plan freshness. Stages 4 and 5 passed their gates on 2026-10-08. Native macOS and WSL runtime checks and trusted system Zsh evidence remain release requirements.
+Stage 4 and stage 5 were authorized on 2026-10-07. Their contracts are in `docs/acceptance/APPLICATION_PACKAGE.md` and `docs/acceptance/TERMINAL_PACKAGE.md`. Both require typed application services, private implementation helpers, no application dependency on terminal models or rendering, and unchanged configuration and plan freshness. Stages 4 and 5 passed their gates on 2026-10-08. Linux and native macOS automated checks, required Bash/Zsh PTYs and the trusted system Zsh verifier passed for `aa83bcc` in [CI run 37821864225](https://github.com/alderon07/al/actions/runs/37821864225). Manual macOS terminal, restart and installation checks and native WSL release checks remain required.
 
 Acceptance criteria: `docs/acceptance/PACKAGE_ORGANIZATION.md`.
 
