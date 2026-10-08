@@ -32,7 +32,7 @@ The corrected startup benchmark ran with `-benchtime=200ms -count=3` and require
 
 Final evidence review found that the original untimed membership gate counted matching names and checked the last entry, which could accept a missing middle entry replaced by an unexpected name with the same count. PS-006 was written before correcting that gate. It now checks every expected name with builtin alias/function lookups, rejects extra names through the count check and rejects aliases masking a catalog function. The fixture generation and timed predicate are unchanged. Both shells passed valid controls and missing first/middle/last and wrong-kind negative PTYs for native aliases and catalog functions, including the same-count replacement with the last entry present. The original two negative PTY cases also remain and pass; no candidate executed in any of the 22 cases.
 
-The corrected startup fixture SHA-256 is `ef6db253dc220bd535cedb97489bd97e593e50549d243239c201ce459ee2301f`. The original fixture hash after normalizing module imports was `39b0421fd43f9c517fa22ed237b843e6be5e4ff91c0f5a88a4a693e7356f2039`; the fixture now differs in its untimed membership gate and negative tests. The full 36-row report was repeated after this correction and supersedes the earlier after report. Production codec optimizations from the parent performance change also affect these complete startup samples, so the direct shell measurements above isolate the handoff correction.
+The fixture file measured in the corrected 36-row run had SHA-256 `ef6db253dc220bd535cedb97489bd97e593e50549d243239c201ce459ee2301f`. The original fixture hash after normalizing module imports was `39b0421fd43f9c517fa22ed237b843e6be5e4ff91c0f5a88a4a693e7356f2039`; the fixture now differs in its untimed membership gate and negative tests. The full 36-row report was repeated after this correction and supersedes the earlier after report. Production codec optimizations from the parent performance change also affect these complete startup samples, so the direct shell measurements above isolate the handoff correction.
 
 | Shell | Entries | Route | Baseline median ms | After median ms | After range ms |
 | --- | ---: | --- | ---: | ---: | --- |
@@ -62,3 +62,14 @@ The focused runtime matrix also passed with the disposable Linux Bash 3.2 execut
 Separate high review of the membership correction found no remaining code issues. Final report and summary arithmetic were refreshed from the repeated corrected run.
 
 The corrected complete-membership and negative startup PTYs also passed with disposable Linux Bash 3.2 and Zsh 5.9, exercising all 22 controls/rejections without candidate execution.
+
+
+## CI fixture correction
+
+Ubuntu 24.04 CI for commit `8b14e23` reached the distro global `compinit` insecure-directory confirmation before loading the new fixtures' private `.zshrc`. All ten Zsh membership cases consequently timed out. The benchmark fixture already enrolled `skip_global_compinit=1` in a private `.zshenv`; the new membership fixtures had omitted it.
+
+PS-007 preceded the correction. Each new Zsh membership fixture now creates its own mode-0600 `.zshenv` with that guard before launching the shell. It also seeds the existing synthetic insecure completion directory and evaluates the existing controlled distro-style `initPTYGlobalCompinit` guard during `.zshenv` loading. The guard prevents the early prompt; the existing private `.zshrc` completion initialization still runs. Both the entry-execution and unsafe-completion sentinels must remain absent. No system startup file or production completion policy changed.
+
+All 22 actual Bash/Zsh membership controls and rejections passed on the normal host after the correction, in 4.249 seconds. The current full test-file SHA-256 is `5e790095a89109c3b2595997f4cb00f56d32efa7b3cf4dbf7aa3538418a53118`. The earlier measured file hash above is historical. This update changes negative-test fixture preparation and its test dependency only; `prepareStartupBenchmark`, the timed predicate and the generated benchmark workload remain unchanged, so the recorded 36 measurements were retained. The parent change reruns the repository gate and CI after review.
+
+Separate high review confirmed the ten Ubuntu failures against the saved CI log, the controlled insecure-directory regression, both execution sentinels and the unchanged exact membership checks. It independently compared the benchmark, preparation and timing functions with `8b14e23` and verified the documented file hash. No findings remain.

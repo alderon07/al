@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/alderon07/al/internal/app"
 	"github.com/alderon07/al/internal/catalog"
+	shellapi "github.com/alderon07/al/internal/shell"
 	"io"
 	"os"
 	"os/exec"
@@ -384,6 +385,13 @@ func TestStartupBenchmarkCompleteMembershipPTY(t *testing.T) {
 					if err := os.Chmod(home, 0700); err != nil {
 						t.Fatal(err)
 					}
+					if shell == "zsh" {
+						directory := seedInsecureZshCompletion(t, home)
+						environment := "skip_global_compinit=1\nfpath=(" + shellapi.Quote(directory) + " $fpath)\n" + initPTYGlobalCompinit + "\n"
+						if err := os.WriteFile(filepath.Join(home, ".zshenv"), []byte(environment), 0600); err != nil {
+							t.Fatal(err)
+						}
+					}
 					var declarations strings.Builder
 					declarations.WriteString(initPTYStartup(shell, "") + "function al { :; }\n")
 					for index := 0; index < 3; index++ {
@@ -426,6 +434,9 @@ func TestStartupBenchmarkCompleteMembershipPTY(t *testing.T) {
 					}
 					if _, err := os.Stat(filepath.Join(home, "benchmark-entry-executed")); !os.IsNotExist(err) {
 						t.Fatal("membership verification executed an entry", err)
+					}
+					if _, err := os.Stat(filepath.Join(home, "unsafe-completion-executed")); !os.IsNotExist(err) {
+						t.Fatal("membership fixture executed an insecure completion", err)
 					}
 				})
 			}

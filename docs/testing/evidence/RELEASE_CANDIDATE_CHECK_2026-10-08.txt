@@ -1,22 +1,22 @@
 gofmt -w $(find cmd internal -name '*.go' -type f)
 go test ./...
-ok  	github.com/alderon07/al/cmd/alias-lens	27.160s
-ok  	github.com/alderon07/al/internal/app	63.788s
+ok  	github.com/alderon07/al/cmd/alias-lens	26.186s
+ok  	github.com/alderon07/al/internal/app	59.974s
 ok  	github.com/alderon07/al/internal/catalog	(cached)
 ok  	github.com/alderon07/al/internal/catalogrender	(cached)
 ok  	github.com/alderon07/al/internal/catalogstore	(cached)
 ok  	github.com/alderon07/al/internal/entry	(cached)
 ?   	github.com/alderon07/al/internal/exportfile	[no test files]
-ok  	github.com/alderon07/al/internal/managedgit	0.449s
+ok  	github.com/alderon07/al/internal/managedgit	0.410s
 ok  	github.com/alderon07/al/internal/plan	(cached)
 ok  	github.com/alderon07/al/internal/presentation	(cached)
-ok  	github.com/alderon07/al/internal/providers	0.098s
+ok  	github.com/alderon07/al/internal/providers	0.125s
 ok  	github.com/alderon07/al/internal/shell	(cached)
 ok  	github.com/alderon07/al/internal/shortcuts	(cached)
 ok  	github.com/alderon07/al/internal/state	(cached)
 ok  	github.com/alderon07/al/internal/tea	(cached)
 ok  	github.com/alderon07/al/internal/transaction	(cached)
-ok  	github.com/alderon07/al/internal/tui	13.725s
+ok  	github.com/alderon07/al/internal/tui	12.459s
 ok  	github.com/alderon07/al/internal/usagelog	(cached)
 go vet ./...
 go build -buildvcs=false -o "/tmp/alias-lens-release" ./cmd/alias-lens
