@@ -23,6 +23,8 @@ Native approval record format 2 binds entry ID, shell, name, kind, implementatio
 
 The guided commands are `init SOURCE` and `catalog enable`, with optional `--shell`, `--startup-path`, and `--apply`; init also accepts `--catalog-path`. Explicit startup enrollment resolves routes that static discovery cannot prove. Inspection and recovery retain `catalog review`, `catalog approve NAME`, `catalog adopt NAME`, `catalog rollback`, and `catalog recover`. `al plan [--json]` previews enablement, rollback, and init without applying changes. `sync --catalog` selects catalog synchronization independently of the configured legacy shell. See the [storage](acceptance/CATALOG_STORAGE.md), [transaction](acceptance/CATALOG_TRANSACTION.md), and [shell runtime](acceptance/CATALOG_SHELL_RUNTIME.md) contracts for the exact private formats and accepted startup grammar.
 
+Native catalog enrollment accepts a bounded grammar for Bash and Zsh declarations. Command and process substitutions, ANSI-C quoted strings, unquoted brace contexts, braced parameter expansions such as `${HOME}`, escaped command newlines, here-strings, and arithmetic involving variables are unsupported and require simplifying the definition before enrollment. Ordinary `$HOME` and quoted literal braces remain supported.
+
 ## Stable metadata and exports
 
 Alias Lens 1.x reads the `# al:` fields `tags`, `collections`, `category`, `platforms`, and `favorite`. A minor release can add a field. It cannot reuse an existing field name for a different value.
@@ -32,6 +34,8 @@ Alias exports contain top-level `kind`, `exported_at`, and `aliases` fields. Eac
 ## Stable configuration
 
 Configuration schema version 2 contains `version`, `repository`, `alias_file`, `shell`, `profiles`, `shortcut_profile`, `shortcuts`, `providers`, `auto_sync`, `tracked_files`, `appearance`, and `footer`. Provider entries contain `enabled`, `host`, `protocol`, and `workspaces`. Automatic sync contains `enabled` and `interval_seconds`. Tracked-file entries contain `source` and `repository_path`.
+
+Tracked sources support owned symlinks when the target and its parent directories pass source trust checks. Unsafe file or parent permissions, write-granting macOS ACLs, unverified ACL metadata, and hardlinks are refused. Source trust changes do not prevent settings from loading or removing the enrollment with `al untrack FILE`.
 
 Alias Lens refuses any configuration schema other than the current version. This keeps pre-1.0 development formats out of the runtime. A future released migration must preserve user settings and back up the exact original bytes.
 

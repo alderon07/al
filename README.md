@@ -110,6 +110,8 @@ Installation makes entries ready for new shells. A running shell keeps its previ
 
 Adopted native definitions stay in the shell's alias file as local fallbacks. A missing helper, corrupt generation, or changed native file declines the overlay and leaves those fallbacks available. Run `al catalog enable` to review native-file changes. Offline rollback restores the original enrollment baseline, including entries later renamed or deleted. Catalog-only entries do not gain native fallback copies.
 
+Catalog enrollment accepts a bounded subset of native Bash and Zsh declarations. Command and process substitutions, ANSI-C quoted strings, unquoted brace contexts, braced parameter expansions such as `${HOME}`, escaped command newlines, here-strings, and arithmetic involving variables require simplifying the definition before enrollment. Ordinary `$HOME` and quoted literal braces remain supported.
+
 Portable entries use a recorded absolute executable path. If that program is removed, Alias Lens reports the failure; renew installation to select a different path. Approvals, local executable paths, generations, native fallbacks, and rollback copies stay private and are excluded from catalog sync.
 
 See [the catalog implementation contracts](docs/CATALOG_PLAN.md) for the supported startup routes and release evidence requirements.
@@ -357,6 +359,8 @@ al untrack ~/.gitconfig
 
 Environment files, keys, and credential-shaped filenames cannot be tracked. Alias Lens scans the alias file for likely secrets before every push.
 Keep the sync repository private. The alias file is stored as readable text, and the secret scan cannot make a public repository safe for private commands.
+
+Tracked files can use owned symlinks whose targets and parent directories are safe. Alias Lens refuses unsafe file or parent permissions, write-granting macOS ACLs, unverified ACL metadata, and hardlinks. If an enrolled source becomes unsafe, remove it with `al untrack FILE` before enrolling a safe source again.
 
 If the local and remote copies both changed, Alias Lens keeps the live file untouched and saves private conflict copies. Run `al diff` to compare them.
 

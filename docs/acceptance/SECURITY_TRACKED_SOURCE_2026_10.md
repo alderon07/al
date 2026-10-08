@@ -8,6 +8,8 @@
 - Validate persisted registry shape independently of current source trust. A source that becomes unsafe must remain removable with `al untrack FILE`, and ordinary settings must still load; enrollment and every source read enforce trust separately.
 - macOS tracked source observation must prove descriptor based native ACL safety for each directory and file. Confirm filesystem ACL metadata support, reject ACL write grants and malformed or unavailable metadata, and preserve deny and read only ACLs. POSIX permission bits and xattr absence do not prove Darwin ACL safety.
 - Verify invalidated source removal and a compiled CLI flow through an actual PTY. Cross compile Darwin and explicitly retain the native ACL verification release gate.
+- Native ACL fixtures must register cleanup before adding synthetic grants or deny entries. Cleanup clears ACLs only on the fixture path before temporary directory removal and reports failures; retain the deny ACL compatibility assertion.
+- Document the bounded catalog native grammar, safe owned tracked symlinks, unsafe source trust restrictions, and `al untrack FILE` recovery in the README and compatibility contract.
 
 Native macOS runtime verification remains required in macOS CI: `TestTrackedDarwinNativeACLBoundary` adds file write and parent add/delete ACL grants, verifies rejection, and checks ordinary and deny ACL controls. Linux decoder tests and Darwin cross compilation do not establish native execution correctness.
 

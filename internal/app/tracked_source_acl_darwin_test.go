@@ -28,6 +28,11 @@ func TestTrackedDarwinNativeACLBoundary(t *testing.T) {
 			if target == "parent" {
 				path, rights = parent, "add_file,delete_child"
 			}
+			t.Cleanup(func() {
+				if output, err := exec.Command("/bin/chmod", "-N", path).CombinedOutput(); err != nil {
+					t.Errorf("clear synthetic ACL before temporary directory cleanup: %v %s", err, output)
+				}
+			})
 			if output, err := exec.Command("/bin/chmod", "+a", "everyone allow "+rights, path).CombinedOutput(); err != nil {
 				t.Fatalf("add synthetic ACL: %v %s", err, output)
 			}
