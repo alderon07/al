@@ -55,7 +55,7 @@ func (s *mutationSession) recover() error {
 		svc = DefaultServices()
 	}
 
-	if err := transaction.RecoverWorkflows(s.stateRoot); err != nil {
+	if err := s.recoverWorkflows(); err != nil {
 		return err
 	}
 	for _, root := range []string{s.configRoot, s.stateRoot} {
@@ -233,7 +233,7 @@ func (s *mutationSession) ApplyPlan(preview workflowplan.OperationPlan, rebuild 
 		spec.Targets = append(spec.Targets, transaction.WorkflowTarget{Path: path, Role: role, Expected: identity, Planned: action.Target.PlannedBytes, Mode: mode, Remove: remove, RecoveryOrder: order, PreserveSymlink: preserve, ExpectedLink: action.Target.ExpectedIdentity.LinkTarget})
 	}
 	if err := transaction.ApplyWorkflow(spec); err != nil {
-		if recoveryErr := transaction.RecoverWorkflows(s.stateRoot); recoveryErr != nil {
+		if recoveryErr := s.recoverWorkflows(); recoveryErr != nil {
 			return fmt.Errorf("%v; automatic rollback needs attention; run al catalog recover: %w", err, recoveryErr)
 		}
 		return err
@@ -425,7 +425,7 @@ func (s *mutationSession) applySpec(spec transaction.WorkflowSpec) error {
 	}
 
 	if e := transaction.ApplyWorkflow(spec); e != nil {
-		if recovery := transaction.RecoverWorkflows(s.stateRoot); recovery != nil {
+		if recovery := s.recoverWorkflows(); recovery != nil {
 			return fmt.Errorf("change failed; run al catalog recover: %w", recovery)
 		}
 		return e
@@ -472,7 +472,7 @@ func (s *mutationSession) writeUserFile(path string, expected, contents []byte, 
 		return nil
 	}
 	if e = transaction.ApplyWorkflow(spec, boundary); e != nil {
-		if recoverErr := transaction.RecoverWorkflows(s.stateRoot); recoverErr != nil {
+		if recoverErr := s.recoverWorkflows(); recoverErr != nil {
 			return fmt.Errorf("change failed; run al catalog recover: %w", recoverErr)
 		}
 		return e

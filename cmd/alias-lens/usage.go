@@ -96,7 +96,8 @@ Remote init previews use the provider API; they do not clone or activate entries
 
 Enroll a local Git repository or supported remote catalog. The default catalog
 path is alias-lens/catalog.json. In a terminal, review exact native declarations
-and ownership ranges before the final apply. Cancellation saves no decisions.
+and ownership ranges together, then confirm the batch or review individually.
+Final confirmation applies the plan. Cancellation saves no decisions.
 --startup-path explicitly selects a startup file when automatic routing cannot
 be proven. --apply uses existing approvals and ownership; it does not approve
 unreviewed native code. Alias-only repository configuration remains separate.
@@ -114,8 +115,11 @@ unreviewed native code. Alias-only repository configuration remains separate.
   al catalog rollback [--shell bash|zsh] [--apply]
   al catalog recover
 
-Preview checks which entries can move into a portable catalog and changes no
-files. Import copies safe entries into an inactive catalog. It keeps your native
+Preview reports source ranges, reasons, and suggested actions without printing
+shell code or changing files. Unsupported definitions may still work natively;
+import copies only equivalent entries and leaves the others in the shell file.
+Review quoting changes carefully because expansion timing can change.
+Import copies safe entries into an inactive catalog. It keeps your native
 alias file and shell setup unchanged. Shadow prints the lower-level safety report.
 It never writes a catalog, alias file, startup file, configuration, or sync state.
 Exit status 0 means every inspected entry is equivalent. Status 1 means at least
@@ -125,8 +129,10 @@ Catalog diff compares entries by their stable identity and reports which details
 changed without printing command or function text. --show-code displays exact
 private text only in an interactive terminal. It leaves both files unchanged.
 
-Enable guides approval and exact fallback ownership review in a terminal. All
-decisions remain staged until the final apply. --apply uses only existing
+Enable displays all pending native approvals and exact fallback enrollments
+together. Confirm the batch once or choose individual review. Matching saved
+records need no repeated review. Decisions remain staged until the final apply.
+--apply uses only existing
 approvals and ownership. --startup-path selects an explicit startup route.
 Plan prints the proposed installation without applying it. Review displays exact
 native text; approve and adopt focus that review on NAME. A separate final

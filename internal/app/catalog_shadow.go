@@ -55,6 +55,14 @@ type ShadowReport struct {
 }
 
 func (svc *Services) inspectCatalogShadow(explicitShell string) (ShadowReport, error) {
+	return svc.inspectCatalogSource(explicitShell, false)
+}
+
+func (svc *Services) InspectCatalogPreview(explicitShell string) (ShadowReport, error) {
+	return svc.inspectCatalogSource(explicitShell, true)
+}
+
+func (svc *Services) inspectCatalogSource(explicitShell string, preview bool) (ShadowReport, error) {
 	adapter, err := svc.shadowShellAdapter(explicitShell)
 	if err != nil {
 		return ShadowReport{}, err
@@ -103,6 +111,9 @@ func (svc *Services) inspectCatalogShadow(explicitShell string) (ShadowReport, e
 	validateShadowCandidates(results)
 	svc.validateShadowRendered(adapter.Name(), results)
 	report := ShadowReport{SchemaVersion: 1, Shell: adapter.Name(), Diagnostics: []shadowDiagnostic{}, Results: results}
+	if preview {
+		shellapi.ExplainPreviewDiagnostics(source, report.Results)
+	}
 	finalizeShadowReport(&report)
 	return report, nil
 }

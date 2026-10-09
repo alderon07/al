@@ -24,7 +24,7 @@ func (svc *Services) catalogAdoptionForEntry(entry neutralcatalog.Entry, shell, 
 			sourceName = record.Name
 		}
 	}
-	var match *shadowResult
+	var match *shellapi.CatalogNativeUnit
 	adapter, err := svc.shellAdapter(shell)
 	if err != nil {
 		return catalogstore.Adoption{}, err
@@ -33,7 +33,11 @@ func (svc *Services) catalogAdoptionForEntry(entry neutralcatalog.Entry, shell, 
 	if err != nil {
 		return catalogstore.Adoption{}, err
 	}
-	for _, result := range importShadowSource(shell, reviewSource) {
+	units, err := shellapi.InspectCatalogNativeSource(shell, reviewSource)
+	if err != nil {
+		return catalogstore.Adoption{}, err
+	}
+	for _, result := range units {
 		if result.Name == sourceName {
 			if match != nil || result.Entry == nil {
 				return catalogstore.Adoption{}, fmt.Errorf("native name is ambiguous")

@@ -11,6 +11,9 @@ func ApplyWorkflow(spec WorkflowSpec, hooks ...func(WorkflowBoundary) error) err
 func RecoverWorkflows(stateRoot string, hooks ...func(WorkflowBoundary) error) error {
 	return ErrUnsafePath
 }
+func RecoverWorkflowsWithPolicy(stateRoot string, policy WorkflowRecoveryPolicy, hooks ...func(WorkflowBoundary) error) error {
+	return ErrUnsafePath
+}
 func ReadWorkflowJournal(stateRoot, path string) (WorkflowManifest, []WorkflowProgress, error) {
 	return WorkflowManifest{}, nil, ErrUnsafePath
 }

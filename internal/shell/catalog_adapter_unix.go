@@ -81,62 +81,31 @@ func ValidateCatalogNativeControls(shell string, native []byte) error {
 	for _, name := range strings.Fields(". : [ [[ alias autoload bind bindkey builtin case command declare do done else esac eval exec export false fc fi for function history if in local print printf return select set setopt shift source then true typeset unalias unset until while zle") {
 		controls[name] = true
 	}
-	aliasHead := regexp.MustCompile(`^(?:builtin[ \t]+)?alias[ \t]+(?:-[^ \t]+[ \t]+)*([^= \t]+)[ \t]*=`)
-	functionHead := regexp.MustCompile(`^(?:function[ \t]+)?(builtin|command)(?:[ \t]*\(\)|[ \t]+)[ \t]*\{`)
-	for _, line := range strings.Split(string(native), "\n") {
-		line = strings.TrimSpace(line)
-		if match := aliasHead.FindStringSubmatch(line); match != nil {
-			name := strings.Trim(match[1], "'\"")
-			if controls[name] {
-				return fmt.Errorf("native definition %q masks catalog handoff control; rename it in the native file, then run al catalog enable --shell %s", name, shell)
-			}
-		}
-		if match := functionHead.FindStringSubmatch(line); match != nil {
-			return fmt.Errorf("native definition %q masks catalog handoff control; rename it in the native file, then run al catalog enable --shell %s", match[1], shell)
-		}
-	}
 	adapter, err := New(shell)
 	if err != nil {
 		return err
 	}
-	source, _, err := CatalogRemoveOwnedIntegration(adapter, native)
+	source, err := CatalogNativeReviewSource(adapter, native)
 	if err != nil {
 		return err
 	}
-	assignments := regexp.MustCompile(`(?:^|[ \t;])(?:['"])?([^ \t='";]+)(?:['"])?[ \t]*=`)
-	for _, result := range ImportShadowSource(shell, source) {
-		if result.Entry == nil {
-			unit := strings.ReplaceAll(string(source[result.StartByte:result.EndByte]), "\\\n", "")
-			for _, match := range assignments.FindAllStringSubmatch(unit, -1) {
-				if controls[match[1]] {
-					return fmt.Errorf("native definition %q masks catalog handoff control; rewrite one literal declaration per line, then run al catalog enable --shell %s", match[1], shell)
-				}
-			}
-			ambiguous := strings.ContainsAny(unit, "$`")
-			for _, token := range catalogNameTokens.FindAllString(unit, -1) {
-				if token == "alias" || token == "aliases" || token == "function" || token == "functions" || token == "builtin" || token == "command" || token == "eval" || token == "source" {
-					ambiguous = true
-				}
-			}
-			if ambiguous {
-				return fmt.Errorf("native unit has ambiguous alias or control definitions; rewrite one literal declaration per line, then run al catalog enable --shell %s", shell)
-			}
-			continue
-		}
-		blocked := (result.Kind == "command" && controls[result.Name]) || (result.Kind == "function" && (result.Name == "builtin" || result.Name == "command"))
+	units, err := InspectCatalogNativeSource(shell, source)
+	if err != nil {
+		return err
+	}
+	for _, unit := range units {
+		blocked := unit.Kind == "command" && controls[unit.Name] || unit.Kind == "function" && (unit.Name == "builtin" || unit.Name == "command")
 		if blocked {
-			return fmt.Errorf("native definition %q masks catalog handoff control; rename it in the native file, then run al catalog enable --shell %s", result.Name, shell)
+			return nativeBoundaryError(unit.StartLine, unit.EndLine, "declaration masks catalog handoff control")
 		}
 	}
+
 	return nil
 }
 
-func ValidateCatalogDeclarations(shell string, entries []neutralcatalog.Entry, declarations [][]byte, native []byte, validator func(context.Context, string, []byte) error) error {
+func ValidateCatalogDependencyPolicy(shell string, entries []neutralcatalog.Entry, declarations [][]byte, native []byte) error {
 	if shell != "bash" && shell != "zsh" {
 		return fmt.Errorf("unsupported shell %q (use bash or zsh)", shell)
-	}
-	if validator == nil {
-		validator = func(ctx context.Context, name string, data []byte) error { return ValidateSyntax(ctx, name, data, nil) }
 	}
 	if err := ValidateCatalogNativeControls(shell, native); err != nil {
 		return err
@@ -155,13 +124,27 @@ func ValidateCatalogDeclarations(shell string, entries []neutralcatalog.Entry, d
 			aliases[entry.Name] = true
 		}
 	}
-	survivors := ImportShadowSource(shell, native)
+	adapter, err := New(shell)
+	if err != nil {
+		return err
+	}
+	reviewSource, err := CatalogNativeReviewSource(adapter, native)
+	if err != nil {
+		return err
+	}
+	survivors, err := InspectCatalogNativeSource(shell, reviewSource)
+	if err != nil {
+		return err
+	}
 	for _, result := range survivors {
-		if result.Entry != nil && result.Kind == "command" {
+		if result.Kind == "command" {
+			implementation := result.Entry.Native[shell]
+			if implementation.AliasValue != nil && len(*implementation.AliasValue) > 0 && strings.ContainsAny((*implementation.AliasValue)[len(*implementation.AliasValue)-1:], " \t") {
+				return fmt.Errorf("trailing-blank native alias is unsupported; remove the trailing blank before al catalog enable")
+			}
 			aliases[result.Name] = true
 		}
 	}
-	var combined bytes.Buffer
 	for index, entry := range entries {
 		if err := ValidateCatalogDeclaration(shell, entry, declarations[index]); err != nil {
 			return err
@@ -174,26 +157,45 @@ func ValidateCatalogDeclarations(shell string, entries []neutralcatalog.Entry, d
 			if implementation.AliasValue != nil {
 				text = *implementation.AliasValue
 			}
-			if err := rejectCatalogAliasDependencies(entry.Name, text, aliases); err != nil {
+			if err := rejectCatalogAliasDependencies(shell, entry.Name, text, aliases, implementation.AliasValue != nil); err != nil {
 				return err
 			}
 		}
 		if _, nativeImplementation := entry.Native[shell]; !nativeImplementation && entry.Portable != nil {
-			if err := rejectCatalogAliasDependencies(entry.Name, "function builtin exec", aliases); err != nil {
+			if err := rejectCatalogPortableAliasDependencies(entry.Name, aliases); err != nil {
 				return err
 			}
 		}
-		combined.Write(declarations[index])
 	}
 	for _, result := range survivors {
-		if result.Entry == nil {
-			continue
-		}
-		if implementation := result.Entry.Native[shell]; implementation.FunctionBody != nil {
-			if err := rejectCatalogAliasDependencies(result.Name, *implementation.FunctionBody, aliases); err != nil {
-				return err
+		if result.Kind == "command" {
+			implementation := result.Entry.Native[shell]
+			if implementation.AliasValue != nil {
+				if err := rejectCatalogAliasDependencies(shell, result.Name, *implementation.AliasValue, aliases, true); err != nil {
+					return nativeBoundaryError(result.StartLine, result.EndLine, "retained alias has an ambiguous or unsupported alias dependency")
+				}
 			}
 		}
+		if result.Kind == "function" {
+			if err := rejectCatalogAliasDependencies(shell, result.Name, result.Body, aliases, false); err != nil {
+				return nativeBoundaryError(result.StartLine, result.EndLine, "retained function has an ambiguous dependency on an alias")
+			}
+		}
+	}
+
+	return nil
+}
+
+func ValidateCatalogDeclarations(shell string, entries []neutralcatalog.Entry, declarations [][]byte, native []byte, validator func(context.Context, string, []byte) error) error {
+	if err := ValidateCatalogDependencyPolicy(shell, entries, declarations, native); err != nil {
+		return err
+	}
+	if validator == nil {
+		validator = func(ctx context.Context, name string, data []byte) error { return ValidateSyntax(ctx, name, data, nil) }
+	}
+	var combined bytes.Buffer
+	for _, declaration := range declarations {
+		combined.Write(declaration)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -203,8 +205,8 @@ func ValidateCatalogDeclarations(shell string, entries []neutralcatalog.Entry, d
 	return nil
 }
 
-func rejectCatalogAliasDependencies(name, text string, aliases map[string]bool) error {
-	for _, token := range catalogNameTokens.FindAllString(text, -1) {
+func rejectCatalogPortableAliasDependencies(name string, aliases map[string]bool) error {
+	for _, token := range []string{"function", "builtin", "exec"} {
 		if aliases[token] {
 			return fmt.Errorf("%s has an ambiguous dependency on alias %s; migrate it manually before al catalog enable", name, token)
 		}

@@ -424,33 +424,37 @@ func parseShadowList(value string, allowed map[string]bool) ([]string, bool) {
 	return parts, true
 }
 func parseShadowAlias(line string) (string, string, bool) {
+	name, value, reason := parseShadowAliasReason(line)
+	return name, value, reason == ""
+}
+func parseShadowAliasReason(line string) (string, string, string) {
 	if !strings.HasPrefix(line, "alias") || len(line) == len("alias") || (line[len("alias")] != ' ' && line[len("alias")] != '\t') {
-		return "", "", false
+		return "", "", "alias_definition"
 	}
 	rest := strings.TrimLeft(line[len("alias"):], " \t")
 	equal := strings.IndexByte(rest, '=')
 	if equal <= 0 {
-		return "", "", false
+		return "", "", "alias_assignment"
 	}
 	name := rest[:equal]
 	if !shadowCommandName.MatchString(name) {
-		return "", "", false
+		return "", "", "alias_name"
 	}
 	quoted := rest[equal+1:]
 	value, tail, ok := decodeShadowSingleQuote(quoted)
 	if !ok {
-		return "", "", false
+		return "", "", "alias_quoting"
 	}
 	if tail != "" {
 		if tail[0] != ' ' && tail[0] != '\t' {
-			return "", "", false
+			return "", "", "alias_trailing"
 		}
 		tail = strings.TrimLeft(tail, " \t")
 	}
 	if tail != "" && !strings.HasPrefix(tail, "#") {
-		return "", "", false
+		return "", "", "alias_trailing"
 	}
-	return name, value, true
+	return name, value, ""
 }
 func decodeShadowSingleQuote(input string) (string, string, bool) {
 	if !strings.HasPrefix(input, "'") {
@@ -515,6 +519,10 @@ func parseShadowFunction(source []byte, lines []SourceLine, start int) (string, 
 	return name, string(contents[open+1 : close]), endIndex, true
 }
 func matchingOuterBrace(contents []byte, open int) (int, bool) {
+	close, reason := matchingOuterBraceReason(contents, open)
+	return close, reason == ""
+}
+func matchingOuterBraceReason(contents []byte, open int) (int, string) {
 	type heredocSpec struct {
 		delimiter []byte
 		stripTabs bool
@@ -529,12 +537,12 @@ func matchingOuterBrace(contents []byte, open int) (int, bool) {
 		if heredocActive {
 			lineEnd := bytes.IndexByte(contents[index:], '\n')
 			if lineEnd < 0 {
-				return 0, false
+				return index, "function_heredoc_boundary"
 			}
 			lineEnd += index
 			line := contents[index:lineEnd]
 			if !heredocs[0].quoted && bytes.HasSuffix(line, []byte{'\\'}) {
-				return 0, false
+				return index, "function_heredoc_continuation"
 			}
 			if heredocs[0].stripTabs {
 				line = bytes.TrimLeft(line, "\t")
@@ -549,7 +557,7 @@ func matchingOuterBrace(contents []byte, open int) (int, bool) {
 		}
 		character := contents[index]
 		if character == '\n' && quote != 0 && len(heredocs) > 0 {
-			return 0, false
+			return index, "function_heredoc_quote"
 		}
 		if quote == '\'' {
 			if character == quote {
@@ -559,11 +567,11 @@ func matchingOuterBrace(contents []byte, open int) (int, bool) {
 		}
 		if character == '\\' {
 			if index+1 >= len(contents) {
-				return 0, false
+				return index, "function_escape_boundary"
 			}
 			next := contents[index+1]
 			if next == '\n' {
-				return 0, false
+				return index, "function_continuation"
 			}
 			if quote == '"' && !bytes.ContainsRune([]byte("$`\"\\\n"), rune(next)) {
 				continue
@@ -573,17 +581,21 @@ func matchingOuterBrace(contents []byte, open int) (int, bool) {
 			continue
 		}
 		if character == '`' {
-			return 0, false
+			return index, "function_backticks"
 		}
 		if character == '$' && index+1 < len(contents) {
 			next := contents[index+1]
 			if next == '{' || next == '[' || next == '\'' || next == '"' {
-				return 0, false
+				reason := map[byte]string{'{': "function_parameter_expansion", '[': "function_legacy_arithmetic", '\'': "function_dollar_single_quote", '"': "function_dollar_double_quote"}[next]
+				return index, reason
 			}
 			if next == '(' {
 				end, ok := shadowNumericArithmetic(contents, index)
 				if !ok {
-					return 0, false
+					if index+2 < len(contents) && contents[index+2] == '(' {
+						return index, "function_arithmetic_expression"
+					}
+					return index, "function_command_substitution"
 				}
 				index = end
 				wordStart, commandStart = false, false
@@ -614,11 +626,11 @@ func matchingOuterBrace(contents []byte, open int) (int, bool) {
 		}
 		if character == '<' && index+1 < len(contents) && contents[index+1] == '<' {
 			if index+2 < len(contents) && contents[index+2] == '<' {
-				return 0, false
+				return index, "function_here_string"
 			}
 			spec, next, ok := parseShadowHeredoc(contents, index+2)
 			if !ok {
-				return 0, false
+				return index, "function_heredoc_delimiter"
 			}
 			heredocs = append(heredocs, spec)
 			index = next - 1
@@ -626,13 +638,13 @@ func matchingOuterBrace(contents []byte, open int) (int, bool) {
 			continue
 		}
 		if character == '{' || character == '(' || character == ')' {
-			return 0, false
+			return index, "function_grouping"
 		}
 		if character == '}' {
 			if !commandStart || !wordStart || len(heredocs) > 0 || (index+1 < len(contents) && !bytes.ContainsRune([]byte(" \t\n;"), rune(contents[index+1]))) {
-				return 0, false
+				return index, "function_closing_brace"
 			}
-			return index, true
+			return index, ""
 		}
 		switch character {
 		case ' ', '\t':
@@ -645,12 +657,12 @@ func matchingOuterBrace(contents []byte, open int) (int, bool) {
 		case '<', '>':
 			wordStart = true
 		case '\r':
-			return 0, false
+			return index, "function_carriage_return"
 		default:
 			wordStart, commandStart = false, false
 		}
 	}
-	return 0, false
+	return len(contents), "function_boundary"
 }
 
 func shadowNumericArithmetic(contents []byte, start int) (int, bool) {

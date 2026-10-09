@@ -7,6 +7,7 @@ import (
 
 	workflowplan "github.com/alderon07/al/internal/plan"
 
+	"errors"
 	"fmt"
 )
 
@@ -30,6 +31,9 @@ func runSupportedCatalogInit(options app.CatalogInitOptions) error {
 	decisions := app.CatalogLifecycleDecisions{ConfirmedAt: applicationServices().LifecycleTimestamp(), StartupPaths: append([]string{}, options.StartupPaths...)}
 	if catalogReviewTerminal() && !options.Apply {
 		decisions, err = guidedCatalogLifecycleReview(value, adapter.Name(), true)
+		if errors.Is(err, errCatalogReviewCanceled) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -39,7 +43,9 @@ func runSupportedCatalogInit(options app.CatalogInitOptions) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(catalogWorkflowStdout, workflowplan.RenderPlain(preview))
+	if err := writeCatalogReviewOutput(workflowplan.RenderPlain(preview)); err != nil {
+		return err
+	}
 	if !options.Apply {
 		if !catalogReviewTerminal() {
 			fmt.Fprintln(catalogWorkflowStdout, "Enter al init SOURCE --apply after reviewing this plan.")
@@ -82,6 +88,9 @@ func runRemoteCatalogInit(options app.CatalogInitOptions) error {
 	decisions := app.CatalogLifecycleDecisions{ConfirmedAt: applicationServices().LifecycleTimestamp(), StartupPaths: append([]string{}, options.StartupPaths...)}
 	if catalogReviewTerminal() && !options.Apply {
 		decisions, err = guidedCatalogLifecycleReview(value, adapter.Name(), true)
+		if errors.Is(err, errCatalogReviewCanceled) {
+			return nil
+		}
 		if err != nil {
 			return err
 		}
@@ -91,7 +100,9 @@ func runRemoteCatalogInit(options app.CatalogInitOptions) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(catalogWorkflowStdout, workflowplan.RenderPlain(preview))
+	if err := writeCatalogReviewOutput(workflowplan.RenderPlain(preview)); err != nil {
+		return err
+	}
 	if !options.Apply {
 		if !catalogReviewTerminal() {
 			fmt.Fprintln(catalogWorkflowStdout, "Enter al init SOURCE --apply after reviewing this immutable catalog plan.")

@@ -91,9 +91,7 @@ func runInitGuidedPTY(t *testing.T, binary, shellName string, insecureCompletion
 			go func() { io.Copy(output, terminal) }()
 			session := &shellPTY{t: t, file: terminal, cmd: command, output: output}
 			if !apply {
-				session.waitFor(0, "Approve this exact native implementation?")
-				session.write("y\n")
-				session.waitFor(0, "Enroll this exact native fallback?")
+				session.waitFor(0, "Approve this exact batch?")
 				session.write("y\n")
 				session.waitFor(0, "Apply this catalog enrollment and installation?")
 				if scenario.cancel {

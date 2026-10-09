@@ -51,3 +51,5 @@ type WorkflowProgress struct {
 	Identity *FileIdentity `json:"identity,omitempty"`
 }
 type WorkflowBoundary = WorkflowProgress
+
+type WorkflowRecoveryPolicy func(WorkflowTarget, []byte, []byte) bool

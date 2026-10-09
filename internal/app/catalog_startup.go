@@ -5,10 +5,11 @@ package app
 import shellapi "github.com/alderon07/al/internal/shell"
 
 type catalogStartupEdit struct {
-	Path   string
-	Before []byte
-	After  []byte
-	Route  string
+	Path      string
+	Before    []byte
+	After     []byte
+	Route     string
+	Reordered bool
 }
 
 const catalogLoaderStart = "# >>> Alias Lens catalog v2 >>>"

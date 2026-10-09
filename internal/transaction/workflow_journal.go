@@ -161,6 +161,7 @@ func validateWorkflowProgress(d workflowDisk) error {
 	recovering := false
 	finished := false
 	recoveryIndex := 0
+	var retainedIdentity *FileIdentity
 	indices := make([]int, len(d.Manifest.Actions))
 	for i := range indices {
 		indices[i] = i
@@ -205,6 +206,15 @@ func validateWorkflowProgress(d workflowDisk) error {
 				} else if !workflowContentMatches(a.Target.Expected, id) {
 					return ErrJournalCorrupt
 				}
+			} else if p.Stage == "recovery_target_retained" {
+				expected := a.Target.Expected
+				if !workflowRetentionEligible(d) || !id.Exists || id.Mode != 0o600 || id.Owner != expected.Owner || id.Group != expected.Group || id.Links != 1 || id.PlatformID == "" || validateHash(id.SHA256, "retained") != nil {
+					return ErrJournalCorrupt
+				}
+				if retainedIdentity != nil && !sameIdentity(*retainedIdentity, id) {
+					return ErrJournalCorrupt
+				}
+				retainedIdentity = p.Identity
 			}
 		}
 		if finished {
@@ -235,6 +245,11 @@ func validateWorkflowProgress(d workflowDisk) error {
 			recoveryIndex = 0
 		case "recovery_target_synced":
 			if !recovering || recoveryIndex == len(indices) || p.Target != indices[recoveryIndex] || p.Identity == nil {
+				return ErrJournalCorrupt
+			}
+			recoveryIndex++
+		case "recovery_target_retained":
+			if !recovering || recoveryIndex != 0 || len(indices) != 1 || p.Target != 0 || p.Identity == nil {
 				return ErrJournalCorrupt
 			}
 			recoveryIndex++

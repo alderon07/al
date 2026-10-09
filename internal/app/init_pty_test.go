@@ -65,9 +65,16 @@ func TestCompiledInitPTYCancellationAndPortableApply(t *testing.T) {
 			go func() { io.Copy(output, terminal) }()
 			session := &shellPTY{t: t, file: terminal, cmd: command, output: output}
 			if !apply {
-				session.waitFor(0, "Approve this exact native implementation?")
-				session.write("y\n")
-				session.waitFor(0, "Enroll this exact native fallback?")
+				session.waitFor(0, "Approve this exact batch?")
+				displayed := output.stringFrom(0)
+				for _, required := range []string{"1 native approvals and 1 fallback enrollments", "Implementation:", "Exact declaration:", "Ownership demo", "Exact fallback:", "Candidate:"} {
+					if !strings.Contains(displayed, required) {
+						t.Fatalf("compiled init omitted batch field %q", required)
+					}
+				}
+				if strings.Contains(displayed, "Approve this exact native implementation?") || strings.Contains(displayed, "Enroll this exact native fallback?") {
+					t.Fatal("compiled init repeated individual prompts by default")
+				}
 				session.write("y\n")
 				session.waitFor(0, "Apply this catalog enrollment and installation?")
 				if scenario.cancel {

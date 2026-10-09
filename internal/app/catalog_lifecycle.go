@@ -247,10 +247,13 @@ func (svc *Services) buildCatalogEnablePlanForCatalog(shell string, decisions Ca
 	if err != nil {
 		return workflowplan.OperationPlan{}, err
 	}
-	nativeEntries := importShadowSource(shell, reviewSource)
+	nativeEntries, err := shellapi.InspectCatalogNativeSource(shell, reviewSource)
+	if err != nil {
+		return workflowplan.OperationPlan{}, err
+	}
 	collisions := map[string]int{}
 	for _, record := range nativeEntries {
-		if record.Entry != nil {
+		if record.Name != "" {
 			collisions[record.Name]++
 		}
 	}
@@ -322,7 +325,7 @@ func (svc *Services) buildCatalogEnablePlanForCatalog(shell string, decisions Ca
 			return workflowplan.OperationPlan{}, err
 		}
 	}
-	startup, err := svc.planCatalogStartup(adapter, manifest, previous, executable, refreshed, decisions.StartupPaths)
+	startup, err := svc.planCatalogStartup(adapter, manifest, previous, executable, refreshed, decisions.StartupPaths, updatedAdoptions)
 	if err != nil {
 		return workflowplan.OperationPlan{}, err
 	}
@@ -400,8 +403,12 @@ func (svc *Services) buildCatalogEnablePlanForCatalog(shell string, decisions Ca
 			}
 		}
 		inputs = append(inputs, svc.planInput("startup", edit.Path, edit.Before))
+		actionCount := len(actions)
 		if err := appendAction(edit.Path, "startup", edit.After); err != nil {
 			return workflowplan.OperationPlan{}, err
+		}
+		if edit.Reordered && len(actions) > actionCount {
+			actions[len(actions)-1].Reason += "; explicitly reorder the native source after statically described opaque startup loads; trust their uninspected behavior, variable and function effects; guard native parsing and install the catalog overlay"
 		}
 	}
 	if previous == nil {
@@ -491,7 +498,10 @@ func refreshCatalogFallbacks(shell, path string, native []byte, adoptions catalo
 	if err != nil {
 		return nil, adoptions, err
 	}
-	parsed := importShadowSource(shell, reviewSource)
+	parsed, err := shellapi.InspectCatalogNativeSource(shell, reviewSource)
+	if err != nil {
+		return nil, adoptions, err
+	}
 	for _, record := range adoptions.Records {
 		if record.Shell != shell {
 			result.Records = append(result.Records, record)
@@ -529,15 +539,41 @@ func refreshCatalogFallbacks(shell, path string, native []byte, adoptions catalo
 	return updated, result, nil
 }
 
-func (svc *Services) planCatalogStartup(adapter ShellAdapter, manifest catalogstore.GenerationManifest, previous *catalogstore.InstalledState, executable string, native []byte, explicit []string) ([]catalogStartupEdit, error) {
+func (svc *Services) planCatalogStartup(adapter ShellAdapter, manifest catalogstore.GenerationManifest, previous *catalogstore.InstalledState, executable string, native []byte, explicit []string, adoptions catalogstore.AdoptionsFile) ([]catalogStartupEdit, error) {
+	if len(explicit) == 0 && previous != nil {
+		preserveEnrollment := false
+		paths := []string{}
+		for _, record := range previous.StartupRecords {
+			contents, err := readRegularFile(record.Path, ShadowSourceLimit)
+			if err != nil || hashBytes(contents) != record.SHA256 {
+				return nil, fmt.Errorf("startup changed; review al setup --repair")
+			}
+			route, err := shellapi.CatalogExplicitNativeRoute(contents)
+			if err != nil {
+				return nil, err
+			}
+			preserveEnrollment = preserveEnrollment || len(route) > 0
+			paths = append(paths, record.Path)
+		}
+		if preserveEnrollment {
+			explicit = paths
+		}
+	}
 	paths, err := adapter.CatalogStartupPaths(svc.homeDirectory(), svc.currentPlatform(), explicit)
 	if err != nil {
 		return nil, err
 	}
 	result := []catalogStartupEdit{}
 	names := map[string]bool{}
+	authoritativeAliases := map[string]bool{}
+	nativeFingerprint := hashBytes(native)
 	for _, entry := range manifest.Entries {
 		names[entry.Entry.Name] = true
+		for _, record := range adoptions.Records {
+			if record.Shell == adapter.Name() && record.EntryID == entry.Entry.ID && record.Name == entry.Entry.Name && (record.Path == manifest.NativePath || record.Path == manifest.NativeSourcePath) && record.Kind == "command" && record.FileSHA256 == nativeFingerprint && record.Start >= 0 && record.End <= len(native) && record.End > record.Start && record.Definition == string(native[record.Start:record.End]) && record.DefinitionSHA256 == hashBytes([]byte(record.Definition)) {
+				authoritativeAliases[entry.Entry.Name] = true
+			}
+		}
 	}
 	for _, path := range paths {
 		before, e := readRegularFile(path, ShadowSourceLimit)
@@ -548,6 +584,7 @@ func (svc *Services) planCatalogStartup(adapter ShellAdapter, manifest catalogst
 		}
 		contents := before
 		previousInsertion := -1
+		retainedExplicit := false
 		if previous != nil {
 			matched := false
 			for _, record := range previous.StartupRecords {
@@ -562,20 +599,23 @@ func (svc *Services) planCatalogStartup(adapter ShellAdapter, manifest catalogst
 				return nil, fmt.Errorf("startup route changed; use al catalog rollback")
 			}
 			text := string(contents)
-			start := bytes.Index(contents, []byte(catalogLoaderStart))
-			end := bytes.Index(contents, []byte(catalogLoaderEnd))
-			if start < 0 || end < start {
-				return nil, fmt.Errorf("catalog startup block is incomplete")
-			}
-			end += len(catalogLoaderEnd)
-			if start > 0 && text[start-1] == '\n' {
-				start--
-			}
-			if end < len(text) && text[end] == '\n' {
-				end++
+			start, end, spanErr := shellapi.CatalogStartupBlockSpan(contents)
+			if spanErr != nil {
+				return nil, spanErr
 			}
 			previousInsertion = start
+			movedRoute, e := shellapi.CatalogExplicitNativeRoute(contents[start:end])
+			if e != nil {
+				return nil, e
+			}
+			retainedExplicit = len(movedRoute) > 0
 			text = text[:start] + text[end:]
+			if retainedExplicit {
+				if text != "" && !strings.HasSuffix(text, "\n") {
+					text += "\n"
+				}
+				text += string(movedRoute)
+			}
 			contents = []byte(text)
 		}
 		route, viaPrimary := adapter.CatalogStartupRoute(path, contents, svc.homeDirectory())
@@ -583,14 +623,28 @@ func (svc *Services) planCatalogStartup(adapter ShellAdapter, manifest catalogst
 			result = append(result, catalogStartupEdit{Path: path, Before: before, After: contents, Route: route})
 			continue
 		}
-		preserved, sourceNative, insertion, e := catalogStartupPlacementAt(contents, adapter.Name(), svc.homeDirectory(), manifest.NativePath, names)
+		explicitStartup := retainedExplicit
+		for _, requested := range explicit {
+			if requested == path {
+				explicitStartup = true
+			}
+		}
+		preserved, sourceNative, insertion, e := shellapi.CatalogStartupPlacementPolicy(contents, adapter.Name(), svc.homeDirectory(), manifest.NativePath, names, authoritativeAliases, explicitStartup)
 		if e != nil {
-			return nil, e
+			return nil, fmt.Errorf("%s: %w", svc.displayPrivatePath(path), e)
 		}
 		integration := ""
-		if !bytes.Contains(native, []byte(adapter.Integration())) {
-			for _, entry := range importShadowSource(adapter.Name(), native) {
-				if entry.Entry != nil && catalogProtectedName(entry.Name) && !(entry.Name == "al" && entry.Kind == "command") {
+		_, ownedIntegration, nativeErr := catalogRemoveOwnedIntegration(adapter, native)
+		if nativeErr != nil {
+			return nil, nativeErr
+		}
+		if ownedIntegration < 0 {
+			units, nativeErr := shellapi.InspectCatalogNativeSource(adapter.Name(), native)
+			if nativeErr != nil {
+				return nil, nativeErr
+			}
+			for _, entry := range units {
+				if catalogProtectedName(entry.Name) && !(entry.Name == "al" && entry.Kind == "command") {
 					return nil, fmt.Errorf("native control name prevents integration; run al setup --repair")
 				}
 			}
@@ -599,13 +653,31 @@ func (svc *Services) planCatalogStartup(adapter ShellAdapter, manifest catalogst
 				return nil, err
 			}
 		}
+		var movedNative []byte
+		if explicitStartup {
+			if sourceNative {
+				return nil, fmt.Errorf("explicit startup placement needs one proven native source route; run al setup --repair")
+			}
+			preserved, movedNative, e = shellapi.CatalogExplicitNativeSourceTail(preserved, adapter.Name(), svc.homeDirectory(), manifest.NativePath)
+			if e != nil {
+				return nil, e
+			}
+			insertion = len(preserved)
+		}
 		block := catalogLoaderBlock(adapter.Name(), manifest.NativePath, executable, svc.catalogGeneratedRoot(adapter.Name()), sourceNative)
-		if previousInsertion >= 0 {
+		block = strings.Replace(block, catalogLoaderEnd, integration+catalogLoaderEnd, 1)
+		if explicitStartup {
+			block, e = shellapi.CatalogGuardExplicitBlock(adapter.Name(), block, movedNative)
+			if e != nil {
+				return nil, e
+			}
+		}
+		if previousInsertion >= 0 && !explicitStartup {
 			insertion = previousInsertion
 		}
-		installedBlock := []byte(strings.Replace(block, catalogLoaderEnd, integration+catalogLoaderEnd, 1))
+		installedBlock := []byte(block)
 		updated := append(append(append([]byte{}, preserved[:insertion]...), installedBlock...), preserved[insertion:]...)
-		result = append(result, catalogStartupEdit{Path: path, Before: before, After: updated, Route: route})
+		result = append(result, catalogStartupEdit{Path: path, Before: before, After: updated, Route: route, Reordered: explicitStartup})
 	}
 	return result, nil
 }

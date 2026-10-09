@@ -8,6 +8,7 @@ import "github.com/alderon07/al/internal/app"
 
 import (
 	"fmt"
+	"github.com/charmbracelet/lipgloss"
 	"os"
 	"strings"
 
@@ -22,19 +23,25 @@ type catalogTUIReviewItem struct {
 	Adoption *catalogstore.Adoption
 }
 type catalogTUIView struct {
-	Shell       string
-	Text        string
-	Err         string
-	Loading     bool
-	Offset      int
-	Review      []catalogTUIReviewItem
-	Index       int
-	Decisions   app.CatalogLifecycleDecisions
-	Plan        *workflowplan.OperationPlan
-	ConflictIDs []string
-	Conflict    *app.CatalogConflictResolution
-	Choices     map[string]string
-	Stage       string
+	Read         bool
+	SeenThrough  int
+	RenderWidth  int
+	RenderHeight int
+	RenderText   string
+	BatchText    string
+	Shell        string
+	Text         string
+	Err          string
+	Loading      bool
+	Offset       int
+	Review       []catalogTUIReviewItem
+	Index        int
+	Decisions    app.CatalogLifecycleDecisions
+	Plan         *workflowplan.OperationPlan
+	ConflictIDs  []string
+	Conflict     *app.CatalogConflictResolution
+	Choices      map[string]string
+	Stage        string
 }
 type catalogTUILoadedMsg struct{ View *catalogTUIView }
 type catalogTUIAppliedMsg struct{ Err error }
@@ -54,19 +61,20 @@ func loadCatalogTUI(services *app.Services, shell string) tea.Cmd {
 		for _, alias := range snapshot.Entries {
 			fmt.Fprintf(&text, "%s  %s\n", presentation.EscapePlainText(alias.Name), alias.CatalogState)
 		}
+		view.BatchText = app.CatalogReviewBatchText(snapshot.Items)
 		for _, item := range snapshot.Items {
-			if candidate := item.Native; candidate != nil {
-				record := candidate.Approval
-				entry := candidate.Entry
-				key := record.Key
-				view.Review = append(view.Review, catalogTUIReviewItem{Text: fmt.Sprintf("Approve %s (%s, %s)\nID %s\nHash %s\nExact declaration %q", entry.Name, entry.Kind, shell, entry.ID, key.ImplementationSHA256, candidate.Declaration), Approval: &record})
+			next := catalogTUIReviewItem{Text: app.CatalogReviewItemText(item)}
+			if item.Native != nil {
+				record := item.Native.Approval
+				next.Approval = &record
 			}
-			if candidate := item.Adoption; candidate != nil {
-				record := candidate.Adoption
-				entry := candidate.Entry
-				view.Review = append(view.Review, catalogTUIReviewItem{Text: fmt.Sprintf("Enroll exact fallback %s\nSource %s\nBytes %d-%d\nHash %s\nExact fallback %q\nCandidate %s", entry.Name, candidate.DisplayPath, record.Start, record.End, record.DefinitionSHA256, record.Definition, presentation.QuotedCatalogValue(entry)), Adoption: &record})
+			if item.Adoption != nil {
+				record := item.Adoption.Adoption
+				next.Adoption = &record
 			}
+			view.Review = append(view.Review, next)
 		}
+
 		for _, conflict := range snapshot.Conflicts {
 			view.ConflictIDs = append(view.ConflictIDs, conflict.ID)
 			fmt.Fprintf(&text, "\nSaved conflict %s\n", presentation.ShortFingerprint(conflict.ID))
@@ -135,12 +143,20 @@ func (m model) updateCatalogTUI(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	if message.Type == tea.KeyUp {
-		view.Offset = max(0, view.Offset-1)
+	if message.Type == tea.KeyUp || message.Type == tea.KeyPgUp {
+		step := 1
+		if message.Type == tea.KeyPgUp {
+			step = max(1, view.RenderHeight)
+		}
+		view.Offset = max(0, view.Offset-step)
 		return m, nil
 	}
-	if message.Type == tea.KeyDown {
-		view.Offset++
+	if message.Type == tea.KeyDown || message.Type == tea.KeyPgDown {
+		step := 1
+		if message.Type == tea.KeyPgDown {
+			step = max(1, view.RenderHeight)
+		}
+		view.Offset = min(view.Offset+step, max(view.Offset, view.SeenThrough))
 		return m, nil
 	}
 	key := ""
@@ -197,8 +213,11 @@ func (m model) updateCatalogTUI(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 		view.Err = ""
 		view.Offset = 0
 		if len(view.Review) > 0 {
-			view.Stage = "review"
-			view.Text = view.Review[0].Text
+			view.Stage = "batch"
+			view.Index = 0
+			view.Read = false
+			view.SeenThrough = 0
+			view.Text = view.BatchText
 			return m, nil
 		}
 		view.Loading = true
@@ -206,7 +225,34 @@ func (m model) updateCatalogTUI(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			view.Shell, view.Decisions)
 	}
-	if view.Stage == "review" && (key == "y" || key == "n") {
+	if view.Stage == "batch" {
+		if key == "n" {
+			return m.updateCatalogTUI(tea.KeyMsg{Type: tea.KeyEsc})
+		}
+		if key == "i" {
+			view.Stage = "review"
+			view.Index = 0
+			view.Offset = 0
+			view.Read = false
+			view.SeenThrough = 0
+			view.Text = view.Review[0].Text
+			return m, nil
+		}
+		if key == "y" && view.Read {
+			for _, item := range view.Review {
+				if item.Approval != nil {
+					view.Decisions.Approvals = append(view.Decisions.Approvals, *item.Approval)
+				}
+				if item.Adoption != nil {
+					view.Decisions.Adoptions = append(view.Decisions.Adoptions, *item.Adoption)
+				}
+			}
+			view.Loading = true
+			return m, catalogTUIPlan(m.service(), view.Shell, view.Decisions)
+		}
+	}
+
+	if view.Stage == "review" && (key == "y" || key == "n") && view.Read {
 		item := view.Review[view.Index]
 		if key == "y" {
 			if item.Approval != nil {
@@ -227,7 +273,7 @@ func (m model) updateCatalogTUI(message tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 			view.Shell, view.Decisions)
 	}
-	if view.Stage == "plan" && key == "y" && view.Err == "" && view.Plan != nil {
+	if view.Stage == "plan" && key == "y" && view.Read && view.Err == "" && view.Plan != nil {
 		view.Loading = true
 		preview := *view.Plan
 		shell := view.Shell
@@ -248,16 +294,12 @@ func (m model) catalogTUIView(frame tuiFrame, header string) string {
 	if view.Err != "" {
 		text += "\n\n" + view.Err
 	}
-	lines := strings.Split(text, "\n")
-	height := max(1, m.height-8)
-	offset := min(view.Offset, max(0, len(lines)-height))
-	lines = lines[offset:min(len(lines), offset+height)]
-	for i := range lines {
-		lines[i] = truncate(lines[i], frame.contentWidth)
-	}
 	footer := "e review and install · x conflicts · r refresh · ↑↓ scroll · esc cancel"
+	if view.Stage == "batch" {
+		footer = "read to end · y batch · i individual · n cancel · ↑↓/pg scroll"
+	}
 	if view.Stage == "review" {
-		footer = "y approve this exact item · n skip · esc cancel all staged decisions"
+		footer = "read to end · y approve · n skip · ↑↓/pg scroll · esc cancel"
 	}
 	if view.Stage == "conflict-select" {
 		footer = "↑↓ choose conflict · enter review fields · esc cancel"
@@ -266,9 +308,27 @@ func (m model) catalogTUIView(frame tuiFrame, header string) string {
 		footer = "l choose local field · r choose remote field · esc cancel"
 	}
 	if view.Stage == "plan" || view.Stage == "conflict-plan" {
-		footer = "y apply this plan · esc cancel all staged decisions"
+		footer = "read to end · y apply · ↑↓/pg scroll · esc cancel"
 	}
-	return frame.renderWithFooter(header+"\n\n"+strings.Join(lines, "\n"), truncate(footer, frame.contentWidth))
+	footer = truncate(footer, frame.contentWidth)
+	height := max(1, frame.contentHeight()-frame.measureFooterHeight(footer)-frame.makerHeight()-frame.measureHeight(header)-2)
+	lines := catalogCompleteLines(text, frame.contentWidth)
+	if view.RenderWidth != frame.contentWidth || view.RenderHeight != height || view.RenderText != text {
+		view.Offset = 0
+		view.Read = false
+		view.SeenThrough = 0
+		view.RenderWidth = frame.contentWidth
+		view.RenderHeight = height
+		view.RenderText = text
+	}
+	offset := min(max(0, view.Offset), max(0, len(lines)-height))
+	view.Offset = offset
+	end := min(len(lines), offset+height)
+	if offset <= view.SeenThrough {
+		view.SeenThrough = max(view.SeenThrough, end)
+	}
+	view.Read = view.SeenThrough >= len(lines)
+	return frame.renderWithFooter(header+"\n\n"+strings.Join(lines[offset:end], "\n"), footer)
 }
 
 func catalogConflictReviewText(value app.CatalogConflictResolution, index int) string {
@@ -320,4 +380,26 @@ func runCatalogConflictReview(services *app.Services, id string) error {
 	view := &catalogTUIView{Shell: services.ActiveShellAdapter().Name(), Stage: "conflict", Conflict: &resolution, Choices: map[string]string{}, Text: catalogConflictReviewText(resolution, 0)}
 	_, err = tea.NewProgram(model{services: services, catalogView: view, catalogStandalone: true, width: 80, height: 24, theme: theme, shortcutProfile: resolvedShortcutProfile(config)}, tea.WithAltScreen(), tea.WithOutput(os.Stderr)).Run()
 	return err
+}
+
+func catalogCompleteLines(text string, width int) []string {
+	width = max(1, width)
+	lines := []string{}
+	for _, line := range strings.Split(text, "\n") {
+		line = presentation.TerminalSafeText(line)
+		var current strings.Builder
+		used := 0
+		for _, character := range line {
+			size := lipgloss.Width(string(character))
+			if used+size > width && current.Len() > 0 {
+				lines = append(lines, current.String())
+				current.Reset()
+				used = 0
+			}
+			current.WriteRune(character)
+			used += size
+		}
+		lines = append(lines, current.String())
+	}
+	return lines
 }

@@ -5,6 +5,7 @@ package main
 import "github.com/alderon07/al/internal/app"
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -93,8 +94,11 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 		value.Entries = filtered
 	}
 	if operation == "review" || operation == "approve" || operation == "adopt" {
-		decisions, err = guidedCatalogLifecycleReview(value, shell, operation == "adopt")
+		decisions, err = guidedCatalogLifecycleReviewMode(value, shell, operation == "adopt", operation != "review")
 		decisions.SourceSHA256 = applicationServices().HashBytes(sourceCanonical)
+		if errors.Is(err, errCatalogReviewCanceled) {
+			return true, 0, nil
+		}
 		if err != nil {
 			return true, 1, err
 		}
@@ -105,6 +109,9 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 		if len(preview.Actions) == 0 {
 			fmt.Fprintln(catalogWorkflowStdout, "No review decisions were saved.")
 			return true, 0, nil
+		}
+		if err := writeCatalogReviewOutput(workflowplan.RenderPlain(preview)); err != nil {
+			return true, 1, err
 		}
 		yes, err := confirmCatalogReview(newCatalogReviewReader(), "Save these exact review decisions?")
 		if err != nil {
@@ -126,6 +133,9 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 	}
 	if operation == "enable" && catalogReviewTerminal() && !apply {
 		decisions, err = guidedCatalogLifecycleReview(value, shell, true)
+		if errors.Is(err, errCatalogReviewCanceled) {
+			return true, 0, nil
+		}
 		if err != nil {
 			return true, 1, err
 		}
@@ -140,9 +150,13 @@ func runCatalogLifecycleCommand(arguments []string) (bool, int, error) {
 		if e != nil {
 			return true, 1, e
 		}
-		fmt.Fprint(catalogWorkflowStdout, string(data))
+		if err := writeCatalogReviewOutput(string(data)); err != nil {
+			return true, 1, err
+		}
 	} else {
-		fmt.Fprint(catalogWorkflowStdout, workflowplan.RenderPlain(preview))
+		if err := writeCatalogReviewOutput(workflowplan.RenderPlain(preview)); err != nil {
+			return true, 1, err
+		}
 	}
 	if operation == "plan" {
 		return true, 0, nil

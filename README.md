@@ -100,13 +100,25 @@ Read the [1.x compatibility policy](docs/COMPATIBILITY.md) before relying on com
 
 ## Install a catalog
 
-A catalog stores portable commands and reviewed Bash or Zsh definitions together. Enroll a repository containing a catalog with:
+A catalog stores portable commands and reviewed Bash or Zsh definitions together. To start with your existing aliases, run these commands one at a time:
+
+```bash
+al catalog preview --from bash
+al catalog import --from bash
+al catalog enable --shell bash
+```
+
+Replace `bash` with `zsh` for Zsh. Preview reports source line ranges, reasons, and suggested actions without printing shell code. Unsupported means the importer cannot prove the definition safe to copy; the definition may still work in your shell. You can leave it native and import only the equivalent entries. When a function boundary cannot be proved, preview groups the remaining lines and explains the first unsupported construct. Review quoting changes carefully because they can change when variables expand.
+
+Enroll a repository already containing a catalog with:
 
 ```bash
 al init /path/to/dotfiles --catalog-path catalog.json --shell bash
 ```
 
-The guided flow shows native shell code, asks about existing names, and presents the complete installation plan before applying it. Cancellation saves no approvals or ownership decisions. In scripts, `--apply` uses existing matching approvals and ownership records; it cannot approve new shell code or take over an unrelated definition.
+The guided flow shows all pending native shell declarations and exact fallback enrollments in one batch. Review the displayed code and ownership changes, then enter `y` to confirm the batch once. Enter `i` to accept or skip entries individually, or `n` to cancel. A final confirmation applies the installation plan. Cancellation saves no approvals or ownership decisions. Matching saved records need no repeated review. In scripts, `--apply` uses existing matching approvals and ownership records; it cannot approve new shell code or take over an unrelated definition.
+
+The terminal catalog view also offers batch review. Scroll through the complete review before approving it, or choose individual review. Escape cancels staged decisions.
 
 After editing or pulling a catalog, review and install its next generation:
 
@@ -120,7 +132,19 @@ Installation makes entries ready for new shells. A running shell keeps its previ
 
 Adopted native definitions stay in the shell's alias file as local fallbacks. A missing helper, corrupt generation, or changed native file declines the overlay and leaves those fallbacks available. Run `al catalog enable` to review native-file changes. Offline rollback restores the original enrollment baseline, including entries later renamed or deleted. Catalog-only entries do not gain native fallback copies.
 
+Startup inspection checks literal declaration names and their position. Earlier defaults can remain when reviewed enrolled native aliases overwrite them before the catalog loads. A real later override requires changing its placement. If other static startup loads prevent automatic placement, enroll the startup file explicitly:
+
+```bash
+al catalog enable --shell bash --startup-path "$HOME/.bashrc"
+```
+
+The final plan explains moving the exact native source block to the end, immediately before the catalog loader. This changes when native aliases become available to intervening startup commands. Other loaded files remain user-owned and uninspected, including their effects on shell variables and functions. Explicit placement accepts narrow existence-guarded loads and directory variables with preceding literal assignments; those assignments describe the source route without freezing its runtime value. The managed block temporarily disables alias expansion while loading definitions and restores the prior setting afterward; later alias invocation still follows the shell's normal expansion rules. Re-enable retains the confirmed placement, and offline rollback restores the original file. Duplicate or dynamic native sources and unproven control flow still require manual placement.
+
 Catalog enrollment accepts a bounded subset of native Bash and Zsh declarations. Command and process substitutions, ANSI-C quoted strings, unquoted brace contexts, braced parameter expansions such as `${HOME}`, escaped command newlines, here-strings, and arithmetic involving variables require simplifying the definition before enrollment. Ordinary `$HOME` and quoted literal braces remain supported.
+
+Unrelated helper functions can remain native when Alias Lens can prove their declaration boundaries. Retained helpers may use ordinary command substitutions, braced parameter expansions, and whitespace-separated command continuations without becoming catalog entries. Compound control blocks, heredocs, process substitutions, and continuations that join tokens remain unsupported by this inspection. Control masking, name collisions, and ambiguous alias dependencies still block installation. An exact legacy shell-init invocation for the selected shell is relocated to the pinned startup integration through the displayed plan and retained in the rollback baseline.
+
+Dependency inspection checks alias-eligible command words. Flags, ordinary arguments, paths, quoted or escaped literals, comments, assignment values, and redirection targets do not count as alias calls. Commands inside substitutions are checked separately. Real ambiguous alias calls require an explicit implementation. Trailing-blank aliases remain unsupported because they can make the following argument eligible for expansion.
 
 Portable entries use a recorded absolute executable path. If that program is removed, Alias Lens reports the failure; renew installation to select a different path. Approvals, local executable paths, generations, native fallbacks, and rollback copies stay private and are excluded from catalog sync.
 

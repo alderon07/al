@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
+	neutralcatalog "github.com/alderon07/al/internal/catalog"
 	"github.com/alderon07/al/internal/catalogstore"
 	"github.com/alderon07/al/internal/shell"
 )
@@ -61,8 +62,8 @@ func (svc *Services) readCatalogGenerationForNative(root, nativePath, shell stri
 	return result, nil
 }
 
-func (svc *Services) readCatalogImmutableGeneration(root, nativePath, shell, id string, native []byte) (catalogstore.GenerationManifest, error) {
-	if shell != "bash" && shell != "zsh" {
+func (svc *Services) readCatalogImmutableGeneration(root, nativePath, shellName, id string, native []byte) (catalogstore.GenerationManifest, error) {
+	if shellName != "bash" && shellName != "zsh" {
 		return catalogstore.GenerationManifest{}, fmt.Errorf("unsupported catalog shell")
 	}
 	for path := root; ; path = filepath.Dir(path) {
@@ -89,17 +90,26 @@ func (svc *Services) readCatalogImmutableGeneration(root, nativePath, shell, id 
 	if err != nil {
 		return catalogstore.GenerationManifest{}, err
 	}
-	if err := validateCatalogNativeControls(shell, native); err != nil {
+	if err := validateCatalogNativeControls(shellName, native); err != nil {
 		return catalogstore.GenerationManifest{}, err
 	}
 	result, err := catalogstore.VerifyGeneration(manifest, body, pointer, native, svc.validateCatalogNativeDeclaration)
-	if err != nil || result.Shell != shell || result.NativePath != nativePath {
+	if err != nil || result.Shell != shellName || result.NativePath != nativePath {
 		return catalogstore.GenerationManifest{}, fmt.Errorf("catalog package does not match this native input")
 	}
 	for _, entry := range result.Entries {
-		if err := svc.validateCatalogDeclaration(shell, entry.Entry, []byte(entry.Declaration)); err != nil {
+		if err := svc.validateCatalogDeclaration(shellName, entry.Entry, []byte(entry.Declaration)); err != nil {
 			return catalogstore.GenerationManifest{}, err
 		}
+	}
+	entries := make([]neutralcatalog.Entry, 0, len(result.Entries))
+	declarations := make([][]byte, 0, len(result.Entries))
+	for _, entry := range result.Entries {
+		entries = append(entries, entry.Entry)
+		declarations = append(declarations, []byte(entry.Declaration))
+	}
+	if err := shell.ValidateCatalogDependencyPolicy(shellName, entries, declarations, native); err != nil {
+		return catalogstore.GenerationManifest{}, err
 	}
 	return result, nil
 }

@@ -26,6 +26,7 @@ func TestCatalogDrawerStagesSpecificApprovalAndCancels(t *testing.T) {
 	record := catalogstore.ApprovalRecord{Key: key, ApprovedAt: "2026-10-03T00:00:00Z"}
 	view := &catalogTUIView{Shell: "bash", Stage: "review", Review: []catalogTUIReviewItem{{Text: "Exact native declaration", Approval: &record}, {Text: "Exact fallback ownership"}}, Text: "Exact native declaration"}
 	m := model{services: applicationServices(), catalogView: view, width: 52, height: 24, cursor: 3}
+	m.catalogTUIView(newMainTUIFrame(m.width, m.height), "Catalog")
 	result, command := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
 	updated := result.(model)
 	if command != nil || len(updated.catalogView.Decisions.Approvals) != 1 || updated.catalogView.Index != 1 {
@@ -220,7 +221,7 @@ func TestCatalogDefaultBinaryPTYNarrowWideReviewCancellation(t *testing.T) {
 			_, _ = terminal.Write([]byte("l"))
 			wait("atalog for Bash")
 			_, _ = terminal.Write([]byte("e"))
-			wait("Exact declaration")
+			wait("Pending exact review")
 			_, _ = terminal.Write([]byte("\x1b"))
 			time.Sleep(100 * time.Millisecond)
 			_, _ = terminal.Write([]byte("\x03"))

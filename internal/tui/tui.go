@@ -364,6 +364,12 @@ func (m model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		m.cursorHidden = true
 		return m, nil
 	case tea.WindowSizeMsg:
+		if m.catalogView != nil && (m.width != message.Width || m.height != message.Height) {
+			m.catalogView.Read = false
+			m.catalogView.SeenThrough = 0
+			m.catalogView.Offset = 0
+			m.catalogView.RenderText = ""
+		}
 		m.width = message.Width
 		m.height = message.Height
 		return m, nil

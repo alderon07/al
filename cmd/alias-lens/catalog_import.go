@@ -4,7 +4,9 @@ package main
 
 import (
 	"fmt"
+	"io"
 
+	"github.com/alderon07/al/internal/app"
 	workflowplan "github.com/alderon07/al/internal/plan"
 )
 
@@ -25,26 +27,36 @@ func runCatalogPreviewCommand(arguments []string) (int, error) {
 			return 2, fmt.Errorf("unknown catalog preview option %q", arguments[index])
 		}
 	}
-	report, err := applicationServices().InspectCatalogShadow(shell)
+	report, err := applicationServices().InspectCatalogPreview(shell)
 	if err != nil {
 		return 1, err
 	}
-	output, err := renderShadowReport(report, jsonOutput)
+	output, err := renderCatalogPreviewReport(report, jsonOutput)
 	if err != nil {
 		return 1, err
 	}
-	if _, err := catalogWorkflowStdout.Write(output); err != nil {
-		return 1, err
-	}
-	if report.Summary.Unsupported+report.Summary.Different+report.Summary.Duplicate+report.Summary.Invalid+report.Summary.Blocked > 0 {
-		if !jsonOutput {
-			fmt.Fprintln(catalogWorkflowStdout, "Nothing was changed. Fix the items that need attention, then enter this command again.")
+	hasProblems := report.Summary.Unsupported+report.Summary.Different+report.Summary.Duplicate+report.Summary.Invalid+report.Summary.Blocked > 0 || len(report.Diagnostics) > 0
+	if !jsonOutput {
+		if hasProblems {
+			output = append(output, []byte("Nothing was changed. Review the ranges above. al catalog import copies only proven equivalent definitions and leaves unsupported definitions native.\n")...)
+		} else {
+			output = append(output, []byte(fmt.Sprintf("Nothing was changed. Enter al catalog import --from %s when you are ready to create the catalog.\n", report.Shell))...)
 		}
+	}
+	if len(output) > app.ShadowReportLimit {
+		return 1, fmt.Errorf("catalog preview report exceeds 16 MiB")
+	}
+	written, err := catalogWorkflowStdout.Write(output)
+	if err != nil {
+		return 1, fmt.Errorf("write catalog preview: %w", err)
+	}
+	if written != len(output) {
+		return 1, fmt.Errorf("write catalog preview: %w", io.ErrShortWrite)
+	}
+	if hasProblems {
 		return 1, nil
 	}
-	if !jsonOutput {
-		fmt.Fprintf(catalogWorkflowStdout, "Nothing was changed. Enter al catalog import --from %s when you are ready to create the catalog.\n", report.Shell)
-	}
+
 	return 0, nil
 }
 

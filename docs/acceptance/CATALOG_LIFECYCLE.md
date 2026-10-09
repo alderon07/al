@@ -8,6 +8,8 @@ Approved for implementation on 2026-10-03. [CATALOG_PLAN.md](../CATALOG_PLAN.md)
 
 Approval binds entry ID, shell, name, kind, native implementation hash, and renderer. Changes to any bound value require new review. Ownership binds the exact native input identity, complete file hash, and source range. An unrelated native edit requires renewed ownership review.
 
+Interactive review displays pending exact approvals and eligible ownership enrollments together, with one batch confirmation and an individual-review alternative. Final plan confirmation remains separate. [CATALOG_BATCH_REVIEW.md](CATALOG_BATCH_REVIEW.md) defines complete display, cancellation, output failure, and terminal scrolling requirements without changing the approval or ownership contracts.
+
 ## Retained native fallbacks
 
 Adoption keeps the original native declaration and records permission to manage that exact fallback. Later reviewed enablement refreshes it; deliberate rename, deletion, and profile exclusion update or remove only its enrolled range. New catalog-only entries gain no fallback automatically. The original pre-catalog native and startup bytes remain in an immutable offline rollback record independently of later refreshes.
