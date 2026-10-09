@@ -21,7 +21,7 @@ help:
 		'  make diff-check  Check the Git diff for whitespace errors.' \
 		'  make check       Run fmt-check, test, vet, build, and diff-check.' \
 		'  make benchmark   Measure synthetic catalog, search, picker and shell workloads.' \
-		'  make install     Test, build, verify, and copy alias-lens to BINDIR.' \
+		'  make install     Build, copy, and verify alias-lens at BINDIR.' \
 		'' \
 		'Default paths' \
 		'  OUTPUT=/tmp/alias-lens-release' \
@@ -29,6 +29,7 @@ help:
 		'' \
 		'Examples' \
 		'  make build OUTPUT=./alias-lens' \
+		'  make check && make install' \
 		'  make install PREFIX=/usr/local'
 
 all: build
@@ -60,7 +61,7 @@ check: fmt-check test vet build diff-check
 benchmark:
 	GO="$(GO)" scripts/benchmark-performance.sh
 
-install: test build
+install: build
 	mkdir -p "$(BINDIR)"
 	install -m 0755 "$(OUTPUT)" "$(BINDIR)/alias-lens"
 	cmp -s "$(OUTPUT)" "$(BINDIR)/alias-lens"

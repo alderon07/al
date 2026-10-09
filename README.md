@@ -49,6 +49,16 @@ make -C al install
 "$HOME/.local/bin/alias-lens" setup
 ```
 
+`make install` builds the binary, copies it to `$HOME/.local/bin`, and verifies the copy. The first build can still take time to download and compile Go dependencies. Release archives above let you install without a Go build.
+
+After changing the source, run the full checks before installing:
+
+```bash
+make -C al check && make -C al install
+```
+
+`make check` includes the Go test suite and PTY tests. `make install` does not run tests.
+
 Setup keeps a user-installed binary on `PATH`, including after a WSL restart. Start a new shell, then check the installation:
 
 ```bash
