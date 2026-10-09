@@ -26,7 +26,7 @@ Press `Ctrl+G` at an empty Zsh or Bash 4+ prompt to open the terminal interface.
 
 Alias Lens supports Bash and Zsh on Linux, WSL, and macOS.
 
-With Go 1.24.2 or newer:
+With Go 1.26.0 or newer:
 
 ```bash
 go install github.com/alderon07/al/cmd/alias-lens@latest
@@ -41,7 +41,7 @@ install -m 0755 alias-lens "$HOME/.local/bin/alias-lens"
 "$HOME/.local/bin/alias-lens" setup
 ```
 
-To build from source, you need Make and Go 1.24.2 or newer:
+To build from source, you need Make and Go 1.26.0 or newer:
 
 ```bash
 git clone https://github.com/alderon07/al.git
