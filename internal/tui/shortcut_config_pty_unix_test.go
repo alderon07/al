@@ -133,6 +133,17 @@ func TestShortcutEditorInPTY(t *testing.T) {
 	}
 }
 
+func typePTYSearchText(t *testing.T, terminal *os.File, output *synchronizedBuffer, text string) {
+	t.Helper()
+	for _, character := range text {
+		offset := output.length()
+		if _, err := terminal.Write([]byte(string(character))); err != nil {
+			t.Fatal(err)
+		}
+		waitForPTYText(t, output, offset, string(character)+"█")
+	}
+}
+
 func TestSingleLetterModesInPTY(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestShortcutEditorPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_SHORTCUT_EDITOR_HELPER=1", "HOME="+t.TempDir(), "TERM=xterm-256color", "NO_COLOR=1")
@@ -166,8 +177,8 @@ func TestSingleLetterModesInPTY(t *testing.T) {
 	_, _ = terminal.Write([]byte("/"))
 	waitForPTYText(t, output, offset, "type to search")
 	offset = output.length()
-	_, _ = terminal.Write([]byte("zz"))
-	search := waitForPTYText(t, output, offset, "zz")
+	typePTYSearchText(t, terminal, output, "zz")
+	search := output.stringFrom(offset)
 	if strings.Contains(search, "Keyboard guide") {
 		t.Fatal("h opened Help while typing an alias search")
 	}
@@ -206,11 +217,7 @@ func TestKeyboardGuideSearchQueryInPTY(t *testing.T) {
 	offset := output.length()
 	_, _ = terminal.Write([]byte("h"))
 	waitForPTYText(t, output, offset, "Keyboard guide")
-	for _, character := range "dffd" {
-		offset = output.length()
-		_, _ = terminal.Write([]byte(string(character)))
-		waitForPTYText(t, output, offset, string(character)+"█")
-	}
+	typePTYSearchText(t, terminal, output, "dffd")
 	for _, size := range []struct{ columns, rows uint16 }{{48, 18}, {120, 36}} {
 		offset = output.length()
 		if err := pty.Setsize(terminal, &pty.Winsize{Rows: size.rows, Cols: size.columns}); err != nil {

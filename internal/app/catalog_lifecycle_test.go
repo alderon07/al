@@ -4,6 +4,7 @@ package app
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"os"
@@ -17,6 +18,18 @@ import (
 	workflowplan "github.com/alderon07/al/internal/plan"
 	workflowstate "github.com/alderon07/al/internal/state"
 )
+
+func catalogPTYShellPath(t *testing.T, shell string) string {
+	t.Helper()
+	path, err := exec.LookPath(shell)
+	if errors.Is(err, exec.ErrNotFound) && shell == "zsh" && os.Getenv("AL_REQUIRE_PTY_SHELLS") != "1" {
+		t.Skip("zsh is not installed")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
 
 func TestCatalogStructuralBoundaryNeverExecutes(t *testing.T) {
 	sentinel := filepath.Join(t.TempDir(), "executed")
@@ -222,10 +235,7 @@ func TestCatalogActualStartupPTY(t *testing.T) {
 	}
 	for _, shell := range []string{"bash", "zsh"} {
 		t.Run(shell, func(t *testing.T) {
-			executable, err := exec.LookPath(shell)
-			if err != nil {
-				t.Fatal(err)
-			}
+			executable := catalogPTYShellPath(t, shell)
 			home := t.TempDir()
 			if err := os.Chmod(home, 0700); err != nil {
 				t.Fatal(err)
@@ -925,10 +935,7 @@ func TestCatalogSurvivingControlMasksBlockBeforeWritesStartupPTY(t *testing.T) {
 			"alias demo='printf fallback' \\\n builtin='printf CONTROL_SENTINEL'\n",
 			"alias demo='printf fallback'; \\\n alias command='printf CONTROL_SENTINEL'\n"} {
 			t.Run(shell+strings.Fields(definition)[0]+strings.Fields(definition)[1], func(t *testing.T) {
-				executable, err := exec.LookPath(shell)
-				if err != nil {
-					t.Fatal(err)
-				}
+				executable := catalogPTYShellPath(t, shell)
 				home := privateTestHome(t)
 				t.Setenv("HOME", home)
 				t.Setenv("ALIAS_LENS_SHELL", shell)
@@ -1011,10 +1018,7 @@ func TestCatalogExistingSetupUpgradeStartupAndOfflineRollbackPTY(t *testing.T) {
 	for _, shell := range []string{"bash", "zsh"} {
 		for formIndex := 0; formIndex < 2; formIndex++ {
 			t.Run(fmt.Sprintf("%s-%d", shell, formIndex), func(t *testing.T) {
-				shellPath, err := exec.LookPath(shell)
-				if err != nil {
-					t.Fatal(err)
-				}
+				shellPath := catalogPTYShellPath(t, shell)
 				home := privateTestHome(t)
 				t.Setenv("HOME", home)
 				t.Setenv("ALIAS_LENS_SHELL", shell)
