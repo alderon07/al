@@ -14,3 +14,11 @@
 - Record remaining WSL restart, Windows Terminal, native architecture, and macOS manual gates without marking them complete from cross-builds or CI alone.
 - Prepare the selected candidate and its review evidence. Do not publish a stable release while mandatory manual platform gates remain open.
 - Prioritize WSL readiness. Prepare persistent synthetic Bash and Zsh homes and reproducible pre/post-restart checks for the exact candidate, and record Windows Terminal evidence separately from Unix PTYs.
+
+## PTY launch reliability
+
+- Reproduce the intermittent controlling-terminal launch error on the existing launcher before changing fixtures. Preserve the diagnostic failures in the evidence.
+- Share a Linux PTY fixture launcher that opens the master and its descriptor-linked slave with `O_NOCTTY` and close-on-exec. Keep the existing launcher on other Unix systems.
+- Preserve terminal size, existing process attributes, caller-provided standard streams, process-group cancellation, and start-error cleanup. Do not retry failed launches or skip required shells.
+- Verify controlling-terminal ownership and terminal dimensions with real Bash PTYs. Verify that failed starts do not leak descriptors.
+- Run the failing startup case repeatedly under the same focused tracing and run all required-shell PTYs afterward. Keep the exact kernel cause distinct from the verified launcher behavior.

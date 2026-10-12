@@ -5,6 +5,7 @@ package app
 import (
 	"bytes"
 	"fmt"
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -62,7 +63,7 @@ func TestCompiledCatalogExplicitStartupPTY(t *testing.T) {
 			}
 			command := exec.Command(binary, "init", repository, "--shell", "bash", "--catalog-path", "catalog.json", "--startup-path", startupPath)
 			command.Env = []string{"HOME=" + svc.homeDirectory(), "XDG_CONFIG_HOME=" + filepath.Join(svc.homeDirectory(), ".config"), "PATH=" + path, "TERM=xterm-256color", "ALIAS_LENS_SHELL=bash", "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull}
-			terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
+			terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
 			if err != nil {
 				t.Fatal(err)
 			}

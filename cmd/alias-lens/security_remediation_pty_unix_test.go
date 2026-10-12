@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -25,7 +26,7 @@ func TestRepositoryControlledTextIsEscapedInPTY(t *testing.T) {
 
 	command := exec.Command(os.Args[0], "-test.run=^TestRepositoryControlledTextIsEscapedInPTY$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_SECURITY_PTY_HELPER=1", "NO_COLOR=1", "TERM=xterm-256color")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 18, Cols: 48})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 18, Cols: 48})
 	if err != nil {
 		t.Fatal(err)
 	}

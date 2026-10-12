@@ -5,6 +5,7 @@ package tui
 import pty "github.com/creack/pty/v2"
 
 import (
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -57,7 +58,7 @@ func TestShortcutEditorPTYHelper(t *testing.T) {
 func TestConfiguredTUIShortcutInPTY(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestCustomTUIShortcutHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_CUSTOM_SHORTCUT_HELPER=1", "TERM=xterm-256color", "NO_COLOR=1")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +84,7 @@ func TestShortcutEditorInPTY(t *testing.T) {
 	home := privateTestHome(t)
 	command := exec.Command(os.Args[0], "-test.run=^TestShortcutEditorPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_SHORTCUT_EDITOR_HELPER=1", "HOME="+home, "TERM=xterm-256color", "NO_COLOR=1")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,7 +137,7 @@ func TestShortcutEditorInPTY(t *testing.T) {
 func TestSingleLetterModesInPTY(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestShortcutEditorPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_SHORTCUT_EDITOR_HELPER=1", "HOME="+t.TempDir(), "TERM=xterm-256color", "NO_COLOR=1")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +189,7 @@ func TestSingleLetterModesInPTY(t *testing.T) {
 func TestKeyboardGuideSearchQueryInPTY(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestShortcutEditorPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_SHORTCUT_EDITOR_HELPER=1", "HOME="+t.TempDir(), "TERM=xterm-256color", "NO_COLOR=1")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
 	if err != nil {
 		t.Fatal(err)
 	}

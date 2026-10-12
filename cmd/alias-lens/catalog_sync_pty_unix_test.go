@@ -3,6 +3,7 @@
 package main
 
 import (
+	"github.com/alderon07/al/internal/testpty"
 	"github.com/creack/pty/v2"
 
 	"io"
@@ -28,7 +29,7 @@ func TestCatalogSyncPTYHelper(t *testing.T) {
 func TestCatalogSemanticPullPTY(t *testing.T) {
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCatalogSyncPTYHelper$")
 	cmd.Env = append(os.Environ(), "AL_CATALOG_SYNC_PTY=1", "TERM=xterm-256color")
-	terminal, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 24, Cols: 80})
+	terminal, err := testpty.StartWithSize(cmd, &pty.Winsize{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}

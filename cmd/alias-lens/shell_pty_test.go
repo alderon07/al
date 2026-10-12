@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -59,7 +60,7 @@ func startShellPTY(t *testing.T, executable string, arguments, environment []str
 	t.Helper()
 	command := exec.Command(executable, arguments...)
 	command.Env = environment
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 100})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 100})
 	if err != nil {
 		t.Fatal(err)
 	}

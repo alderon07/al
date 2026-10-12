@@ -3,6 +3,7 @@
 package main
 
 import (
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -82,7 +83,7 @@ func runInitGuidedPTY(t *testing.T, binary, shellName string, insecureCompletion
 			}
 			command := exec.Command(binary, args...)
 			command.Env = []string{"AL_INIT_PTY_HELPER=1", "HOME=" + os.Getenv("HOME"), "XDG_CONFIG_HOME=" + filepath.Join(os.Getenv("HOME"), ".config"), "PATH=" + capturedPATH, "TERM=xterm-256color", "ALIAS_LENS_SHELL=" + shellName, "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=" + os.DevNull}
-			terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 100})
+			terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 100})
 			if err != nil {
 				t.Fatal(err)
 			}

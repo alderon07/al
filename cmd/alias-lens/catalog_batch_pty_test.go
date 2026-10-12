@@ -4,6 +4,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -43,7 +44,7 @@ func TestCatalogBatchPTYManyEntriesCancelAndIndividual(t *testing.T) {
 				before := shadowTreeManifest(t, os.Getenv("HOME"))
 				command := exec.Command(os.Args[0], "catalog", "enable", "--shell", "bash")
 				command.Env = append(os.Environ(), "AL_INIT_PTY_HELPER=1", "TERM=xterm-256color")
-				terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
+				terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
 				if err != nil {
 					t.Fatal(err)
 				}

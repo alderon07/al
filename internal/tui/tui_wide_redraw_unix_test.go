@@ -5,6 +5,7 @@ package tui
 import pty "github.com/creack/pty/v2"
 
 import (
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 
 	"os"
@@ -38,7 +39,7 @@ func TestWideAliasNavigationPTYHelper(t *testing.T) {
 func TestWideAliasNavigationPTY(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestWideAliasNavigationPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_WIDE_REDRAW_HELPER=1", "HOME="+t.TempDir(), "TERM=xterm-256color")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 33, Cols: 128})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 33, Cols: 128})
 	if err != nil {
 		t.Fatal(err)
 	}
