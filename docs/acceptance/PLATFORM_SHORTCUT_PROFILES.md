@@ -7,12 +7,11 @@
 - The macOS profile uses Command shortcuts for new, settings, refresh, save, undo, and help. It does not repurpose a standard Command shortcut for an unrelated action.
 - App-specific pages use `F2` through `F8`. Each page keeps one unmodified function-key binding that works in a legacy terminal.
 - Every action has a terminal-safe binding. A profile remains usable when the user selects it on a different operating system or when the terminal does not send Command or modified punctuation keys.
-- Enhanced terminal reports preserve the shifted printable character, so `Ctrl+?` opens help and `Ctrl+,` opens settings when the terminal reports those modifiers.
+- Enhanced terminal reports preserve the shifted printable character. Linux retains modified punctuation for help and settings when the terminal reports those modifiers. The Windows default uses `o` and `F3` for the footer because Windows Terminal owns `Ctrl+,`.
 - PTY tests send the actual Kitty keyboard and xterm `modifyOtherKeys` byte
   sequences for `Ctrl+?` and `Ctrl+,` through Bubble Tea. Both encodings open
   the advertised page instead of entering punctuation into search.
-- Linux and Windows show `F1` and `F3` before modified punctuation because
-  those function keys work in legacy terminals. A legacy `Ctrl+?` byte is
+- Linux shows `F1` and `F3` before modified punctuation because those function keys work in legacy terminals. Windows retains function keys without a default `Ctrl+,` binding. A legacy `Ctrl+?` byte is
   normalized from `Ctrl+_`; a legacy comma remains search text because its
   byte stream contains no Ctrl modifier.
 - `Delete` removes the selected alias only when the search field is empty. `Backspace` and `Delete` continue to edit nonempty search text.
@@ -27,7 +26,7 @@
 | --- | --- | --- | --- | --- |
 | Help | `F1` or `?` | `Ctrl+?`, `F1`, or `?` | `Cmd+?`, `F1`, or `?` | `F1` or `?` |
 | Stats | `F2` | `F2` | `Cmd+2` or `F2` | `F2` |
-| Footer | `Ctrl+,` or `F3` | `Ctrl+,` or `F3` | `Cmd+,` or `F3` | `F3` |
+| Footer | `o` or `F3` | `Ctrl+,` or `F3` | `Cmd+,` or `F3` | `F3` |
 | Themes | `F4` | `F4` | `Cmd+4` or `F4` | `F4` |
 | Refresh | `F5` or `Ctrl+R` | `Ctrl+R` or `F5` | `Cmd+R`, `F5`, or `Ctrl+R` | `F5` or `Ctrl+R` |
 | Sync status | `F6` | `F6` | `Cmd+6` or `F6` | `F6` |

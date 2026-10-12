@@ -22,3 +22,10 @@
 - Preserve terminal size, existing process attributes, caller-provided standard streams, process-group cancellation, and start-error cleanup. Do not retry failed launches or skip required shells.
 - Verify controlling-terminal ownership and terminal dimensions with real Bash PTYs. Verify that failed starts do not leak descriptors.
 - Run the failing startup case repeatedly under the same focused tracing and run all required-shell PTYs afterward. Keep the exact kernel cause distinct from the verified launcher behavior.
+
+## Windows Terminal shortcut ownership
+
+- Reproduce Windows Terminal consuming `Ctrl+,` for its own settings without reading or changing host settings.
+- Keep the Windows default footer shortcuts limited to `o` and `F3`. Preserve Linux and macOS settings conventions and explicit custom shortcut support.
+- Write a failing Windows-profile label and dispatch regression before changing the default. Verify both unmodified footer bindings and the host-owned modified chord afterward.
+- Run the required-shell PTY suite and native Windows Terminal footer/help checks after the correction. Update the shortcut matrix to match displayed bindings.

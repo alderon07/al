@@ -50,6 +50,7 @@ func TestShortcutProfilesUsePlatformConventions(t *testing.T) {
 		want    string
 	}{
 		{profile: shortcutWindows, action: Add, want: "a / Ctrl+N"},
+		{profile: shortcutWindows, action: Settings, want: "o / F3"},
 		{profile: shortcutWindows, action: Refresh, want: "r / F5 / Ctrl+R"},
 		{profile: shortcutLinux, action: Help, want: "h / F1 / Ctrl+? / ?"},
 		{profile: shortcutLinux, action: Settings, want: "o / F3 / Ctrl+,"},
@@ -73,6 +74,7 @@ func TestProfilesDoNotRepurposeCommonShortcuts(t *testing.T) {
 		key     tea.KeyMsg
 	}{
 		{name: "select all", profile: shortcutLinux, action: Add, key: tea.KeyMsg{Type: tea.KeyCtrlA}},
+		{name: "Windows Terminal settings", profile: shortcutWindows, action: Settings, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}, Ctrl: true}},
 		{name: "find", profile: shortcutWindows, action: Sync, key: tea.KeyMsg{Type: tea.KeyCtrlF}},
 		{name: "replace", profile: shortcutLinux, action: Health, key: tea.KeyMsg{Type: tea.KeyCtrlH}},
 		{name: "new tab", profile: shortcutMacOS, action: Themes, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}, Super: true}},
