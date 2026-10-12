@@ -62,6 +62,8 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 
 ## Keep documentation accurate
 
+- [x] Audit the updated development tree on WSL 2, fix imported Windows PATH resolution through failing regression tests, and record automated results and remaining manual release checks in [the 2026-10-12 evidence report](docs/testing/evidence/WSL2_TEST_AUDIT_2026-10-12.md).
+
 - [x] Document every new command and metadata field.
 - [x] Run tests, static checks, a secret scan, and a live terminal check.
 
