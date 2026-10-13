@@ -6,6 +6,7 @@ import pty "github.com/creack/pty/v2"
 
 import (
 	"bytes"
+	"github.com/alderon07/al/internal/testpty"
 
 	neutralcatalog "github.com/alderon07/al/internal/catalog"
 	"io"
@@ -132,7 +133,7 @@ func TestCatalogDrawerPTYNarrowWideCancellation(t *testing.T) {
 		t.Run(strconv.Itoa(int(width)), func(t *testing.T) {
 			command := exec.Command(os.Args[0], "-test.run=^TestCatalogDrawerPTYHelper$")
 			command.Env = append(os.Environ(), "AL_CATALOG_DRAWER_PTY=1", "TERM=xterm-256color")
-			terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
+			terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -198,7 +199,7 @@ func TestCatalogDefaultBinaryPTYNarrowWideReviewCancellation(t *testing.T) {
 			before, _ := os.ReadFile(catalogPathFixture())
 			command := exec.Command(binary)
 			command.Env = append(os.Environ(), "TERM=xterm-256color", "NO_COLOR=1")
-			terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
+			terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -4,7 +4,8 @@ package main
 
 import (
 	"fmt"
-	"github.com/creack/pty/v2"
+	"github.com/alderon07/al/internal/testpty"
+
 	"os"
 	"os/exec"
 	"testing"
@@ -14,7 +15,7 @@ import (
 func TestPlainCommandStartupDoesNotProbeTerminal(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestStartupProbeHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_STARTUP_PROBE_HELPER=1", "TERM=xterm-256color")
-	terminal, err := pty.Start(command)
+	terminal, err := testpty.Start(command)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,7 @@ package shell_test
 
 import (
 	"bytes"
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -11,8 +12,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/creack/pty/v2"
 
 	"github.com/alderon07/al/internal/catalog"
 	"github.com/alderon07/al/internal/catalogstore"
@@ -135,7 +134,7 @@ func readonlyHandoffPTY(t *testing.T, executable, home string, arguments ...stri
 	}
 	command := exec.Command(executable, arguments...)
 	command.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin", "TERM=xterm", "PS1=READONLY_READY> "}
-	terminal, err := pty.Start(command)
+	terminal, err := testpty.Start(command)
 	if err != nil {
 		t.Fatal(err)
 	}

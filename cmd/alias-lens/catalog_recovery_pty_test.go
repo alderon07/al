@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -78,7 +79,7 @@ func TestCompiledCatalogRecoveryPTY(t *testing.T) {
 				for attempt := 0; attempt < 2; attempt++ {
 					command := exec.Command(bash, "--noprofile", "--norc", "-c", `exec "$1" catalog recover`, "recovery-pty", binary)
 					command.Env = []string{"HOME=" + home, "XDG_CONFIG_HOME=" + filepath.Join(home, ".config"), "PATH=" + os.Getenv("PATH"), "TERM=xterm-256color", "ALIAS_LENS_SHELL=bash"}
-					terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
+					terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: width})
 					if err != nil {
 						t.Fatal(err)
 					}

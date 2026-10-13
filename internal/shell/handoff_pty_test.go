@@ -6,7 +6,8 @@ import (
 	"bytes"
 	"github.com/alderon07/al/internal/entry"
 	"github.com/alderon07/al/internal/shell"
-	"github.com/creack/pty/v2"
+	"github.com/alderon07/al/internal/testpty"
+
 	"io"
 	"os"
 	"os/exec"
@@ -46,7 +47,7 @@ func TestShellEntryHandoffPTYArgumentsStatusMaskingAndSignal(t *testing.T) {
 			command := exec.Command(executable, args...)
 			home := t.TempDir()
 			command.Env = []string{"HOME=" + home, "ZDOTDIR=" + home, "PATH=/usr/bin:/bin", "TERM=xterm", "PS1=HANDOFF_READY> ", "PROMPT=HANDOFF_READY> "}
-			terminal, err := pty.Start(command)
+			terminal, err := testpty.Start(command)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -150,7 +151,7 @@ func TestNativeDeclarationBoundaryPTY(t *testing.T) {
 				home := t.TempDir()
 				command := exec.Command(executable, args...)
 				command.Env = []string{"HOME=" + home, "ZDOTDIR=" + home, "PATH=/usr/bin:/bin", "BASH_ENV=/dev/null", "ENV=/dev/null", "TERM=xterm", "FPATH=" + os.Getenv("FPATH")}
-				terminal, err := pty.Start(command)
+				terminal, err := testpty.Start(command)
 				if err != nil {
 					t.Fatal(err)
 				}

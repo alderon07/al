@@ -153,3 +153,5 @@ jobs:
           args: release --snapshot --clean --skip=publish
       - name: Verify release snapshot
         run: ./scripts/verify-release-artifacts.sh dist
+      - name: Scan archived executables for vulnerabilities
+        run: ./scripts/verify-release-vulnerabilities.sh dist

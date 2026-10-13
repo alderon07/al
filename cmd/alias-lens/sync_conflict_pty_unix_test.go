@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -36,7 +37,7 @@ func runSyncConflictPTY(t *testing.T, subcommand string, expectedExit int, expec
 	home := setupPlainSyncConflictPTY(t)
 	command := exec.Command(os.Args[0], "-test.run=^"+t.Name()+"$")
 	command.Env = append(os.Environ(), "HOME="+home, "ALIAS_LENS_SHELL"+"=bash", "ALIAS_LENS_SYNC_CONFLICT_PTY_HELPER="+subcommand, "NO_COLOR=1", "TERM=xterm-256color")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 12, Cols: 44})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 12, Cols: 44})
 	if err != nil {
 		t.Fatal(err)
 	}

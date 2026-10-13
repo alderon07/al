@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	neutralcatalog "github.com/alderon07/al/internal/catalog"
 )
@@ -19,7 +20,12 @@ func resolveCatalogExecutable(program, searchPath string) (string, error) {
 	}
 	directories := filepath.SplitList(searchPath)
 	for _, directory := range directories {
-		if !filepath.IsAbs(directory) || filepath.Clean(directory) != directory {
+		cleaned := filepath.Clean(directory)
+		trimmed := strings.TrimRight(directory, string(filepath.Separator))
+		if trimmed == "" && filepath.IsAbs(directory) {
+			trimmed = string(filepath.Separator)
+		}
+		if !filepath.IsAbs(directory) || cleaned != trimmed {
 			return "", fmt.Errorf("PATH contains an empty or relative directory; set an absolute PATH before al catalog enable")
 		}
 	}

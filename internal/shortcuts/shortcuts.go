@@ -139,7 +139,7 @@ var shortcutDefinitions = []shortcutDefinition{
 		linux:   shortcutBindings(terminalShortcut("F2", shortcutKey{typeCode: tea.KeyF2})),
 		macos:   shortcutBindings(nativeShortcut("Cmd+2", shortcutKey{typeCode: tea.KeyRunes, runeCode: '2', super: true}), terminalShortcut("F2", shortcutKey{typeCode: tea.KeyF2}))},
 	{action: Settings,
-		windows: shortcutBindings(terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3}), nativeShortcut("Ctrl+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', ctrl: true})),
+		windows: shortcutBindings(terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3})),
 		linux:   shortcutBindings(terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3}), nativeShortcut("Ctrl+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', ctrl: true})),
 		macos:   shortcutBindings(nativeShortcut("Cmd+,", shortcutKey{typeCode: tea.KeyRunes, runeCode: ',', super: true}), terminalShortcut("F3", shortcutKey{typeCode: tea.KeyF3}))},
 	{action: Themes,

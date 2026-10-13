@@ -97,6 +97,8 @@ jobs:
           args: release --clean --skip=publish
       - name: Verify release artifacts
         run: ./scripts/verify-release-artifacts.sh dist
+      - name: Scan archived executables for vulnerabilities
+        run: ./scripts/verify-release-vulnerabilities.sh dist
       - name: Preserve reviewed release artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

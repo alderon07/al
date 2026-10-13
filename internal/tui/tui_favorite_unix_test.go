@@ -5,6 +5,7 @@ package tui
 import pty "github.com/creack/pty/v2"
 
 import (
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 
 	tea "github.com/alderon07/al/internal/tea"
@@ -39,7 +40,7 @@ func TestFavoriteToggleInPTY(t *testing.T) {
 	}
 	command := exec.Command(os.Args[0], "-test.run=^TestFavoriteTogglePTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_FAVORITE_PTY_HELPER=1", "HOME="+home, "ALIAS_LENS_SHELL"+"=bash", "TERM=xterm-256color", "NO_COLOR=1")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 90})
 	if err != nil {
 		t.Fatal(err)
 	}

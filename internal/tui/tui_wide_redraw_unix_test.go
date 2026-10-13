@@ -5,6 +5,7 @@ package tui
 import pty "github.com/creack/pty/v2"
 
 import (
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 
 	"os"
@@ -49,7 +50,7 @@ func TestSettledViewClearScreenPTYHelper(t *testing.T) {
 func TestSettledViewClearScreenPTY(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestSettledViewClearScreenPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_CLEAR_SCREEN_HELPER=1", "HOME="+t.TempDir(), "TERM=xterm-256color", "NO_COLOR=1")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 18, Cols: 48})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 18, Cols: 48})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +113,7 @@ func waitForPTYWideAliasFrame(t *testing.T, output *synchronizedBuffer, offset i
 func TestWideAliasNavigationPTY(t *testing.T) {
 	command := exec.Command(os.Args[0], "-test.run=^TestWideAliasNavigationPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_WIDE_REDRAW_HELPER=1", "HOME="+t.TempDir(), "TERM=xterm-256color")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 33, Cols: 128})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 33, Cols: 128})
 	if err != nil {
 		t.Fatal(err)
 	}

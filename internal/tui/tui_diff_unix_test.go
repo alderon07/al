@@ -5,6 +5,7 @@ package tui
 import pty "github.com/creack/pty/v2"
 
 import (
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 
 	"os"
@@ -61,7 +62,7 @@ func TestTerminalDiffPTYAtNarrowAndWideWidths(t *testing.T) {
 	}
 	command := exec.Command(os.Args[0], "-test.run=^TestTerminalDiffPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_DIFF_PTY_HELPER=1", "HOME="+home, "ALIAS_LENS_SHELL"+"=bash", "NO_COLOR=1", "TERM=xterm-256color")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +131,7 @@ func TestRevisionPreviewPTYBeforeRestore(t *testing.T) {
 	}
 	command := exec.Command(os.Args[0], "-test.run=^TestRevisionPreviewPTYHelper$")
 	command.Env = append(os.Environ(), "ALIAS_LENS_REVISION_PTY_HELPER=1", "HOME="+home, "ALIAS_LENS_SHELL"+"=bash", "NO_COLOR=1", "TERM=xterm-256color")
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 80})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -54,7 +54,7 @@ func TestCatalogStructuralBoundaryNeverExecutes(t *testing.T) {
 }
 
 func TestCatalogExecutableResolutionRejectsRelativePATH(t *testing.T) {
-	for _, path := range []string{"", ":/bin", "/bin:", "relative:/bin"} {
+	for _, path := range []string{"", ":/bin", "/bin:", "relative:/bin", "/usr/../bin:/bin", "/usr/./bin:/bin", "/usr//bin:/bin", "/./:/bin", "/usr/..:/bin"} {
 		if _, err := resolveCatalogExecutable("printf", path); err == nil {
 			t.Fatalf("unsafe PATH %q accepted", path)
 		}
@@ -62,6 +62,23 @@ func TestCatalogExecutableResolutionRejectsRelativePATH(t *testing.T) {
 	resolved, err := resolveCatalogExecutable("printf", "/usr/bin:/bin")
 	if err != nil || !filepath.IsAbs(resolved) {
 		t.Fatalf("pin=%q, %v", resolved, err)
+	}
+}
+
+func TestCatalogExecutableResolutionAcceptsWSLPATH(t *testing.T) {
+	windowsDirectory := filepath.Join(t.TempDir(), "Program Files", "Synthetic Tools")
+	for _, searchPath := range []string{
+		"/usr/bin/:/bin/",
+		"/:/usr/bin///:/bin",
+		windowsDirectory + "/:/usr/bin:/bin",
+		"/usr/bin:/bin:" + windowsDirectory + "/",
+	} {
+		t.Run(searchPath, func(t *testing.T) {
+			resolved, err := resolveCatalogExecutable("printf", searchPath)
+			if err != nil || !filepath.IsAbs(resolved) {
+				t.Fatalf("portable executable unavailable under WSL PATH: %q, %v", resolved, err)
+			}
+		})
 	}
 }
 

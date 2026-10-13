@@ -67,7 +67,7 @@ func TestPreferredSettingsShortcutTogglesSettingsPage(t *testing.T) {
 		key     tea.KeyMsg
 	}{
 		{profile: shortcutLinux, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}, Ctrl: true}},
-		{profile: shortcutWindows, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}, Ctrl: true}},
+		{profile: shortcutWindows, key: tea.KeyMsg{Type: tea.KeyF3}},
 		{profile: shortcutMacOS, key: tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{','}, Super: true}},
 	}
 	for _, test := range tests {

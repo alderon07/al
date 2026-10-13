@@ -41,7 +41,7 @@ install -m 0755 alias-lens "$HOME/.local/bin/alias-lens"
 "$HOME/.local/bin/alias-lens" setup
 ```
 
-To build from source, you need Make and Go 1.26 or newer:
+To build from source, you need Make and Go 1.26 or newer with automatic toolchain selection enabled. The repository selects Go 1.27.2 for builds and checks:
 
 ```bash
 git clone https://github.com/alderon07/al.git

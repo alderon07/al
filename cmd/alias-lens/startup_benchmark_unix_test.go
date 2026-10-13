@@ -9,6 +9,7 @@ import (
 	"github.com/alderon07/al/internal/app"
 	"github.com/alderon07/al/internal/catalog"
 	shellapi "github.com/alderon07/al/internal/shell"
+	"github.com/alderon07/al/internal/testpty"
 	"io"
 	"os"
 	"os/exec"
@@ -260,7 +261,7 @@ func runStartupBenchmark(fixture startupBenchmarkFixture, login, fullMembership 
 	if fpath, ok := os.LookupEnv("FPATH"); ok {
 		command.Env = append(command.Env, "FPATH="+fpath)
 	}
-	terminal, err := pty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 100})
+	terminal, err := testpty.StartWithSize(command, &pty.Winsize{Rows: 24, Cols: 100})
 	if err != nil {
 		return err
 	}
