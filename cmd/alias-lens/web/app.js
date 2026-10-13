@@ -47,7 +47,6 @@ function render() {
     card.querySelector('.category').textContent = alias.category;
     card.querySelector('.description').textContent = alias.description;
     card.querySelector('.command').textContent = alias.command;
-    card.querySelector('.copy').addEventListener('click', () => copy(alias.command));
     article.addEventListener('click', () => copy(alias.command));
     results.append(card);
   });

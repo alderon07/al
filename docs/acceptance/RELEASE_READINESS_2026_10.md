@@ -29,3 +29,13 @@
 - Keep the Windows default footer shortcuts limited to `o` and `F3`. Preserve Linux and macOS settings conventions and explicit custom shortcut support.
 - Write a failing Windows-profile label and dispatch regression before changing the default. Verify both unmodified footer bindings and the host-owned modified chord afterward.
 - Run the required-shell PTY suite and native Windows Terminal footer/help checks after the correction. Update the shortcut matrix to match displayed bindings.
+
+## Combine the Linux and WSL candidates
+
+- Reproduce the Linux settled-view clear regression on the WSL candidate before updating the renderer.
+- Combine Linux commit `f8a7da3` with the WSL fixes. Preserve WSL PATH validation, archive vulnerability gates, Windows Terminal shortcut ownership, and the descriptor-based Linux PTY launcher.
+- Keep Linux's stronger complete-frame and per-character assertions. Use the shared launcher in its new PTY regression.
+- Select the renderer's required Go 1.26 minimum and Go 1.27.2 release toolchain. Keep dependency versions and installation documentation consistent.
+- Pass the required-shell suite, repeated renderer regressions, `make fmt check`, race checks, module verification, and source and archive vulnerability scans on the combined candidate.
+- Build and inspect all four combined-candidate archives and SBOMs. Obtain green CI for the exact committed tree. Keep native Windows Terminal and WSL restart gates open until the combined binary passes them.
+- Record the Linux branch's evidence and commit directly in the shared coordination file, without requiring the user to relay messages.
