@@ -10,7 +10,7 @@ The combined tree passes `make fmt check`, 1,434 uncached tests/subtests, 507 re
 
 Controlled Windows Terminal checks pass for Bash and Zsh at 48x18, 80x24, and 160x40, including F1-F8, search, host copy/paste, preferred bindings, shell launcher/execution/Tab handoff, long commands, and live resizing. The exact snapshot executable and archive hashes are recorded in `docs/testing/evidence/RC5_WSL_READINESS_2026-10-12.md`.
 
-WSL shutdown/restart verification is pending.
+WSL shutdown/restart verification passed with preserved installations and identical shadow hashes. The combined code candidate is ready for WSL review. Linux and publication gates remain separately recorded.
 
 ## Ownership and handoff
 

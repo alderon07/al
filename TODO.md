@@ -154,10 +154,10 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
 - [ ] Add phase 4 read-only shadow generation after phases 2 and 3 pass.
   - [x] Add the read-only `al catalog shadow` pipeline, bounded native validation, redacted reports, and resource limits.
   - [x] Add Linux and macOS CI matrices, deterministic report hashes, and a disposable WSL verification script.
-  - [ ] Record the WSL 2 release-candidate run from `docs/testing/RELEASE_WSL.md`.
+  - [x] Record the WSL 2 release-candidate preparation and host run from `docs/testing/RELEASE_WSL.md`.
     - [x] Record the clean pre-restart WSL 2 candidate run and matching report hashes in `docs/testing/evidence/RC5_WSL_READINESS_2026-10-12.md`.
     - [x] Verify the combined Linux/WSL candidate with controlled Windows Terminal widths, preferred keys, shell handoff, copy/paste, long commands, and live resizing.
-    - [ ] Shut down WSL, reopen it, and rerun the verifier.
+    - [x] Shut down WSL, reopen it, and rerun the verifier.
 - [ ] Approve and deliver the state, planning, and portability work in `docs/STATE_WORKFLOW_SPEC.md` after the phase 4 WSL gate.
   - [x] Add the observational status and shared operation-plan foundation.
   - [x] Review and approve the catalog implementation contract in `docs/CATALOG_PLAN.md` and `docs/acceptance/CATALOG_BOOTSTRAP.md`.

@@ -1,6 +1,6 @@
 # RC5 WSL readiness, 2026-10-12
 
-The selected candidate is `v1.0.0-rc.5`. Automated and native Windows Terminal checks pass for the combined candidate. WSL shutdown/restart verification is pending.
+The selected candidate is `v1.0.0-rc.5`. Automated and native Windows Terminal checks pass for the combined candidate. WSL shutdown/restart verification passed. All required checks for the prepared WSL candidate pass.
 
 The tested code is `2cbd387c469dfae0899bf30ad420568b4c827d97` on `release/readiness-2026-10-12`. [PR #6](https://github.com/alderon07/al/pull/6) targets `dev`. The merge combines the WSL preparation and Linux commit `f8a7da31a99586f7e74883b017648b4bf7ca2f58`, retaining both parents. Fetching `origin/dev` found no newer changes beyond `31a33ec`. Concurrent Linux edits in the original workspace remain preserved.
 
@@ -34,7 +34,7 @@ WSL is 2.7.14.0 on Windows 10.0.26300.9457. The distribution is Ubuntu 24.04.5 L
 | Native Linux archive | Pass: matching executable, version, isolated Bash/Zsh setup, doctor expectations, repair, completion, saved profile override, automatic Windows profile, and removal |
 | Compiled tmux | Alias/search/help at 48x18, 80x24, 160x40 and plain `TERM=dumb` search pass |
 | Pre-restart persistent installation | Login/nonlogin startup, binary/function/completion, alias exit status, Windows profile, doctor expectations, unchanged startup/alias hashes and modes pass |
-| Actual WSL shutdown and persistence | Pending |
+| Actual WSL shutdown and persistence | Pass: changed kernel ID; Bash/Zsh startup, binary, completion, alias modes, and shadow hashes preserved |
 
 The prior [WSL audit](WSL2_TEST_AUDIT_2026-10-12.md) records PATH TDD evidence, coverage of 64.3%, and two 15-second runs for each of three fuzz targets. The [Linux report](RELEASE_LINUX_MINT_2026-10-12.md) records its native terminal/browser evidence, minimum-Go compatibility checks, fuzzing, and benchmark smoke results. Those prior results retain their original commit scope.
 
@@ -80,3 +80,9 @@ json 7b49b8b3e23673e11aa349d8d84b62779dd65c65723ee05c71e7aa9f9c77b2ce
 Native architecture/platform manual evidence outside this WSL host and published archive attestations remain release-publication gates. Snapshots and macOS CI do not close those gates. Both platform tracks must agree on the tagged candidate and artifact hashes before publication.
 
 Raw logs and synthetic screenshots remain outside the repository. Earlier `/tmp` audit logs were copied to private persistent storage before shutdown preparation.
+
+## Verified restart
+
+The independent Windows task ran `wsl.exe --shutdown`, reopened Ubuntu-24.04, and completed the saved post-check. The previous kernel boot ID was `3573e4d5-56fe-4567-b4e7-8c0fea6e8f8c`; the restarted kernel boot ID is `e099404c-deae-4b10-8501-8e22b8b8b7d1`. Both persistent homes retain the candidate executable SHA-256, startup and alias bytes, permissions, binary resolution, `al` function, completion, exit status 41, and expected doctor results. The post-restart shadow result matches every pre-restart line and all three recorded hashes.
+
+The task committed and pushed this result only after those checks passed. Raw logs remain in the private persistent readiness directory.
