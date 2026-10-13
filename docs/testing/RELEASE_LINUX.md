@@ -4,11 +4,16 @@ Run this checklist on the exact release commit. Use temporary home directories a
 
 Record the commit, distribution, kernel, architecture, Go version, Bash version, Zsh version, terminal, tmux version when used, and every failed command in a dated file under `docs/testing/evidence/`.
 
+The [Linux Mint verification record](evidence/RELEASE_LINUX_MINT_2026-10-12.md) covers the current x86-64 worktree. Native Linux ARM64 and final release-commit checks remain separate.
+
 ## Run automated checks
 
 - [ ] Confirm that `git status --short` is empty and record `git rev-parse HEAD`.
-- [ ] Run `make fmt check`.
-- [ ] Run `go test -race -count=1 -skip PTY ./...`. `make check` runs the PTY tests without race instrumentation.
+- [ ] Confirm root-owned system Bash and Zsh are installed. On Linux Mint, install Zsh with `sudo apt-get install zsh`; keep the preferred login shell unchanged.
+- [ ] Confirm `go version` matches the patched `toolchain` directive in `go.mod`.
+- [ ] Run `AL_REQUIRE_PTY_SHELLS=1 make fmt check`.
+- [ ] Run `AL_REQUIRE_PTY_SHELLS=1 go test -count=1 ./...` to bypass cached results.
+- [ ] Run `AL_REQUIRE_PTY_SHELLS=1 go test -race -count=1 -skip PTY ./...`. `make check` runs the PTY tests without race instrumentation.
 - [ ] Run `go mod verify` and `go mod tidy -diff`.
 - [ ] Run `go list -m -u -mod=readonly all` and review available direct and transitive updates.
 - [ ] Run `govulncheck ./...`. Review imported-package and module findings even when no called symbol is vulnerable.

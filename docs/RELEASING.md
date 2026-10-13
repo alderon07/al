@@ -6,6 +6,8 @@ The first supported release routes are GitHub archives and `go install github.co
 
 Read [the compatibility policy](COMPATIBILITY.md) before changing commands, flags, metadata, JSON output, or configuration fields.
 
+The `toolchain` directive in `go.mod` pins the tested release compiler. CI's `setup-go` steps read that directive before the source compatibility minimum. Use Go 1.27.2 for this release and scan again before changing the pin. The Bubble Tea renderer fix requires Go 1.26. Older toolchains must not build release artifacts.
+
 ## Prepare a release candidate
 
 1. Choose one commit for every platform check. Push it without a tag.
