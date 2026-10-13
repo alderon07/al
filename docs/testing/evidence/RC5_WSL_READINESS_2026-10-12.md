@@ -86,3 +86,7 @@ Raw logs and synthetic screenshots remain outside the repository. Earlier `/tmp`
 The independent Windows task ran `wsl.exe --shutdown`, reopened Ubuntu-24.04, and completed the saved post-check. The previous kernel boot ID was `3573e4d5-56fe-4567-b4e7-8c0fea6e8f8c`; the restarted kernel boot ID is `e099404c-deae-4b10-8501-8e22b8b8b7d1`. Both persistent homes retain the candidate executable SHA-256, startup and alias bytes, permissions, binary resolution, `al` function, completion, exit status 41, and expected doctor results. The post-restart shadow result matches every pre-restart line and all three recorded hashes.
 
 The task committed and pushed this result only after those checks passed. Raw logs remain in the private persistent readiness directory.
+
+After reconnecting, the independent audit confirmed the current boot ID, both executable hashes, every shadow output line, and login/nonlogin shell behavior again. A fresh required-shell PTY run on the restarted kernel passes all 169 test/subtest events with no failures or skips. [All six CI jobs pass for the pushed restart evidence commit `d31e708`](https://github.com/alderon07/al/actions/runs/38326710782).
+
+The outer Windows log ends at Git progress output. The persisted result file and the fetched remote commit independently prove that restart verification and the evidence push completed. The pull-request description was refreshed after reconnecting.
