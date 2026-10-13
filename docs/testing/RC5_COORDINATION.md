@@ -4,24 +4,13 @@ The user selected `v1.0.0-rc.5`. This thread owns WSL readiness. The Lenovo thre
 
 ## WSL status
 
-Latest prepared code: `c22c10edbb55b1a6de4c4fba6d00f04a845e7ce6`. All six jobs passed in https://github.com/alderon07/al/actions/runs/38323178723. The WSL feature branch includes the PATH fix, patched toolchain/dependencies, archive scanning, the shared Linux PTY launcher, and removal of Windows Terminal's `Ctrl+,` from the Windows default. PR #6 remains the review entry point.
+The tested combined code candidate is `2cbd387c469dfae0899bf30ad420568b4c827d97` on `release/readiness-2026-10-12`. It merges Linux commit `f8a7da3` and preserves the WSL PATH fix, patched Go 1.27.2 toolchain and archive scans, descriptor-based PTY launcher, and Windows Terminal shortcut correction. Bubble Tea 2.1.0 now requires Go 1.26. All six jobs pass in https://github.com/alderon07/al/actions/runs/38325473094. PR #6 remains the review entry point.
 
-The launcher passed five complete PTY repetitions (835 events) and 1,000 focused traced startup repetitions. The shortcut correction passed three complete PTY repetitions (501 events) and `make fmt check`. Four c22c10e snapshot archives and SBOMs pass contents, checksums, and vulnerability scans. Bash/Zsh Windows Terminal F1-F8 and search passed at all three sizes before the final chord removal. Persistent c22c10e installations pass pre-restart checks; shutdown and final host checks remain open. See `docs/testing/evidence/RC5_WSL_READINESS_2026-10-12.md` on the feature branch for candidate hashes and the gate status.
+The combined tree passes `make fmt check`, 1,434 uncached tests/subtests, 507 required-shell PTY events over three repetitions, 50 clear-screen regression repetitions, race checks, Homebrew/system Zsh catalog workflows, module verification, source and four archive vulnerability scans, native archive lifecycle, compiled tmux widths, and pre-restart installation/shadow checks.
 
-Preparation history:
+Controlled Windows Terminal checks pass for Bash and Zsh at 48x18, 80x24, and 160x40, including F1-F8, search, host copy/paste, preferred bindings, shell launcher/execution/Tab handoff, long commands, and live resizing. The exact snapshot executable and archive hashes are recorded in `docs/testing/evidence/RC5_WSL_READINESS_2026-10-12.md`.
 
-- Committed WSL PATH resolution and audit evidence in `3c04ee2` on local `dev`.
-- Full suite, three PTY repetitions, red/green regression verification, race tests, fuzzing, catalog workflow, and `make fmt check` passed. Coverage is 64.3%.
-- Ten repeated catalog startup PTYs did not reproduce the earlier isolated Homebrew Zsh process-start failure.
-- Release preparation now uses branch `release/readiness-2026-10-12` in `/var/tmp/alias-lens-release-readiness-20261012/checkout`, based on `3c04ee2`.
-- The release workflow's Go 1.24.2 selection exposes 40 reachable standard-library advisories. Go 1.27.2 clears those findings.
-- Binary scanning additionally detected GO-2026-5970 in `golang.org/x/text` despite no source-level call trace. The preparation branch selects `golang.org/x/text v0.41.0`, `golang.org/x/sys v0.44.0`, and the resulting `golang.org/x/sync v0.22.0`, with `go 1.25.0` and `toolchain go1.27.2`.
-- Shared security correction is committed as `d115eacae6a803254080113fc7c1b871fc597217` on `release/readiness-2026-10-12`. Both source and compiled-binary scans now report no vulnerabilities, including module advisories.
-- Updated dependencies pass the full suite, race checks, and `make fmt check`. An untraced three-run PTY retry passed all 492 events; the first repetition hit an isolated Bash launch EPERM. Broad syscall tracing caused startup timeouts and did not identify that launch failure.
-- Draft PR https://github.com/alderon07/al/pull/6 is linked to this thread. All six CI jobs passed at d115eac, run https://github.com/alderon07/al/actions/runs/38318663812.
-- All four RC5 snapshot archives and SBOMs built with pinned GoReleaser/Syft, passed checksums/content checks, and passed binary vulnerability scanning. The native Linux archive passed isolated Bash/Zsh setup, repair, completion, and removal.
-- Focused syscall tracing reproduced the isolated launch error at TIOCSCTTY. Its cause is still being isolated; ordinary required-shell runs and the untraced retry pass.
-- WSL terminal and restart checks are continuing. Preparation data and the candidate checkout moved to private /var/tmp storage so they survive WSL shutdown.
+WSL shutdown/restart verification is pending.
 
 ## Ownership and handoff
 
@@ -34,4 +23,6 @@ Preparation history:
 
 ## Lenovo status
 
-Awaiting the Linux thread's status and commit references.
+The Linux thread pushed `f8a7da3` on `fix/linux-release-readiness`. Its sanitized Mint evidence is in `docs/testing/evidence/RELEASE_LINUX_MINT_2026-10-12.md`. WSL reproduced the settled-view renderer failure on its earlier candidate and merged the Linux branch as `2cbd387c469dfae0899bf30ad420568b4c827d97`, preserving both parents. The combined candidate selects Bubble Tea 2.1.0, Go 1.26 minimum, preferred Go 1.27.2, and the matching dependency graph. It also includes the Linux browser copy correction and stronger PTY assertions.
+
+The combined WSL tree passes `make fmt check`, 1,434 uncached tests/subtests, 507 required-shell PTY events across three repetitions, 50 clear-screen regression repetitions, race checks, catalog workflow, source and four archive vulnerability scans, module verification, native archive lifecycle, pre-restart setup, shadow hashes, and compiled tmux widths. Native Windows Terminal and shutdown checks are in progress. Both tracks can review PR #6 directly; no user message relay is needed.

@@ -1,73 +1,82 @@
 # RC5 WSL readiness, 2026-10-12
 
-The selected candidate is `v1.0.0-rc.5`. Automated release checks pass. WSL kernel restart validation remains open, so this report does not declare complete WSL release readiness.
+The selected candidate is `v1.0.0-rc.5`. Automated and native Windows Terminal checks pass for the combined candidate. WSL shutdown/restart verification is pending.
 
-The prepared code is `c22c10edbb55b1a6de4c4fba6d00f04a845e7ce6` on `release/readiness-2026-10-12`. [PR #6](https://github.com/alderon07/al/pull/6) targets `dev`. Fetching `origin/dev` found no changes beyond the already integrated `31a33ec`. The isolated checkout preserves the concurrent Linux audit changes in the original workspace.
+The tested code is `2cbd387c469dfae0899bf30ad420568b4c827d97` on `release/readiness-2026-10-12`. [PR #6](https://github.com/alderon07/al/pull/6) targets `dev`. The merge combines the WSL preparation and Linux commit `f8a7da31a99586f7e74883b017648b4bf7ca2f58`, retaining both parents. Fetching `origin/dev` found no newer changes beyond `31a33ec`. Concurrent Linux edits in the original workspace remain preserved.
 
-## Corrections
+## Corrections and regression evidence
 
-- `3c04ee2` accepts imported WSL PATH directories with trailing separators while retaining rejection of empty, relative, and dot-segment entries. The regression failed against upstream and passed with the fix.
-- `d115eac` selects Go 1.27.2 and fixed `golang.org/x/text v0.41.0`, `golang.org/x/sys v0.44.0`, and the resulting `golang.org/x/sync v0.22.0`. Those dependency versions require Go 1.25.0. Installation documentation matches the new minimum and preferred toolchain.
-- `9ec84d8` shares a Linux PTY fixture launcher across the shell and terminal tests. It opens the master with `O_NOCTTY` and close-on-exec, then obtains its slave with `TIOCGPTPEER`. Other Unix systems retain the existing launcher. Tests verify terminal ownership and dimensions, exit status, caller streams, preserved process attributes, and descriptor cleanup after a failed start.
-- `c22c10e` removes `Ctrl+,` from the Windows default footer bindings. Native input opened Windows Terminal's settings instead of Alias Lens's footer. The Windows profile now advertises `o / F3`; Linux and macOS retain their existing settings bindings. Label and dispatch regressions failed before the correction and pass afterward.
+- `3c04ee2` fixes WSL PATH directories with trailing separators while retaining rejection of empty, relative, and dot-segment entries. The regression failed before the correction and passed afterward.
+- `d115eac` selects patched Go 1.27.2 and fixed normalization/system dependencies. Source and compiled archive scans clear the previously detected advisories. Both candidate CI and release publication require scans of all four archived executables.
+- `9ec84d8` shares a Linux PTY fixture launcher that opens its master with `O_NOCTTY` and close-on-exec and obtains the descriptor-linked slave with `TIOCGPTPEER`. Other Unix systems retain their existing launcher. Meaningful tests cover terminal ownership, dimensions, exit status, caller streams, existing process attributes, and descriptor cleanup after a failed start.
+- `c22c10e` removes Windows Terminal's settings chord `Ctrl+,` from the Windows default. Physical host input reproduced the conflict. Windows now advertises `o / F3`; Linux and macOS retain their conventions. Label and dispatch regressions fail before the correction and pass afterward.
+- `2cbd387` combines the Linux Bubble Tea 2.1.0 renderer correction, its Go 1.26 minimum and dependency graph, the browser copy correction, and stronger PTY assertions with the WSL fixes. The settled-view clear regression failed on the earlier WSL candidate: `PTY redraw did not contain "PTY_CLEAR_END": ""`. It passes 50 repetitions on the combined tree. The new regression uses the descriptor-based launcher. The preferred release toolchain remains Go 1.27.2.
 
-## Environment and automated checks
+The earlier PTY launch experiment reproduced `TIOCSCTTY` failure before shell execution: ten failures in 500 original-launcher traced repetitions and five in 500 diagnostic repetitions. Descriptor-linked launches passed 500 experimental repetitions and 1,000 implemented repetitions. A timing-altered baseline also passed 2,000 repetitions. These results verify the launcher on this host without establishing an exact kernel cause. Required-shell failures are neither retried nor skipped.
 
-The host is WSL 2.7.14.0 on Windows 10.0.26300.9457, Ubuntu 24.04.5 LTS, kernel 6.18.33.2-microsoft-standard-WSL2, x86_64. Windows Terminal is 1.24.12741.0; tmux is 3.4. Bash is 5.2.21. Both system Zsh 5.9 and Homebrew Zsh 5.9.2 are installed. The module automatically selects Go 1.27.2 from the installed Go 1.27.1.
+## Environment and automated results
 
-[All six CI jobs pass for c22c10e](https://github.com/alderon07/al/actions/runs/38323178723): Ubuntu and macOS tests, both shadow matrices, source vulnerability scanning, and release-candidate packaging with race checks and archive scans. The earlier toolchain/dependency and PTY launcher commits also passed all six jobs.
+WSL is 2.7.14.0 on Windows 10.0.26300.9457. The distribution is Ubuntu 24.04.5 LTS, kernel 6.18.33.2-microsoft-standard-WSL2, x86_64. Windows Terminal is 1.24.12741.0; tmux is 3.4; Bash is 5.2.21. System Zsh 5.9 and Homebrew Zsh 5.9.2 are installed. Builds select Go 1.27.2.
 
-| Check | Result |
+[All six CI jobs pass on the combined commit](https://github.com/alderon07/al/actions/runs/38325473094): Ubuntu/macOS tests, both shadow matrices, source vulnerability scanning, and candidate packaging with race checks and archive scans.
+
+| Check on the combined candidate | Result |
 | --- | --- |
-| Full uncached unit and integration audit | 1,428 passing test/subtest events before adding the launcher tests; coverage 64.3%. See the earlier [WSL audit](WSL2_TEST_AUDIT_2026-10-12.md). |
-| Launcher change: all required-shell PTYs, five repetitions | 835 passing test/subtest events, no failures or skips. |
-| Launcher change: focused startup case under syscall tracing | 1,000 repetitions pass; no failed `TIOCSCTTY`. |
-| Final shortcut change: all required-shell PTYs, three repetitions | 501 passing test/subtest events, no failures or skips. |
-| `AL_REQUIRE_PTY_SHELLS=1 make fmt check` after each correction | Pass: formatting, full suite, vet, binary build, and whitespace checks. |
-| Non-PTY race suite and separate launcher race tests | Pass locally; the final candidate CI race suite also passes. |
-| Module verification and tidy diff | Pass, no module changes. |
-| Three fuzz targets | Two 15-second runs with two workers pass for each target in the earlier audit. |
-| Actionlint and GoReleaser configuration | Pass with pinned tools. |
-| Catalog workflow | Bash/Zsh bootstrap, read-only preview, installed entries, rollback, and catalog PTYs pass. |
-| Source and compiled archive vulnerability scans | No vulnerabilities found after the dependency correction. |
+| `AL_REQUIRE_PTY_SHELLS=1 make fmt check` | Pass: formatting, full suite, vet, build, whitespace checks |
+| Uncached full suite | 1,434 passing test/subtest events across 18 tested packages; only the macOS shadow matrix is skipped on WSL |
+| All required-shell PTYs, three repetitions | 507 passing events, no failures or skips |
+| Settled-view clear regression | Expected red result on the preceding candidate; 50 green repetitions on the combined tree |
+| Non-PTY race suite and separate launcher race tests | Pass |
+| Catalog workflow with Homebrew and system Zsh | Both pass; system-shell run puts `/usr/bin:/bin` before Homebrew in PATH |
+| Module verification and tidy | Pass; no module changes after tidy |
+| Browser script syntax | Pass; Linux's live copy evidence is recorded in its separate report |
+| Source and all four compiled archive vulnerability scans | No vulnerabilities found |
+| Native Linux archive | Pass: matching executable, version, isolated Bash/Zsh setup, doctor expectations, repair, completion, saved profile override, automatic Windows profile, and removal |
+| Compiled tmux | Alias/search/help at 48x18, 80x24, 160x40 and plain `TERM=dumb` search pass |
+| Pre-restart persistent installation | Login/nonlogin startup, binary/function/completion, alias exit status, Windows profile, doctor expectations, unchanged startup/alias hashes and modes pass |
+| Actual WSL shutdown and persistence | Pending |
 
-The old Go 1.24.2 release build exposed 40 reachable standard-library advisories. Go 1.27.2 cleared those findings. Binary scanning additionally found GO-2026-5970 in normalization code even when source reachability analysis did not report a call trace. The dependency update removes that finding, GO-2026-6629, and GO-2026-5024. Both CI snapshots and release builds now scan all four archived executables before publication. A real vulnerable archive failed the new gate; fixed archives passed.
+The prior [WSL audit](WSL2_TEST_AUDIT_2026-10-12.md) records PATH TDD evidence, coverage of 64.3%, and two 15-second runs for each of three fuzz targets. The [Linux report](RELEASE_LINUX_MINT_2026-10-12.md) records its native terminal/browser evidence, minimum-Go compatibility checks, fuzzing, and benchmark smoke results. Those prior results retain their original commit scope.
 
-The intermittent launch failure was reproduced at `TIOCSCTTY` before the shell executable ran. An original-launcher control failed ten times in 500 traced repetitions, and a matching diagnostic launcher failed five times in another 500. Descriptor-based launches passed the isolated 500-run experiment and the implemented 1,000-run check. A timing-altered baseline experiment also passed 2,000 repetitions. These results verify the new launcher on this host; they do not establish the exact kernel cause or guarantee that every possible launch fault is eliminated. No retry or required-shell skip masks an error.
+## Combined snapshot artifacts
 
-## Archives and native terminal evidence
+Pinned GoReleaser 2.18.0 and Syft 1.42.3 downloads were checked against published checksums. A clean combined checkout produced four `1.0.0-rc.5-SNAPSHOT-2cbd387` archives, four SPDX SBOMs, and checksums. Archive contents, checksums, SBOM structure, build metadata, and binary vulnerability scans pass. Native lifecycle and host checks use that snapshot's Linux/amd64 executable.
 
-Pinned GoReleaser 2.18.0 and Syft 1.42.3 downloads were verified against published checksums. The clean c22c10e checkout produced four `1.0.0-rc.5-SNAPSHOT-c22c10e` archives, four SPDX SBOMs, and checksums. Contents, checksums, SBOM structure, build metadata, and all four archived binary scans pass. The native Linux archive passed isolated Bash/Zsh setup, doctor expectations, repair, completion installation/removal, and setup removal during preparation. Persistent homes now contain the c22c10e binary.
-
-| Archive platform | SHA-256 |
+| Platform | Archive SHA-256 |
 | --- | --- |
-| darwin/amd64 | `52343a1c9d5a74284e70d47d39d6505a9f6c72845cb3426e6d16303f17fbc2b7` |
-| darwin/arm64 | `9636b076c9047246a6eb61861b6984a074f7b77394a10487f9c8876e4777b91d` |
-| linux/amd64 | `353bbae181977636f988092d269c6d5cc2707d7fe64fe0e3a223e78aa30946eb` |
-| linux/arm64 | `23e798fd51050b13ad9d9542a3b13bf8e33705300366797ec6c5f26eb820ac4c` |
+| darwin/amd64 | `e265a77a149ee55c3c2cef06c4c71379ccc35f40659347d66371e3844a5a88ae` |
+| darwin/arm64 | `08887bf233681fd408c99b1fffbbb94b4ed0a3c072a5a8995ffc448e069cee5a` |
+| linux/amd64 | `f44af5a02a654b0f547e8e8bfa2b28defdbf426db3a2b96b739452b2de2747a9` |
+| linux/arm64 | `1894d96b99c2825fea38d7144c55ac3f8447275274d8e7f08921fd9d96a44e4f` |
 
-The native c22c10e executable hash is `cf92fe6afe815ce707776626fc1b8b84bf693415842000576fe6127bde783263`.
+The native executable SHA-256 is `ad0cc8b3956b58f23fbc5ddb1bb1bbf1fc36d7af24e1d230592d91668d107a10`. Evidence-only commits after `2cbd387` do not change its runtime source. These hashes identify the tested snapshots; tagged release artifacts require their own checksums and provenance verification.
 
-Compiled tmux alias, search, and help flows pass at 48x18, 80x24, and 160x40. `TERM=dumb` produces plain search output. The Windows Terminal matrix uses dedicated windows and synthetic homes; `stty` confirms the requested dimensions. Window-only images show the selected alias, search field, footer, maker line, and a non-ASCII description with `NO_COLOR=1`.
+## Controlled Windows Terminal evidence
 
-Before the final shortcut correction, native Windows input passed F1 through F8, search, and page return for Bash and Zsh at all three sizes. Host `Ctrl+Shift+V` pasted `?` without opening help in command mode and appended it to search text in search mode. Clipboard contents were restored after the synthetic check. These host runs used the 9ec84d8 binary; the subsequent production change removes only the terminal-owned footer chord. The host-owned chord was separately reproduced before that correction. On the c22c10e binary, the 48x18 Bash run passed all function keys, search, host copy, and host paste. Its guide omitted `Ctrl+,`. Native Bash shell tests at 80x24 also passed Ctrl+G launch, Enter execution, exit status 41, Tab without execution, appended arguments, and nonempty-prompt cancellation. The complete Zsh shell handoff check remains open.
+The user authorized taking terminal focus and restarting WSL. Each native run creates a dedicated Windows Terminal window and uses an isolated synthetic Bash or Zsh home. The launcher starts with a restricted environment. Physical key delivery uses `SendInput` only when the owned window and its `TermControl` own focus. Clipboard checks restore the previous clipboard without recording its contents. Captures cover only the owned window.
 
-Windows automation diagnostics included a wrong distribution name, an incorrect UI Automation control type, premature prompt expectations, unsupported PowerShell type spelling, command-line length limits, and focus-guard failures. Early posted-message key tests were inconsistent and are not accepted as physical key evidence. The accepted native tests use `SendInput` only while the dedicated test window owns focus. Attempts to regain focus can interrupt desktop typing; foreground input automation was stopped pending a controlled host run. The ordinary `al` invocation prints a Tab selection; the editable prompt handoff must be checked through the Ctrl+G launcher.
+- Both shells pass at 48x18, 80x24, and 160x40. `stty` confirms the dimensions. The selected alias, search, footer, maker line, and non-ASCII description remain visible with `NO_COLOR=1`. The narrow and wide captures were inspected.
+- F1 through F8, search, page return, host copy, and host paste pass at all six shell/size combinations. Pasted `?` does not invoke help and appends to the active search. The guide omits Windows Terminal's `Ctrl+,`.
+- Both shells pass Ctrl+G launch at an empty prompt, Enter execution, exit status 41, Tab without execution, appended arguments, and cancellation of a nonempty prompt. Editable handoff is tested through the shell's Ctrl+G launcher.
+- Both shells pass preferred letter bindings and control fallbacks at 80x24: page access, add/cancel, edit/cancel, context marks, favorites, refresh, revisions, delete/cancel/confirm, and Ctrl+S save of a synthetic alias. Delete fallback is tested with an unfiltered list.
+- Both shells pass the `l` catalog entry point and `p`/Ctrl+G commit behavior without a configured repository. The commit operation reports the setup command and leaves the fixture isolated.
+- Both shells pass long-command live resizing from 80x24 to 48x18, then 160x40, then back to 80x24. Kernel PTY dimensions are checked after every resize. The complete alias frame and maker line remain visible. Bash window captures and Zsh terminal text were inspected; a direct visible-pixel check confirmed the complete Zsh redraw.
 
-## Restart preparation and open gates
+The controlled harness initially expected Delete to act on a filtered list and overcorrected native window dimensions. `PrintWindow` omitted part of some Zsh resize captures even after the terminal text settled. A direct visible-pixel check confirmed that the actual view was complete; it also picked up the transparent terminal background, so those direct captures were deleted from both artifact locations. They are not retained evidence. The corrected harness tests an unfiltered Delete fallback, dampens dimension adjustments, and verifies the complete resized terminal text. Incomplete `PrintWindow` images remain diagnostic evidence only. Earlier automation diagnostics and pre-combination host results remain in the private logs.
 
-Persistent synthetic Bash and Zsh homes, binaries, metadata, and logs are saved outside the repository under private `/var/tmp/alias-lens-release-readiness-20261012`. Pre-restart checks pass for login and nonlogin shells, binary resolution, the `al` function, completion, successful execution, exit status 41, Windows profile detection, expected doctor notices, and unchanged startup/alias hashes and modes. The post-check correctly rejects the current unchanged kernel ID.
+## Restart preparation and publication gates
 
-A prepared Windows driver can shut down WSL, reopen Ubuntu-24.04, and run the saved post-check. It has passed its preparation mode. It has not performed shutdown. That operation stops this session and every running WSL process.
+Persistent synthetic homes, binaries, metadata, logs, and the independent Windows task are saved under private `/var/tmp/alias-lens-release-readiness-20261012`. The Windows driver shuts down WSL, reopens Ubuntu-24.04, verifies a changed kernel boot ID, checks both installations, and compares every shadow output line. A guarded finalizer records, scans, commits, and pushes the restart result only after verification succeeds and the prepared branch is unchanged.
 
-The pre-restart shadow verifier passes with these hashes:
+The pre-restart shadow baseline is:
 
 ```text
+PASS shadow-wsl
 manifest 3272702548a24c6b8181d8fab21afb957487f02e0906c7c2df595b4dac5252e1
 plain 69fa1a36e59413963dc7b89f48dd8023349de9ae20745221deda46626fb81d4e
 json 7b49b8b3e23673e11aa349d8d84b62779dd65c65723ee05c71e7aa9f9c77b2ce
 ```
 
-Still open: actual WSL shutdown/restart with matching post-restart hashes; complete final-binary Windows Terminal preferred-chord and width matrix, Zsh shell handoff, long-command, and live-resize checks; native architecture/platform release evidence outside this WSL host; and published archive attestations. Snapshot builds and macOS CI do not close the manual platform gates. No RC5 tag, release publication, or stable release claim has been made.
+Native architecture/platform manual evidence outside this WSL host and published archive attestations remain release-publication gates. Snapshots and macOS CI do not close those gates. Both platform tracks must agree on the tagged candidate and artifact hashes before publication.
 
-Raw logs and synthetic screenshots stay outside the repository. Earlier `/tmp` audit logs were copied into the private persistent directory before preparing shutdown.
+Raw logs and synthetic screenshots remain outside the repository. Earlier `/tmp` audit logs were copied to private persistent storage before shutdown preparation.

@@ -156,6 +156,7 @@ This roadmap tracks user problems. A checkbox closes only after the feature has 
   - [x] Add Linux and macOS CI matrices, deterministic report hashes, and a disposable WSL verification script.
   - [ ] Record the WSL 2 release-candidate run from `docs/testing/RELEASE_WSL.md`.
     - [x] Record the clean pre-restart WSL 2 candidate run and matching report hashes in `docs/testing/evidence/RC5_WSL_READINESS_2026-10-12.md`.
+    - [x] Verify the combined Linux/WSL candidate with controlled Windows Terminal widths, preferred keys, shell handoff, copy/paste, long commands, and live resizing.
     - [ ] Shut down WSL, reopen it, and rerun the verifier.
 - [ ] Approve and deliver the state, planning, and portability work in `docs/STATE_WORKFLOW_SPEC.md` after the phase 4 WSL gate.
   - [x] Add the observational status and shared operation-plan foundation.
