@@ -316,7 +316,7 @@ type workflowRecoveryFailure struct {
 }
 
 func (e workflowRecoveryFailure) Error() string {
-	return fmt.Sprintf("%s: target %d: %s; preserve the current file and original backup, then run al catalog recover", ErrRecoveryBlocked, e.index, e.reason)
+	return fmt.Sprintf("%s: target %d: %s; preserve the current file and original backup; resolve the reported safety check before retrying al catalog recover", ErrRecoveryBlocked, e.index, e.reason)
 }
 
 func (e workflowRecoveryFailure) Unwrap() []error {

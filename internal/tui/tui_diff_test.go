@@ -139,6 +139,16 @@ func TestTerminalDiffNavigationAndReadOnlyRepositoryPreview(t *testing.T) {
 	}
 }
 
+func TestRevisionPreviewRequiresLoadedRevision(t *testing.T) {
+	m := model{}
+	if err := m.openSelectedRevisionDiff(); err == nil || !strings.Contains(err.Error(), "no revision") {
+		t.Fatalf("empty revision preview: %v", err)
+	}
+	if m.diff != nil {
+		t.Fatal("empty revision preview created a diff")
+	}
+}
+
 func TestRevisionPreviewRejectsChangedLiveFile(t *testing.T) {
 	home := privateTestHome(t)
 	t.Setenv("HOME", home)
@@ -153,8 +163,14 @@ func TestRevisionPreviewRejectsChangedLiveFile(t *testing.T) {
 	}
 	m := model{services: applicationServices(), width: 80, height: 24}
 	m.openRevisionDrawer()
+	if m.revisionErr != "" || len(m.revisions) == 0 {
+		t.Fatalf("load revisions: count=%d error=%s", len(m.revisions), m.revisionErr)
+	}
 	if err := m.openSelectedRevisionDiff(); err != nil {
 		t.Fatal(err)
+	}
+	if m.diff == nil {
+		t.Fatal("revision preview did not create a diff")
 	}
 	changed := []byte("alias gs='git status --short'\n")
 	if err := os.WriteFile(path, changed, 0o600); err != nil {

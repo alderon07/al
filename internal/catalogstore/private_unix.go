@@ -4,12 +4,14 @@ package catalogstore
 
 import (
 	"errors"
-	"golang.org/x/sys/unix"
 	"io"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+
+	"github.com/alderon07/al/internal/privatefs"
+	"golang.org/x/sys/unix"
 )
 
 func ReadPrivate(path string, destination any) error { return readPrivate(path, destination, nil) }
@@ -35,8 +37,8 @@ func readPrivateBytes(path string, limit int64, observed func()) ([]byte, error)
 		return nil, errors.New("cannot open catalog state root")
 	}
 	parts := strings.Split(strings.TrimPrefix(filepath.Clean(path), "/"), "/")
-	for _, part := range parts[:len(parts)-1] {
-		next, e := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	for index, part := range parts[:len(parts)-1] {
+		next, e := privatefs.OpenDirectoryComponent(fd, part, index == 0)
 		unix.Close(fd)
 		if e != nil {
 			return nil, errors.Join(errors.New("catalog state parent must not be a symlink"), e)

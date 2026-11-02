@@ -170,7 +170,7 @@ func (m *model) openRepositoryDiff() error {
 
 func (m *model) openSelectedRevisionDiff() error {
 	if len(m.revisions) == 0 {
-		return nil
+		return fmt.Errorf("no revision is available to preview; refresh the revision list")
 	}
 	revision := m.revisions[min(max(0, m.revisionCursor), len(m.revisions)-1)]
 	preview, err := m.service().RevisionPreview(revision.ID)

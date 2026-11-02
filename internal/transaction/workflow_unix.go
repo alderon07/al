@@ -12,10 +12,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
+	"github.com/alderon07/al/internal/privatefs"
 	"golang.org/x/sys/unix"
 )
 
@@ -32,11 +34,11 @@ func openWorkflowParent(path string) (*workflowParent, error) {
 	if err != nil {
 		return nil, err
 	}
-	for _, part := range strings.Split(strings.TrimPrefix(filepath.Dir(path), "/"), "/") {
+	for index, part := range strings.Split(strings.TrimPrefix(filepath.Dir(path), "/"), "/") {
 		if part == "" {
 			continue
 		}
-		next, e := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+		next, e := privatefs.OpenDirectoryComponent(fd, part, index == 0)
 		unix.Close(fd)
 		if e != nil {
 			return nil, fmt.Errorf("%w: target parent must be a real directory", ErrUnsafePath)
@@ -105,12 +107,8 @@ func inspectWorkflowFile(path string, limit int64) (FileIdentity, []byte, error)
 	if !info.Mode().IsRegular() || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || id.Links != 1 || id.Owner != uint64(os.Geteuid()) || info.Size() > limit {
 		return id, nil, ErrUnsafePath
 	}
-	n, err := unix.Flistxattr(int(f.Fd()), nil)
-	if err != nil && !errors.Is(err, unix.ENOTSUP) {
+	if err := validateWorkflowMetadata(int(f.Fd())); err != nil {
 		return id, nil, err
-	}
-	if n != 0 {
-		return id, nil, fmt.Errorf("%w: extended file metadata cannot be preserved", ErrUnsafePath)
 	}
 	b, err := io.ReadAll(io.LimitReader(f, limit+1))
 	if err != nil {
@@ -127,9 +125,8 @@ func inspectWorkflowFile(path string, limit int64) (FileIdentity, []byte, error)
 	if err != nil || !sameOpenIdentity(id, next) || id.Size != next.Size || info.Mode() != after.Mode() || !info.ModTime().Equal(after.ModTime()) {
 		return id, nil, ErrIdentityChanged
 	}
-	n, err = unix.Flistxattr(int(f.Fd()), nil)
-	if err != nil && !errors.Is(err, unix.ENOTSUP) || n != 0 {
-		return id, nil, ErrUnsafePath
+	if err := validateWorkflowMetadata(int(f.Fd())); err != nil {
+		return id, nil, err
 	}
 	id.SHA256 = hashBytes(b)
 	return id, b, nil
@@ -247,12 +244,8 @@ func workflowDirectoryMetadata(path string) error {
 	if e = validateDirectoryOwner(info); e != nil {
 		return e
 	}
-	n, e := unix.Flistxattr(int(f.Fd()), nil)
-	if e != nil && !errors.Is(e, unix.ENOTSUP) {
+	if e := validateWorkflowMetadata(int(f.Fd())); e != nil {
 		return e
-	}
-	if n != 0 {
-		return ErrUnsafePath
 	}
 	return nil
 }
@@ -294,12 +287,8 @@ func inspectWorkflowDirectory(path string) (FileIdentity, error) {
 		if info.Mode().Perm()&0o022 != 0 || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
 			return ErrUnsafePath
 		}
-		n, e := unix.Flistxattr(int(directory.Fd()), nil)
-		if e != nil && !errors.Is(e, unix.ENOTSUP) {
+		if e := validateWorkflowMetadata(int(directory.Fd())); e != nil {
 			return e
-		}
-		if n != 0 {
-			return ErrUnsafePath
 		}
 		frame := func(value any) error {
 			b, e := json.Marshal(value)
@@ -363,8 +352,7 @@ func inspectWorkflowDirectory(path string) (FileIdentity, error) {
 				child.Close()
 				return ErrUnsafePath
 			}
-			n, e = unix.Flistxattr(fd, nil)
-			if e != nil && !errors.Is(e, unix.ENOTSUP) || n != 0 {
+			if e = validateWorkflowMetadata(fd); e != nil {
 				child.Close()
 				return ErrUnsafePath
 			}
@@ -452,9 +440,8 @@ func AppendWorkflowPrivateFile(path string, contents []byte) error {
 	if e = validatePrivateFileInfo(info, id, MaxPrivateFileSize-int64(len(contents))); e != nil {
 		return e
 	}
-	n, e := unix.Flistxattr(int(f.Fd()), nil)
-	if e != nil && !errors.Is(e, unix.ENOTSUP) || n != 0 {
-		return ErrUnsafePath
+	if e = validateWorkflowMetadata(int(f.Fd())); e != nil {
+		return e
 	}
 	if e = writeAll(f, contents); e != nil {
 		return e
@@ -512,12 +499,35 @@ func InspectWorkflowDirectoryMetadata(path string) (FileIdentity, error) {
 	if info.Mode().Perm()&0o022 != 0 || info.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 {
 		return FileIdentity{}, ErrUnsafePath
 	}
-	n, e := unix.Flistxattr(int(f.Fd()), nil)
-	if e != nil && !errors.Is(e, unix.ENOTSUP) {
+	if e := validateWorkflowMetadata(int(f.Fd())); e != nil {
 		return FileIdentity{}, e
 	}
-	if n != 0 {
-		return FileIdentity{}, ErrUnsafePath
-	}
 	return identityFromInfo(info)
+}
+
+func validateWorkflowMetadata(fd int) error {
+	n, err := unix.Flistxattr(fd, nil)
+	if errors.Is(err, unix.ENOTSUP) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return nil
+	}
+	if runtime.GOOS != "darwin" || n > 64<<10 {
+		return fmt.Errorf("%w: extended file metadata cannot be preserved", ErrUnsafePath)
+	}
+	names := make([]byte, n)
+	n, err = unix.Flistxattr(fd, names)
+	if err != nil {
+		return err
+	}
+	for _, name := range strings.Split(string(names[:n]), "\x00") {
+		if name != "" && name != "com.apple.provenance" {
+			return fmt.Errorf("%w: extended file metadata cannot be preserved", ErrUnsafePath)
+		}
+	}
+	return nil
 }
