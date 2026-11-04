@@ -3,7 +3,7 @@ module alias-lens
 go 1.26.0
 
 require (
-	charm.land/bubbletea/v2 v2.1.0
+	charm.land/bubbletea/v2 v2.1.1
 	github.com/aymanbagabas/go-udiff v0.4.1
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/x/ansi v0.11.9
@@ -12,7 +12,7 @@ require (
 	github.com/muesli/termenv v0.16.0
 	github.com/pterm/pterm v0.12.84
 	github.com/rivo/uniseg v0.4.7
-	golang.org/x/sys v0.47.0
+	golang.org/x/sys v0.49.0
 )
 
 require (
