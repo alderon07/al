@@ -11,7 +11,7 @@ class AliasLens < Formula
     system "go", "build", *std_go_args(
       output: bin/"alias-lens",
       ldflags: "-s -w -X main.version=#{version}",
-    )
+    ), "./cmd/alias-lens"
   end
 
   def caveats
@@ -23,6 +23,6 @@ class AliasLens < Formula
 
   test do
     assert_match version.to_s, shell_output("#{bin}/alias-lens --version")
-    assert_match "Alias Lens shell integration", shell_output("#{bin}/alias-lens shell-init bash")
+    assert_match "Alias Lens Bash integration", shell_output("#{bin}/alias-lens shell-init bash")
   end
 end

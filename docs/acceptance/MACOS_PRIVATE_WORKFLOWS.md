@@ -16,3 +16,5 @@ Verification on Linux:
 - Focused workflow, private-file, and revision-preview tests passed.
 - `go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...` reported no vulnerabilities. Build metadata confirms Go 1.27.3.
 - Darwin amd64 and arm64 test binaries cross-compiled. Native macOS provenance, system-parent, and recovery execution remains pending.
+
+Subsequent [user-reported macOS 27.0.1 arm64 validation](../testing/evidence/MACOS_ARM64_2026-11-09.md) passed the full suite and native setup flows on `03b1279`. Terminal.app and Intel execution remain open.
